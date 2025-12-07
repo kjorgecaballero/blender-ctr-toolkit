@@ -1,0 +1,22 @@
+# Python files
+__pycache__/
+*.pyc
+*.pyo
+
+# Blender files
+*.blend1
+*.blend2
+
+# macOS files
+.DS_Store
+Thumbs.db
+
+# VS Code files
+.vscode/
+*.code-workspace
+
+# Temporary and log files
+*.log
+/temp/
+debug/
+*.tmp
