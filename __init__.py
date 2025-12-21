@@ -12,10 +12,18 @@ import bpy
 
 def register():
     """Register the entire addon"""
+    from . import properties
+
+    properties.register()
+
     print(f"Blender CTR Toolkit loaded")
 
 def unregister():
     """Unregister the entire addon"""
+    from . import properties
+
+    properties.unregister()
+    
     print(f"Blender CTR Toolkit unloaded")
 
 if __name__ == "__main__":
