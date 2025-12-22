@@ -13,15 +13,18 @@ import bpy
 def register():
     """Register the entire addon"""
     from . import properties
+    from . import operators
 
     properties.register()
+    operators.register()
 
     print(f"Blender CTR Toolkit loaded")
 
 def unregister():
     """Unregister the entire addon"""
-    from . import properties
+    from . import operators, properties
 
+    operators.unregister()
     properties.unregister()
     
     print(f"Blender CTR Toolkit unloaded")
