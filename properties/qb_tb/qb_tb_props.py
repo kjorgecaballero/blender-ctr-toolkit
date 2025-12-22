@@ -21,7 +21,6 @@ def register():
             ('QUADBLOCKS', 'Quadblocks', 'Select all Quadblocks'),
             ('NON_MESH', 'Non-Mesh', 'Select non-mesh objects'),
             ('NGONS', 'NGons', 'Select objects with NGons'),
-            ('MIXED_ISSUES', 'Mixed Issues', 'Select objects with multiple issues'),
         ],
         default='ALL_INVALID'
     )
