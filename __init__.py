@@ -14,16 +14,19 @@ def register():
     """Register the entire addon"""
     from . import properties
     from . import operators
+    from . import ui
 
     properties.register()
     operators.register()
+    ui.register()
 
     print(f"Blender CTR Toolkit loaded")
 
 def unregister():
     """Unregister the entire addon"""
-    from . import operators, properties
+    from . import ui,operators, properties
 
+    ui.unregister()
     operators.unregister()
     properties.unregister()
     
