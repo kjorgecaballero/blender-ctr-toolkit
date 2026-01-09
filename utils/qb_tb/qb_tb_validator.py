@@ -3,11 +3,13 @@ from math import isclose
 from collections import defaultdict
 from mathutils import Vector
 
+# Check if two vertices are the same within tolerance
 def vertices_are_same(v1, v2, tolerance=0.001):
     return (isclose(v1.x, v2.x, abs_tol=tolerance) and 
             isclose(v1.y, v2.y, abs_tol=tolerance) and 
             isclose(v1.z, v2.z, abs_tol=tolerance))
 
+# Analyze vertex coordinates to check quadblock
 def analyze_quadblock_by_coordinates(obj, tolerance=0.001):
     if obj.type != 'MESH':
         return False
@@ -54,6 +56,7 @@ def analyze_quadblock_by_coordinates(obj, tolerance=0.001):
             share_count.get(2, 0) == 4 and 
             share_count.get(4, 0) == 1)
 
+# Analyze vertex coordinates to check triblock
 def analyze_triblock_by_coordinates(obj, tolerance=0.001):
     if obj.type != 'MESH':
         return False
@@ -99,6 +102,7 @@ def analyze_triblock_by_coordinates(obj, tolerance=0.001):
     return (share_count.get(1, 0) == 3 and 
             share_count.get(3, 0) == 3)
 
+# Check if all UVs are the same (degenerated)
 def are_uvs_degenerated(uv_layer, tolerance=0.0001):
     if not uv_layer.data:
         return False
@@ -113,6 +117,7 @@ def are_uvs_degenerated(uv_layer, tolerance=0.0001):
     
     return True
 
+# Validate triblock UVs
 def are_triblock_uvs_valid(obj, tolerance=0.0001):
     if obj.type != 'MESH':
         return False
@@ -162,6 +167,7 @@ def are_triblock_uvs_valid(obj, tolerance=0.0001):
     
     return len(valid_pairs) > 0
 
+# Get detailed triblock UV validation results
 def get_triblock_uv_validation_details(obj, tolerance=0.0001):
     if obj.type != 'MESH':
         return {'valid': False, 'reason': 'Not a mesh'}

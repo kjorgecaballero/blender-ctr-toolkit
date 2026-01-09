@@ -6,6 +6,7 @@ from .qb_tb_validator import (
     are_triblock_uvs_valid
 )
 
+# Determine mesh type (quadblock, triblock, or None)
 def get_mesh_type(obj):
     if obj.type != 'MESH':
         return None
@@ -21,6 +22,7 @@ def get_mesh_type(obj):
     
     return None
 
+# Get list of issues for an object
 def get_object_issues(obj):
     issues = []
     
