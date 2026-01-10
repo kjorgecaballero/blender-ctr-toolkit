@@ -1,1 +1,1 @@
-# EMPTY - just marks as a package
+from .qb_tb_panel import register, unregister

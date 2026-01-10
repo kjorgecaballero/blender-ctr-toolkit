@@ -1,2 +1,7 @@
-# This file allows expanding the addon with more UI in the future
-from .qb_tb.qb_tb_ui import register, unregister
+from .qb_tb.qb_tb_panel import register as register_qb_tb_ui, unregister as unregister_qb_tb_ui
+
+def register():
+    register_qb_tb_ui()
+
+def unregister():
+    unregister_qb_tb_ui()
