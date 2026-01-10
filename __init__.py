@@ -1,17 +1,16 @@
 bl_info = {
     "name": "Blender CTR Toolkit",
     "author": "Jorge Caballero (Siruka)",
-    "version": (0, 1, 0),
+    "version": (0, 0, 1),
     "blender": (3, 3, 0),
     "location": "View3D > Sidebar > CTR",
-    "description": "Tools for CTR track development.",
+    "description": "Tools for CTR track development including export functionality.",
     "category": "3D View",
 }
 
 import bpy
 
 def register():
-    """Register the entire addon"""
     from . import properties
     from . import operators
     from . import ui
@@ -20,17 +19,16 @@ def register():
     operators.register()
     ui.register()
 
-    print(f"Blender CTR Toolkit loaded")
+    print(f"Blender CTR Toolkit v{bl_info['version'][0]}.{bl_info['version'][1]} loaded")
 
 def unregister():
-    """Unregister the entire addon"""
-    from . import ui,operators, properties
+    from . import ui, operators, properties
 
     ui.unregister()
     operators.unregister()
     properties.unregister()
     
-    print(f"Blender CTR Toolkit unloaded")
+    print(f"Blender CTR Toolkit v{bl_info['version'][0]}.{bl_info['version'][1]} unloaded")
 
 if __name__ == "__main__":
     register()
