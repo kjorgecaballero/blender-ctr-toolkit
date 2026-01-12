@@ -10,6 +10,37 @@ class QB_TB_PT_ToolsPanel(Panel):
     bl_region_type = 'UI'
     bl_category = "CTR"
 
+    def get_find_icon(self, find_option):
+        icon_mapping = {
+            'QUADBLOCK': 'MESH_CUBE',
+            'TRIBLOCK': 'MESH_CONE',
+            'INVALID_GEOMETRY': 'MESH_DATA',
+            'INVALID_UVS': 'UV',
+            'INVALID_TRIBLOCK_UVS': 'MESH_CONE',
+            'DEGENERATED_UVS': 'GROUP_UVS',
+            'NGONS': 'MESH_CYLINDER',
+            'NON_MESH': 'OUTLINER_OB_EMPTY',
+            'OUT_OF_RANGE': 'CUBE',  # ¡CORREGIDO: Coma añadida!
+            'ALL_INVALID': 'ERROR'
+        }
+        return icon_mapping.get(find_option, 'VIEWZOOM')
+    
+    def get_select_icon(self, select_option):
+        icon_mapping = {
+            'QUADBLOCKS': 'MESH_CUBE',
+            'TRIBLOCKS': 'MESH_CONE',
+            'INVALID_GEOMETRY': 'MESH_DATA',
+            'INVALID_UVS': 'UV',
+            'INVALID_TRIBLOCK_UVS': 'MESH_CONE',
+            'DEGENERATED_UVS': 'GROUP_UVS',
+            'NGONS': 'MESH_CYLINDER',
+            'NON_MESH': 'OUTLINER_OB_EMPTY',
+            'OUT_OF_RANGE': 'CUBE',
+            'ALL_INVALID': 'ERROR'
+        }
+        
+        return icon_mapping.get(select_option, 'SELECT_SET')
+
     def draw(self, context):
         layout = self.layout
         scene = context.scene
@@ -23,7 +54,7 @@ class QB_TB_PT_ToolsPanel(Panel):
         col.prop(scene, "find_option", text="")
         col = row.column()
         
-        find_icon = 'MESH_CONE' if scene.find_option == 'TRIBLOCK' else 'MESH_CUBE'
+        find_icon = self.get_find_icon(scene.find_option)
         col.operator("qb_tb.object_qb_tb_suffix", text="", icon=find_icon)
         
         col = row.column()
@@ -41,21 +72,6 @@ class QB_TB_PT_ToolsPanel(Panel):
         
         col = row.column()
         col.operator("qb_tb.clean_object_suffixes", text="", icon='FILE_REFRESH')
-    
-    def get_select_icon(self, select_option):
-        icon_mapping = {
-            'ALL_INVALID': 'ERROR',
-            'INVALID_GEOMETRY': 'MESH_DATA',
-            'INVALID_UVS': 'UV',
-            'DEGENERATED_UVS': 'GROUP_UVS',
-            'INVALID_TRIBLOCK_UVS': 'MESH_CONE',
-            'TRIBLOCKS': 'MESH_CONE',
-            'QUADBLOCKS': 'MESH_CUBE',
-            'NON_MESH': 'OUTLINER_OB_EMPTY',
-            'NGONS': 'MESH_CYLINDER'
-        }
-        
-        return icon_mapping.get(select_option, 'SELECT_SET')
 
 
 def register():

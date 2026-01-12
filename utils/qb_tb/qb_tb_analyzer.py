@@ -5,8 +5,8 @@ from .qb_tb_validator import (
     are_uvs_degenerated,
     are_triblock_uvs_valid
 )
+from ...utils.range_box import is_object_in_range, get_out_of_range_objects
 
-# Determine mesh type (quadblock, triblock, or None)
 def get_mesh_type(obj):
     if obj.type != 'MESH':
         return None
@@ -22,7 +22,6 @@ def get_mesh_type(obj):
     
     return None
 
-# Get list of issues for an object
 def get_object_issues(obj):
     issues = []
     
@@ -66,4 +65,20 @@ def get_object_issues(obj):
             except Exception as e:
                 print(f"Error checking triblock UVs for {obj.name}: {e}")
     
+    if not is_object_in_range(obj):
+        issues.append("out_of_range")
+    
     return issues
+
+def get_range_statistics():
+    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+    in_range, out_of_range = get_out_of_range_objects(mesh_objects)
+    
+    return {
+        'total_meshes': len(mesh_objects),
+        'in_range': len(in_range),
+        'out_of_range': len(out_of_range),
+        'in_range_objects': in_range,
+        'out_of_range_objects': out_of_range,
+        'range_box_exists': bpy.data.objects.get("Range") is not None
+    }

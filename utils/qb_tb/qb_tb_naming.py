@@ -1,4 +1,3 @@
-# Build object name based on mesh type and issues
 def build_object_name(base_name, mesh_type, issues):
     name_parts = [base_name]
     
@@ -21,13 +20,14 @@ def build_object_name(base_name, mesh_type, issues):
         name_parts.append("degenerated_uvs")
     if "invalid_triblock_uvs" in issues:
         name_parts.append("invalid_triblock_uvs")
+    if "out_of_range" in issues:
+        name_parts.append("out_of_range")
     
     return "_".join(name_parts)
 
-# Remove known suffixes from object name
 def clean_object_name(name):
     suffixes = ["_quadblock", "_triblock", "_nonmesh", "_ngon", "_invalid_geo", 
-                "_invalid_uvs", "_degenerated_uvs", "_invalid_triblock_uvs"]
+                "_invalid_uvs", "_degenerated_uvs", "_invalid_triblock_uvs", "_out_of_range"]
     
     clean_name = name
     for suffix in suffixes:
