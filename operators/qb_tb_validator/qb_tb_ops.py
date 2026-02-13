@@ -3,8 +3,8 @@ import time
 from bpy.types import Operator
 from bpy.props import BoolProperty
 
-from ...utils.qb_tb.qb_tb_analyzer import get_mesh_type, get_object_issues
-from ...utils.qb_tb.qb_tb_naming import build_object_name, clean_object_name
+from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
+from ...utils.qb_tb_validator.qb_tb_naming import build_object_name, clean_object_name
 
 
 class QB_TB_OT_ObjectQbTbSuffix(Operator):

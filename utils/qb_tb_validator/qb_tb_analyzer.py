@@ -1,5 +1,5 @@
 import bpy
-from .qb_tb_validator import (
+from .qb_tb_validation import (
     analyze_quadblock_by_coordinates,
     analyze_triblock_by_coordinates,
     are_uvs_degenerated,

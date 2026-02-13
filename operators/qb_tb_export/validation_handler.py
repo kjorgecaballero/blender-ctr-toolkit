@@ -1,5 +1,5 @@
 import bpy
-from ...utils.qb_tb.qb_tb_analyzer import get_mesh_type, get_object_issues
+from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 from ...utils.range_box import get_out_of_range_objects
 
 class ValidationHandler:

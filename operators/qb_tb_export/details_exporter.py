@@ -6,7 +6,7 @@ import json
 import os
 import bpy
 from datetime import datetime
-from ...utils.qb_tb.qb_tb_analyzer import get_mesh_type, get_object_issues
+from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 
 
 class DetailsExporter:
