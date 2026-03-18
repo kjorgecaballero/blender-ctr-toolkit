@@ -1,38 +1,24 @@
 import bpy
 
 def register():
-    bpy.types.Scene.find_option = bpy.props.EnumProperty(
+    # Unified option for both Find and Select
+    bpy.types.Scene.validator_option = bpy.props.EnumProperty(
+        name="Option",
+        description="Object type to find or select",
         items=[
-            ('QUADBLOCK', 'Quadblocks', 'Find all Quadblocks'),
-            ('TRIBLOCK', 'Triblocks', 'Find all Triblocks'),
-            ('INVALID_GEOMETRY', 'Invalid Geometry', 'Find objects with invalid geometry'),
-            ('INVALID_UVS', 'Invalid UVs', 'Find objects with invalid UVs'),
-            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Find triblocks with invalid UV arrangement'),
-            ('DEGENERATED_UVS', 'Degenerated UVs', 'Find objects with degenerated UVs'),
-            ('NGONS', 'NGons', 'Find objects with NGons'),
-            ('NON_MESH', 'Non-Mesh', 'Find non-mesh objects'),
-            ('OUT_OF_RANGE', 'Out of Range', 'Find objects outside the range box'),
-            ('ALL_INVALID', 'All Invalid', 'Find all invalid objects'),
+            ('QUADBLOCK', 'Quadblocks', 'Quadblock objects'),
+            ('TRIBLOCK', 'Triblocks', 'Triblock objects'),
+            ('INVALID_GEOMETRY', 'Invalid Geometry', 'Objects with invalid geometry'),
+            ('INVALID_UVS', 'Invalid UVs', 'Objects with invalid UVs'),
+            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Triblocks with invalid UV arrangement'),
+            ('DEGENERATED_UVS', 'Degenerated UVs', 'Objects with degenerated UVs'),
+            ('NGONS', 'NGons', 'Objects with NGons'),
+            ('NON_MESH', 'Non-Mesh', 'Non-mesh objects'),
+            ('OUT_OF_RANGE', 'Out of Range', 'Objects outside the range box'),
+            ('ALL_INVALID', 'All Invalid', 'All invalid objects'),
         ],
         default='QUADBLOCK'
     )
-    
-    bpy.types.Scene.select_option = bpy.props.EnumProperty(
-        items=[
-            ('QUADBLOCKS', 'Quadblocks', 'Select all Quadblocks'),
-            ('TRIBLOCKS', 'Triblocks', 'Select all Triblocks'),
-            ('INVALID_GEOMETRY', 'Invalid Geometry', 'Select objects with invalid geometry'),
-            ('INVALID_UVS', 'Invalid UVs', 'Select objects with invalid UVs'),
-            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Select triblocks with invalid UV arrangement'),
-            ('DEGENERATED_UVS', 'Degenerated UVs', 'Select objects with degenerated UVs'),
-            ('NGONS', 'NGons', 'Select objects with NGons'),
-            ('NON_MESH', 'Non-Mesh', 'Select non-mesh objects'),
-            ('OUT_OF_RANGE', 'Out of Range', 'Select objects outside the range box'),
-            ('ALL_INVALID', 'All Invalid', 'Select all invalid objects'),
-        ],
-        default='QUADBLOCKS'
-    )
 
 def unregister():
-    del bpy.types.Scene.find_option
-    del bpy.types.Scene.select_option
+    del bpy.types.Scene.validator_option

@@ -10,11 +10,11 @@ from ...utils.qb_tb_validator.qb_tb_naming import build_object_name, clean_objec
 class QB_TB_OT_ObjectQbTbSuffix(Operator):
     bl_idname = "qb_tb.object_qb_tb_suffix"
     bl_label = "Add Suffix"
-    bl_description = "Add suffix to objects based on their type"
+    bl_description = "Add suffix to objects based on their type (uses current validator option)"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        find_option = context.scene.find_option
+        option = context.scene.validator_option  # Unified option
 
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=0)
         start_time = time.time()
@@ -29,25 +29,25 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
             base_name = clean_object_name(obj.name)
             
             match = False
-            if find_option == 'QUADBLOCK':
+            if option == 'QUADBLOCK':
                 match = (mesh_type == 'QUADBLOCK')
-            elif find_option == 'TRIBLOCK':
+            elif option == 'TRIBLOCK':
                 match = (mesh_type == 'TRIBLOCK')
-            elif find_option == 'INVALID_GEOMETRY':
+            elif option == 'INVALID_GEOMETRY':
                 match = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
-            elif find_option == 'INVALID_UVS':
+            elif option == 'INVALID_UVS':
                 match = any(issue in issues for issue in ["invalid_uvs", "invalid_triblock_uvs"])
-            elif find_option == 'INVALID_TRIBLOCK_UVS':
+            elif option == 'INVALID_TRIBLOCK_UVS':
                 match = "invalid_triblock_uvs" in issues
-            elif find_option == 'DEGENERATED_UVS':
+            elif option == 'DEGENERATED_UVS':
                 match = "degenerated_uvs" in issues
-            elif find_option == 'NGONS':
+            elif option == 'NGONS':
                 match = "ngon" in issues
-            elif find_option == 'NON_MESH':
+            elif option == 'NON_MESH':
                 match = "non_mesh" in issues
-            elif find_option == 'OUT_OF_RANGE':
+            elif option == 'OUT_OF_RANGE':
                 match = "out_of_range" in issues
-            elif find_option == 'ALL_INVALID':
+            elif option == 'ALL_INVALID':
                 match = bool(issues)
             
             if match:
@@ -56,7 +56,7 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
                 count += 1
 
         elapsed_time = time.time() - start_time
-        self.report({'INFO'}, f"Found {count} objects matching '{find_option}' in {elapsed_time:.2f} seconds.")
+        self.report({'INFO'}, f"Found {count} objects matching '{option}' in {elapsed_time:.2f} seconds.")
         return {'FINISHED'}
 
 
@@ -240,14 +240,16 @@ class QB_TB_OT_ValidateAllObjects(Operator):
 class QB_TB_OT_FilterSelectObjects(Operator):
     bl_idname = "qb_tb.filter_select_objects"
     bl_label = "Select Object Types"
-    bl_description = "Select objects based on their type"
+    bl_description = "Select objects based on their type (uses current validator option)"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        option = context.scene.validator_option  # Unified option
+
+        # Deselect all
         for obj in context.selected_objects:
             obj.select_set(False)
         
-        select_option = context.scene.select_option
         count = 0
         selected_objects = []
         
@@ -256,34 +258,25 @@ class QB_TB_OT_FilterSelectObjects(Operator):
             mesh_type = get_mesh_type(obj) if obj.type == 'MESH' else None
             issues = get_object_issues(obj)
             
-            if select_option == 'ALL_INVALID':
+            if option == 'ALL_INVALID':
                 select_this = bool(issues)
-            
-            elif select_option == 'INVALID_GEOMETRY':
+            elif option == 'INVALID_GEOMETRY':
                 select_this = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
-            
-            elif select_option == 'INVALID_UVS':
+            elif option == 'INVALID_UVS':
                 select_this = any(issue in issues for issue in ["invalid_uvs", "invalid_triblock_uvs"])
-            
-            elif select_option == 'DEGENERATED_UVS':
+            elif option == 'DEGENERATED_UVS':
                 select_this = "degenerated_uvs" in issues
-            
-            elif select_option == 'INVALID_TRIBLOCK_UVS':
+            elif option == 'INVALID_TRIBLOCK_UVS':
                 select_this = "invalid_triblock_uvs" in issues
-            
-            elif select_option == 'TRIBLOCKS':
+            elif option == 'TRIBLOCK':  
                 select_this = mesh_type == 'TRIBLOCK'
-            
-            elif select_option == 'QUADBLOCKS':
+            elif option == 'QUADBLOCK':
                 select_this = mesh_type == 'QUADBLOCK'
-            
-            elif select_option == 'NON_MESH':
+            elif option == 'NON_MESH':
                 select_this = "non_mesh" in issues
-            
-            elif select_option == 'NGONS':
+            elif option == 'NGONS':
                 select_this = "ngon" in issues
-            
-            elif select_option == 'OUT_OF_RANGE':
+            elif option == 'OUT_OF_RANGE':
                 select_this = "out_of_range" in issues
             
             if select_this:
