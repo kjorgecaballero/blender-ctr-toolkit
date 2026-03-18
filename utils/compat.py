@@ -15,7 +15,6 @@ def should_use_wm_obj_export():
     Determine if we should use wm.obj_export (Blender 3.3+) 
     or export_scene.obj (older versions)
     """
-    # Blender 3.3.0 and above have wm.obj_export
     return hasattr(bpy.ops.wm, 'obj_export')
 
 
@@ -31,24 +30,18 @@ def get_export_parameters(export_ops_instance, valid_objects):
         dict: Export parameters for current Blender version
     """
     if should_use_wm_obj_export():
-        # PARAMETERS FOR wm.obj_export (Blender 3.3.0+)
         params = {
             'filepath': export_ops_instance.filepath,
             'export_selected_objects': True,
-            'export_triangulated_mesh': False,  # Or True if triangulation is desired
+            'export_triangulated_mesh': False,
             'export_normals': True,
             'export_uv': True,
             'export_materials': True,
             'export_colors': export_ops_instance.export_colors,
-            # Use the path_mode selected by the user
             'path_mode': export_ops_instance.path_mode,
         }
-        
-        # Note: wm.obj_export in Blender 3.3.0 does NOT accept global_scale or apply_modifiers
-        # Therefore, they are not included. They are handled manually.
         return params
     else:
-        # PARAMETERS FOR export_scene.obj (older versions)
         params = {
             'filepath': export_ops_instance.filepath,
             'use_selection': True,
@@ -58,20 +51,16 @@ def get_export_parameters(export_ops_instance, valid_objects):
             'use_triangles': False,
             'use_vertex_colors': export_ops_instance.export_colors,
             'global_scale': export_ops_instance.global_scale,
-            # Use the path_mode selected by the user
             'path_mode': export_ops_instance.path_mode,
             'axis_forward': '-Z',
             'axis_up': 'Y',
         }
-        
-        # Add conditional parameters if they exist in this version
         if hasattr(bpy.ops.export_scene.obj, 'keywords'):
             keywords = bpy.ops.export_scene.obj.keywords
             if 'use_mesh_modifiers' in keywords:
-                params['use_mesh_modifiers'] = False  # Already applied modifiers before
+                params['use_mesh_modifiers'] = False
             if 'use_textures' in keywords:
                 params['use_textures'] = export_ops_instance.export_textures
-        
         return params
 
 
@@ -83,7 +72,6 @@ def apply_scale_to_objects(objects, scale):
         dict: Original scales for restoration
     """
     original_scales = {}
-    
     if scale != 1.0:
         for obj in objects:
             if obj and obj.name in bpy.data.objects:
@@ -91,10 +79,7 @@ def apply_scale_to_objects(objects, scale):
                 obj.scale.x *= scale
                 obj.scale.y *= scale
                 obj.scale.z *= scale
-        
-        # Update view to apply changes
         bpy.context.view_layer.update()
-    
     return original_scales
 
 
@@ -106,7 +91,6 @@ def restore_scale_to_objects(original_scales):
                 obj.scale.x = scale[0]
                 obj.scale.y = scale[1]
                 obj.scale.z = scale[2]
-        
         bpy.context.view_layer.update()
 
 
@@ -122,38 +106,28 @@ def execute_obj_export(export_ops_instance, valid_objects):
         Result of the export operation
     """
     try:
-        # Save original scales for restoration
         original_scales = {}
-        
-        # Apply scale manually if needed
         if should_use_wm_obj_export() and export_ops_instance.global_scale != 1.0:
-            # wm.obj_export in Blender 3.3.0 doesn't accept global_scale
-            # Apply manually
             original_scales = apply_scale_to_objects(
                 valid_objects, 
                 export_ops_instance.global_scale
             )
         
-        # Get export parameters based on version
         export_params = get_export_parameters(export_ops_instance, valid_objects)
         
-        # Execute export
         if should_use_wm_obj_export():
             result = bpy.ops.wm.obj_export(**export_params)
         else:
             result = bpy.ops.export_scene.obj(**export_params)
         
-        # Restore scales if we changed them
         if original_scales:
             restore_scale_to_objects(original_scales)
         
         return result
         
     except Exception as e:
-        # Ensure scale restoration even on error
         if 'original_scales' in locals():
             restore_scale_to_objects(original_scales)
-        
         print(f"Error in execute_obj_export: {e}")
         import traceback
         traceback.print_exc()
@@ -168,7 +142,7 @@ def get_export_operator_name():
 def has_vertex_colors_support():
     """Check if current Blender version supports vertex colors in OBJ export"""
     if should_use_wm_obj_export():
-        return True  # wm.obj_export supports export_colors
+        return True
     else:
         return hasattr(bpy.ops.export_scene.obj, 'keywords') and \
                'use_vertex_colors' in bpy.ops.export_scene.obj.keywords
@@ -186,12 +160,9 @@ def ensure_objects_in_view_layer(objects, context):
         list: Objects that were temporarily linked to view layer
     """
     temporarily_linked = []
-    
     for obj in objects:
         if obj and obj.name in bpy.data.objects:
-            # Check if object is in the active view layer
             if obj.name not in context.view_layer.objects:
-                # Link to scene collection if not already linked
                 scene_collection_names = [c.name for c in obj.users_collection]
                 if context.scene.collection.name not in scene_collection_names:
                     try:
@@ -200,12 +171,9 @@ def ensure_objects_in_view_layer(objects, context):
                         print(f"Temporarily linked {obj.name} to view layer")
                     except Exception as e:
                         print(f"Could not link {obj.name} to view layer: {e}")
-                
-                # Make sure object is visible
                 obj.hide_viewport = False
                 obj.hide_set(False)
                 obj.hide_select = False
-    
     return temporarily_linked
 
 
@@ -220,10 +188,8 @@ def cleanup_temporarily_linked_objects(temporarily_linked, context):
     for obj in temporarily_linked:
         if obj and obj.name in bpy.data.objects:
             try:
-                # Check if object is in multiple collections
                 collections = obj.users_collection
                 if len(collections) > 1:
-                    # Unlink from scene collection if it's there
                     for coll in collections:
                         if coll.name == context.scene.collection.name:
                             coll.objects.unlink(obj)
@@ -231,3 +197,26 @@ def cleanup_temporarily_linked_objects(temporarily_linked, context):
                             break
             except Exception as e:
                 print(f"Error unlinking {obj.name}: {e}")
+
+
+# Functions for OBJ import compatibility 
+
+def should_use_wm_obj_import():
+    """Return True if wm.obj_import exists (Blender 3.3+), else False."""
+    return hasattr(bpy.ops.wm, 'obj_import')
+
+
+def execute_obj_import(filepath):
+    """
+    Execute OBJ import with version-specific operator.
+    
+    Args:
+        filepath: Path to the OBJ file to import.
+    
+    Returns:
+        Result of the import operation.
+    """
+    if should_use_wm_obj_import():
+        return bpy.ops.wm.obj_import(filepath=filepath)
+    else:
+        return bpy.ops.import_scene.obj(filepath=filepath)

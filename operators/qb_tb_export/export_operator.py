@@ -18,7 +18,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     
     filename_ext = ".obj"
     
-    # Operator properties
     filter_glob: StringProperty(
         default="*.obj",
         options={'HIDDEN'},
@@ -204,6 +203,22 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             col.label(text=f"Last project: {os.path.basename(context.scene.last_export_path)}")
             col.label(text=f"Location: {context.scene.last_export_path}")
             col.label(text="Quick Export: Ctrl+Shift+E", icon='EVENT_CTRL')
+        
+        # Duplicate Export section 
+        layout.separator()
+        box = layout.box()
+        box.label(text="Duplicate Export", icon='DUPLICATE')
+        col = box.column(align=True)
+        
+        if context.scene.duplicate_export_path:
+            col.label(text=f"Path: {context.scene.duplicate_export_path}")
+        else:
+            col.label(text="No path set", icon='INFO')
+        
+        row = col.row(align=True)
+        row.prop(context.scene, "duplicate_export_path", text="")
+        op = row.operator("wm.path_open", text="", icon='FILE_FOLDER')
+        op.filepath = context.scene.duplicate_export_path
 
     def invoke(self, context, event):
         """Initialize operator properties from scene settings."""

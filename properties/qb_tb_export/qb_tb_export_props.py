@@ -122,6 +122,14 @@ def register():
         description="Export only selected objects",
         default=False
     )
+    
+    # Property for duplicate export path
+    bpy.types.Scene.duplicate_export_path = bpy.props.StringProperty(
+        name="Duplicate Export Path",
+        description="Last used folder for duplicate exports",
+        default="",
+        subtype='DIR_PATH'
+    )
 
 def unregister():
     del bpy.types.Scene.export_index
@@ -142,3 +150,4 @@ def unregister():
     del bpy.types.Scene.export_details
     del bpy.types.Scene.allow_out_of_range
     del bpy.types.Scene.use_selection
+    del bpy.types.Scene.duplicate_export_path
