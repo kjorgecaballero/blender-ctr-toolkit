@@ -2,6 +2,7 @@
 Block List UI Initialization
 Registration of panels and menus ONLY.
 Operators are now in operators/qb_tb_list/.
+Now includes IssueFilterMenu.
 """
 
 import bpy
@@ -10,6 +11,7 @@ from .list_panel import LIST_PT_BlockListPanel
 from .list_material_menus import (
     LIST_MT_MaterialFilterMenu,
     LIST_MT_VertexGroupMenu,
+    LIST_MT_IssueFilterMenu,  
 )
 from .group_management import LIST_MT_ConstantMaterialGroupMenu
 from .navigation_points import LIST_MT_NavigationFilterMenu
@@ -21,6 +23,7 @@ classes = [
     LIST_MT_VertexGroupMenu,
     LIST_MT_ConstantMaterialGroupMenu,
     LIST_MT_NavigationFilterMenu,
+    LIST_MT_IssueFilterMenu,   
 ]
 
 def register():

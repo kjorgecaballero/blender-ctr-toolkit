@@ -14,7 +14,7 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        option = context.scene.validator_option  # Unified option
+        option = context.scene.validator_option
 
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=0)
         start_time = time.time()
@@ -63,7 +63,7 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
 class QB_TB_OT_ValidateAllObjects(Operator):
     bl_idname = "qb_tb.validate_all_objects"
     bl_label = "Validate All Objects"
-    bl_description = "Validate all objects and optionally remove invalid ones"
+    bl_description = "Validate all objects and optionally remove invalid ones. Also can validate vertex groups of active object."
     bl_options = {'REGISTER', 'UNDO'}
 
     remove_invalid_geometry: BoolProperty(
@@ -96,8 +96,26 @@ class QB_TB_OT_ValidateAllObjects(Operator):
         default=True
     )
 
+    # Validate vertex groups of active object
+    validate_vertex_groups: BoolProperty(
+        name="Validate Vertex Groups",
+        description="Also validate vertex groups (QB/TB) of the active mesh object",
+        default=False
+    )
+
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self, width=350)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "remove_invalid_geometry")
+        layout.prop(self, "remove_invalid_uvs")
+        layout.prop(self, "remove_degenerated_uvs")
+        layout.prop(self, "remove_out_of_range")
+        layout.prop(self, "add_suffixes")
+        layout.separator()
+        # Draw the checkbox for vertex group validation
+        layout.prop(self, "validate_vertex_groups")
 
     def execute(self, context):
         triblock_count = 0
@@ -209,6 +227,20 @@ class QB_TB_OT_ValidateAllObjects(Operator):
                 except Exception as e:
                     print(f"Error removing object {obj.name}: {e}")
 
+        #  Validate vertex groups if requested ---
+        if self.validate_vertex_groups:
+            obj = context.active_object
+            if obj and obj.type == 'MESH':
+                try:
+                    # The operator handles mode switching internally
+                    bpy.ops.list.validate_vertex_groups()
+                    self.report({'INFO'}, "Vertex groups validation completed")
+                except Exception as e:
+                    self.report({'WARNING'}, f"Vertex group validation failed: {e}")
+            else:
+                self.report({'WARNING'}, "No active mesh object to validate vertex groups")
+
+
         message_parts = []
         suffix_status = "renamed" if self.add_suffixes else "validated"
         message_parts.append(f"{suffix_status.capitalize()}: {triblock_count} triblocks, {quadblock_count} quadblocks.")
@@ -244,9 +276,8 @@ class QB_TB_OT_FilterSelectObjects(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        option = context.scene.validator_option  # Unified option
+        option = context.scene.validator_option
 
-        # Deselect all
         for obj in context.selected_objects:
             obj.select_set(False)
         

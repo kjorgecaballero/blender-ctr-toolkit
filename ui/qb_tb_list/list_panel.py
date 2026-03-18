@@ -4,6 +4,7 @@ Main panel class and custom list drawing for QB/TB Block List
 Now with Navigation Points support
 Now with intelligent toggle for all navigation points
 Now with separate material filters for each display mode
+Now with issue filter and validation button for vertex groups
 """
 
 import bpy
@@ -138,7 +139,7 @@ class LIST_PT_BlockListPanel(Panel):
             
             # ACTION BUTTONS - Only show if there are vertex groups or blocks detected
             if has_detected_blocks or has_block_vertex_groups:
-                # First row: [Vertex Groups][Clear Group]
+                # First row: [Create Vertex Groups][Clear Group]
                 row1 = layout.row(align=True)
                 
                 # Always show Create Vertex Groups if blocks are detected
@@ -218,19 +219,27 @@ class LIST_PT_BlockListPanel(Panel):
                         has_vertex_groups=False, has_constant_materials=False,
                         has_detected_blocks=False, nav_point_count=0):
         """Draw a custom scrollable list with search, sort, material filter, and vertical scrollbar
-        Now includes navigation point toggles and separate material filters for each display mode"""
+        Now includes navigation point toggles, separate material filters for each display mode,
+        and issue filter for vertex groups."""
         scene = context.scene
         search_text = scene.list_search_text.lower()
         
         # USE THE CORRECT MATERIAL FILTER BASED ON DISPLAY MODE
         if scene.list_display_type == 'VERTEX_GROUPS':
             material_filter = scene.list_material_filter_vg
+            issue_filter = scene.list_issue_filter   # issue filter
         else:  # CONSTANT_MATERIALS
             material_filter = scene.list_material_filter_cm
+            issue_filter = None   # not used in constant materials
             
         navigation_filter = scene.list_navigation_filter if scene.list_display_type == 'CONSTANT_MATERIALS' else 'ALL'
         
-        # Apply search filter
+        #  Get stored issues for vertex groups (if any)
+        issues_dict = {}
+        if scene.list_display_type == 'VERTEX_GROUPS' and "vertex_group_issues" in obj:
+            issues_dict = dict(obj["vertex_group_issues"])
+        
+        # Apply search and filters
         filtered_items = []
         for item in items:
             # Skip items based on material filter
@@ -244,6 +253,35 @@ class LIST_PT_BlockListPanel(Panel):
                     # For constant materials, check the material name directly
                     if item['name'] != material_filter:
                         continue
+            
+            # Apply issue filter (only for vertex groups)
+            if scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
+                item_issues = issues_dict.get(item['name'], [])
+                # Determine if item should be shown based on filter
+                if issue_filter == 'VALID':
+                    # Valid means has 'quadblock' or 'triblock' and no other issues
+                    if not ('quadblock' in item_issues or 'triblock' in item_issues):
+                        # Not even a valid block type
+                        show = False
+                    else:
+                        # Check for any issue besides the type
+                        other_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
+                        show = len(other_issues) == 0
+                elif issue_filter == 'NO_ISSUES':
+                    # No issues at all (including geometry invalid)
+                    show = len(item_issues) == 0
+                elif issue_filter == 'INVALID_GEOMETRY':
+                    show = 'invalid_geometry' in item_issues
+                elif issue_filter == 'INVALID_UVS':
+                    show = 'invalid_uvs' in item_issues
+                elif issue_filter == 'INVALID_TRIBLOCK_UVS':
+                    show = 'invalid_triblock_uvs' in item_issues
+                elif issue_filter == 'DEGENERATED_UVS':
+                    show = 'degenerated_uvs' in item_issues
+                else:
+                    show = True
+                if not show:
+                    continue
             
             # Apply navigation point filter (only for constant materials)
             if scene.list_display_type == 'CONSTANT_MATERIALS':
@@ -305,7 +343,7 @@ class LIST_PT_BlockListPanel(Panel):
             if reverse_type:
                 type_order = 1 - type_order  # Invert if descending
             
-            # Priority 2: Navigation point status (navigation points first)
+            # Priority 2: Navigation point status (navigation points first) - only for constant mats
             nav_order = 0 if item.get('is_nav_point', False) else 1
             if reverse_name:
                 nav_order = 1 - nav_order  # Invert if descending
@@ -441,23 +479,40 @@ class LIST_PT_BlockListPanel(Panel):
                 remove_op.group_name = scene.list_active_group
         
 
-        # ROW 2: MATERIAL FILTER FOR VERTEX GROUPS (BELOW FILTER BUTTONS) 
+        # ROW 2: FILTER DROPDOWNS (Material and Issue for Vertex Groups; Navigation and Material for Constant Materials)
 
         if scene.list_display_type == 'VERTEX_GROUPS':
-            # New row for material filter in Vertex Groups mode
-            material_row = item_list_box.row()
-            material_row.alignment = 'EXPAND'
+            # Row for two dropdowns: Material Filter and Issue Filter
+            filter_row = item_list_box.row()
+            filter_row.alignment = 'EXPAND'
             
-            # Material filter menu for Vertex Groups
+            # Split into two columns
+            split = filter_row.split(factor=0.5)
+            
+            # Left: Material Filter
+            left_col = split.row()
+            left_col.alignment = 'EXPAND'
             material_text = scene.list_material_filter_vg if scene.list_material_filter_vg else "All Materials"
+            left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
             
-            # Use split to create proper expansion
-            split = material_row.split(factor=1.0)
-            split.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
+            # Right: Issue Filter
+            right_col = split.row()
+            right_col.alignment = 'EXPAND'
+            
+            # Determine display text for issue filter
+            issue_text = {
+                'ALL': "All",
+                'VALID': "Valid",
+                'INVALID_GEOMETRY': "Invalid Geo",
+                'INVALID_UVS': "Invalid UVs",
+                'INVALID_TRIBLOCK_UVS': "Invalid Triblock UVs",
+                'DEGENERATED_UVS': "Degenerated UVs",
+                'NO_ISSUES': "No Issues"
+            }.get(scene.list_issue_filter, "All")
+            
+            # Create a menu for issue filter
+            right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
         
-
-        # ROW 2: NAVIGATION AND MATERIAL FILTER FOR CONSTANT MATERIALS 
-
         elif scene.list_display_type == 'CONSTANT_MATERIALS':
             menus_row = item_list_box.row()
             menus_row.alignment = 'EXPAND'
@@ -581,7 +636,7 @@ class LIST_PT_BlockListPanel(Panel):
                 icon = 'VERTEXSEL' if item['block_type'] == 'quadblock' else 'FACESEL'
                 left_side.label(text="", icon=icon)
                 
-                # Middle: Item name with material icon
+                # Middle: Item name with material icon and possibly issue icon
                 middle = row.row()
                 middle.alignment = 'EXPAND'
                 
@@ -607,6 +662,19 @@ class LIST_PT_BlockListPanel(Panel):
                         # If no material, show just the block ID with QB/TB prefix
                         block_prefix = "QB" if item['block_type'] == 'quadblock' else "TB"
                         middle.label(text=f"{block_prefix}_Block_{item['block_id']}", icon='MATERIAL')
+                    
+                    # Add issue indicator icon if this group has issues
+                    if item['name'] in issues_dict:
+                        item_issues = issues_dict[item['name']]
+                        if item_issues:
+                            # If there are any issues besides valid type, show error icon
+                            non_type_issues = [iss for iss in item_issues if iss not in ('quadblock', 'triblock')]
+                            if non_type_issues:
+                                # Use a small icon at the end
+                                right_icon = row.row(align=True)
+                                right_icon.alignment = 'RIGHT'
+                                right_icon.label(text="", icon='ERROR')
+                            # Could also show specific icons for each issue, but we keep it simple
                     
                 elif item['type'] == 'constant_material':
                     # Show only the constant material name (not QB/TB_ prefix)
@@ -737,6 +805,8 @@ class LIST_PT_BlockListPanel(Panel):
                             message = f"No items match group filter: {scene.list_active_group}"
                     else:
                         message = f"No items match group filter: {scene.list_active_group}"
+                elif scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
+                    message = f"No items match issue filter: {issue_filter}"
                 else:
                     message = "No items match current search"
             

@@ -1,11 +1,17 @@
 """
 QB/TB Vertex Groups Operators
 Operators for creating vertex groups for each detected block
+Now includes operator to validate vertex groups (blocks)
 """
 
 import bpy
 import bmesh
 from collections import defaultdict
+
+from ...utils.qb_tb_validator.qb_tb_validation import (
+    get_faces_of_vertex_group,
+    analyze_faces_for_block
+)
 
 
 class LIST_OT_CreateBlockVertexGroups(bpy.types.Operator):
@@ -505,8 +511,97 @@ class LIST_OT_SelectBlockByVertexGroup(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class LIST_OT_ValidateVertexGroups(bpy.types.Operator):
+    """Validate all vertex groups (quadblocks/triblocks) for geometry and UV issues"""
+    bl_idname = "list.validate_vertex_groups"
+    bl_label = "Validate Groups"
+    bl_description = "Analyze each vertex group (QB/TB) and report issues (stored for filtering)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.edit_object is not None)
+
+    def execute(self, context):
+        obj = context.edit_object
+        # Switch to object mode to safely access mesh data
+        original_mode = context.mode
+        if original_mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        try:
+            mesh = obj.data
+            # Get all vertex groups that are likely blocks
+            all_vgroups = obj.vertex_groups
+            block_group_indices = []
+            group_index_to_name = {}
+            for idx, vg in enumerate(all_vgroups):
+                if vg.name.startswith(("QB_", "TB_")):
+                    block_group_indices.append(idx)
+                    group_index_to_name[idx] = vg.name
+
+            if not block_group_indices:
+                self.report({'WARNING'}, "No block vertex groups found.")
+                return {'CANCELLED'}
+
+            # Step 1: Build mapping from vertex index to set of group indices it belongs to
+            vert_groups = [set() for _ in range(len(mesh.vertices))]
+            for v in mesh.vertices:
+                v_idx = v.index
+                for g in v.groups:
+                    if g.group in block_group_indices:
+                        vert_groups[v_idx].add(g.group)
+
+            # Step 2: For each face, determine which groups contain all its vertices
+            group_faces = defaultdict(list)  # group index -> list of face indices
+
+            for face in mesh.polygons:
+                if not face.vertices:
+                    continue
+                common_groups = set(vert_groups[face.vertices[0]])
+                for v_idx in face.vertices[1:]:
+                    common_groups.intersection_update(vert_groups[v_idx])
+                    if not common_groups:
+                        break
+                for g_idx in common_groups:
+                    group_faces[g_idx].append(face.index)
+
+            # Step 3: For each block group, retrieve its faces and analyze
+            issues_dict = {}
+            total = len(block_group_indices)
+            validated = 0
+
+            for g_idx in block_group_indices:
+                vg_name = group_index_to_name[g_idx]
+                face_indices = group_faces.get(g_idx, [])
+                if not face_indices:
+                    issues_dict[vg_name] = ["invalid_geometry"]
+                else:
+                    issues = analyze_faces_for_block(obj, face_indices)
+                    issues_dict[vg_name] = issues
+                validated += 1
+                if validated % 20 == 0:
+                    self.report({'INFO'}, f"Validated {validated}/{total} groups")
+
+            # Store the results
+            obj["vertex_group_issues"] = issues_dict
+
+            self.report({'INFO'}, f"Validation complete. Checked {validated} groups.")
+        except Exception as e:
+            self.report({'ERROR'}, f"Error during validation: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {'CANCELLED'}
+        finally:
+            if original_mode == 'EDIT_MESH':
+                bpy.ops.object.mode_set(mode='EDIT')
+
+        return {'FINISHED'}
+
+
 classes = [
     LIST_OT_CreateBlockVertexGroups,
     LIST_OT_ClearBlockVertexGroups,
     LIST_OT_SelectBlockByVertexGroup,
+    LIST_OT_ValidateVertexGroups,
 ]

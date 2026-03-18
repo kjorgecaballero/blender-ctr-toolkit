@@ -3,6 +3,7 @@ QB/TB List Properties
 Property definitions for the block list system
 Now includes navigation point filtering
 Now includes separate material filters for each display mode
+Now includes issue filter for vertex groups
 """
 
 import bpy
@@ -89,6 +90,22 @@ def register():
         default=""
     )
     
+    # Issue filter for Vertex Groups mode
+    bpy.types.Scene.list_issue_filter = EnumProperty(
+        name="Issue Filter",
+        description="Filter vertex groups by validation issues",
+        items=[
+            ('ALL', 'All', 'Show all vertex groups'),
+            ('VALID', 'Valid Blocks', 'Show only blocks with no issues'),
+            ('INVALID_GEOMETRY', 'Invalid Geometry', 'Show blocks with invalid geometry'),
+            ('INVALID_UVS', 'Invalid UVs', 'Show blocks with UVs outside 0-1 range'),
+            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Show triblocks with incorrect UV arrangement'),
+            ('DEGENERATED_UVS', 'Degenerated UVs', 'Show blocks with all UVs identical'),
+            ('NO_ISSUES', 'No Issues', 'Show blocks that are valid (alias for Valid Blocks)'),
+        ],
+        default='ALL'
+    )
+    
     # Group filter property
     bpy.types.Scene.list_active_group = StringProperty(
         name="Active Group",
@@ -172,6 +189,7 @@ def unregister():
     del bpy.types.Scene.list_navigation_filter
     del bpy.types.Scene.list_material_filter_vg
     del bpy.types.Scene.list_material_filter_cm
+    del bpy.types.Scene.list_issue_filter  
     del bpy.types.Scene.list_active_group
     del bpy.types.Scene.list_show_group_section
     del bpy.types.Scene.list_search_text

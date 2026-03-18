@@ -1,11 +1,12 @@
 """
 Sort and Filter Operators for Quadblock/Triblock List
 Moved from ui/qb_tb_list/list_sort_filters.py
+Now includes operator for issue filter
 """
 
 import bpy
 from bpy.types import Operator
-from bpy.props import StringProperty
+from bpy.props import StringProperty, EnumProperty
 
 
 class LIST_OT_ToggleSortName(Operator):
@@ -49,8 +50,35 @@ class LIST_OT_SetMaterialFilter(Operator):
         return {'FINISHED'}
 
 
+# Operator to set issue filter
+class LIST_OT_SetIssueFilter(Operator):
+    bl_idname = "list.set_issue_filter"
+    bl_label = "Set Issue Filter"
+    bl_description = "Filter vertex groups by validation issues"
+    bl_options = {'REGISTER'}
+
+    filter_type: EnumProperty(
+        name="Filter Type",
+        items=[
+            ('ALL', 'All', ''),
+            ('VALID', 'Valid Blocks', ''),
+            ('INVALID_GEOMETRY', 'Invalid Geometry', ''),
+            ('INVALID_UVS', 'Invalid UVs', ''),
+            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', ''),
+            ('DEGENERATED_UVS', 'Degenerated UVs', ''),
+            ('NO_ISSUES', 'No Issues', ''),
+        ],
+        default='ALL'
+    )
+
+    def execute(self, context):
+        context.scene.list_issue_filter = self.filter_type
+        return {'FINISHED'}
+
+
 classes = [
     LIST_OT_ToggleSortName,
     LIST_OT_ToggleSortType,
     LIST_OT_SetMaterialFilter,
+    LIST_OT_SetIssueFilter,  
 ]

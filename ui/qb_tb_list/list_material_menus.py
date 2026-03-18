@@ -3,6 +3,7 @@ Material Selection Menus for Quadblock/Triblock List
 Menus for selecting materials and constant materials
 Now includes Vertex Group selection menu
 Now with separate material filters for each display mode
+Now includes Issue Filter menu for vertex groups
 """
 
 import bpy
@@ -163,7 +164,34 @@ class LIST_MT_VertexGroupMenu(bpy.types.Menu):
             op.vertex_group_name = vg_name
 
 
+# Menu for issue filter
+class LIST_MT_IssueFilterMenu(bpy.types.Menu):
+    bl_label = "Filter by Issue"
+    
+    def draw(self, layout):
+        layout = self.layout
+        scene = bpy.context.scene
+        current = scene.list_issue_filter
+
+        # Define items with their display names and operators
+        items = [
+            ('ALL', "All", 'FILTER'),
+            ('VALID', "Valid Blocks", 'CHECKBOX_HLT'),
+            ('NO_ISSUES', "No Issues", 'CHECKBOX_DEHLT'),
+            ('INVALID_GEOMETRY', "Invalid Geometry", 'ERROR'),
+            ('INVALID_UVS', "Invalid UVs", 'UV'),
+            ('INVALID_TRIBLOCK_UVS', "Invalid Triblock UVs", 'MESH_CONE'),
+            ('DEGENERATED_UVS', "Degenerated UVs", 'GROUP_UVS'),
+        ]
+
+        for filter_type, label, icon in items:
+            icon_disp = 'CHECKBOX_HLT' if current == filter_type else 'CHECKBOX_DEHLT'
+            op = layout.operator("list.set_issue_filter", text=label, icon=icon_disp)
+            op.filter_type = filter_type
+
+
 classes = [
     LIST_MT_MaterialFilterMenu,
     LIST_MT_VertexGroupMenu, 
+    LIST_MT_IssueFilterMenu,   
 ]

@@ -1,7 +1,7 @@
 """
 QB/TB List Operators Initialization
 Registration of ALL operators for the block list system.
-Now includes operators previously located in ui/.
+Now includes vertex group validation operator.
 """
 
 import bpy
@@ -17,7 +17,7 @@ from .list_select import classes as select_classes
 
 operator_classes = (
     constant_material_classes +
-    vertex_classes +
+    vertex_classes +          
     multi_selection_classes +
     navigation_classes +
     group_classes +
