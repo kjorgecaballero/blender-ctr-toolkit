@@ -520,9 +520,17 @@ class LIST_PT_BlockListPanel(Panel):
             # Split row into two columns that expand properly
             split = menus_row.split(factor=0.5)
             
-            # Left column: Navigation filter
+            # Left column: Material filter (moved from right to left)
             left_col = split.row()
             left_col.alignment = 'EXPAND'
+            
+            material_text = scene.list_material_filter_cm if scene.list_material_filter_cm else "All Materials"
+            # Material filter with proper expansion
+            left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
+            
+            # Right column: Navigation filter
+            right_col = split.row()
+            right_col.alignment = 'EXPAND'
             
             nav_text = "All"
             if scene.list_navigation_filter == 'NAVIGATION_POINTS':
@@ -531,18 +539,7 @@ class LIST_PT_BlockListPanel(Panel):
                 nav_text = "Non-Nav"
             
             # Navigation filter with proper expansion
-            nav_split = left_col.split(factor=1.0)
-            nav_split.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon='PIVOT_CURSOR')
-            
-            # Right column: Material filter
-            right_col = split.row()
-            right_col.alignment = 'EXPAND'
-            
-            material_text = scene.list_material_filter_cm if scene.list_material_filter_cm else "All Materials"
-            
-            # Material filter with proper expansion
-            mat_split = right_col.split(factor=1.0)
-            mat_split.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
+            right_col.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon='PIVOT_CURSOR')
         
         # POSITION AND PAGINATION CONTROLS 
 

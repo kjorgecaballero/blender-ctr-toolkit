@@ -16,8 +16,8 @@ def draw_validator(context, layout):
     find_icon = get_icon(scene.validator_option)
     grid.operator("qb_tb.object_qb_tb_suffix", text="Suffix", icon=find_icon)
 
-    # Button 2: Validate
-    grid.operator("qb_tb.validate_all_objects", text="Validate", icon='ERROR')
+    # Button 2: Validate (unified)
+    grid.operator("qb_tb.validate", text="Validate", icon='CHECKMARK')
 
     # Button 3: Select
     select_icon = get_icon(scene.validator_option)

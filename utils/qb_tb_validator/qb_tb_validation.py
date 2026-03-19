@@ -117,7 +117,7 @@ def are_uvs_degenerated(uv_layer, tolerance=0.0001):
     
     return True
 
-# Validate triblock UVs
+# Validate triblock UVs for an entire object (kept for compatibility)
 def are_triblock_uvs_valid(obj, tolerance=0.0001):
     if obj.type != 'MESH':
         return False
@@ -167,7 +167,7 @@ def are_triblock_uvs_valid(obj, tolerance=0.0001):
     
     return len(valid_pairs) > 0
 
-# Get detailed triblock UV validation results
+# Get detailed triblock UV validation results (kept for compatibility)
 def get_triblock_uv_validation_details(obj, tolerance=0.0001):
     if obj.type != 'MESH':
         return {'valid': False, 'reason': 'Not a mesh'}
@@ -238,6 +238,85 @@ def get_triblock_uv_validation_details(obj, tolerance=0.0001):
         'triangles_uvs': triangles_uvs,
         'reason': 'Valid' if is_valid else 'No triangle pair shares 2+ UVs'
     }
+
+
+# Validate triblock UVs for a given set of face indices
+def are_faces_triblock_uvs_valid(obj, face_indices, tolerance=0.0001):
+    """Check if the given faces (must be 4 triangles) have valid triblock UV arrangement."""
+    if obj.type != 'MESH':
+        return False
+    mesh = obj.data
+    if len(face_indices) != 4:
+        return False
+    faces = [mesh.polygons[i] for i in face_indices]
+    if not all(len(f.vertices) == 3 for f in faces):
+        return False
+    if not mesh.uv_layers:
+        return False
+    uv_layer = mesh.uv_layers.active
+    if not uv_layer or len(uv_layer.data) == 0:
+        return False
+
+    triangles_uvs = []
+    for fi in face_indices:
+        face = mesh.polygons[fi]
+        face_uvs = []
+        for loop_index in face.loop_indices:
+            uv = uv_layer.data[loop_index].uv
+            face_uvs.append({
+                'uv': uv,
+                'uv_key': (round(uv.x, 4), round(uv.y, 4))
+            })
+        triangles_uvs.append(face_uvs)
+
+    # Check for at least one pair sharing 2+ UVs
+    for i in range(4):
+        for j in range(i+1, 4):
+            shared_keys = set(k['uv_key'] for k in triangles_uvs[i]) & set(k['uv_key'] for k in triangles_uvs[j])
+            if len(shared_keys) >= 2:
+                return True
+    return False
+
+
+# UV issue function 
+def get_face_uv_issues(obj, face_indices):
+    """Check UVs for the given faces and return a list of UV-related issues.
+       Possible issues: 'invalid_uvs', 'degenerated_uvs'"""
+    issues = []
+    mesh = obj.data
+    if not mesh.uv_layers:
+        return issues
+    uv_layer = mesh.uv_layers.active.data
+
+    # Check for invalid UVs (out of 0-1 range)
+    for fi in face_indices:
+        face = mesh.polygons[fi]
+        for loop_idx in face.loop_indices:
+            uv = uv_layer[loop_idx].uv
+            if uv.x < 0 or uv.x > 1 or uv.y < 0 or uv.y > 1:
+                issues.append("invalid_uvs")
+                break
+        if "invalid_uvs" in issues:
+            break
+
+    # Check for degenerated UVs (all UVs identical)
+    if face_indices:
+        all_uvs = []
+        for fi in face_indices:
+            face = mesh.polygons[fi]
+            for loop_idx in face.loop_indices:
+                all_uvs.append(uv_layer[loop_idx].uv)
+        if all_uvs:
+            first_uv = all_uvs[0]
+            degenerated = True
+            for uv in all_uvs[1:]:
+                if (abs(uv.x - first_uv.x) > 0.0001 or abs(uv.y - first_uv.y) > 0.0001):
+                    degenerated = False
+                    break
+            if degenerated:
+                issues.append("degenerated_uvs")
+
+    return list(set(issues))
 
 
 # Functions for vertex group validation
@@ -360,73 +439,7 @@ def analyze_faces_for_triblock(obj, face_indices, tolerance=0.001):
             share_count.get(3, 0) == 3)
 
 
-def get_face_uv_issues(obj, face_indices):
-    """
-    Check UVs for the given faces and return a list of UV-related issues.
-    Possible issues: 'invalid_uvs', 'degenerated_uvs', 'invalid_triblock_uvs'
-    """
-    issues = []
-    mesh = obj.data
-    if not mesh.uv_layers:
-        return issues
-    uv_layer = mesh.uv_layers.active.data
-
-    # Check for invalid UVs (out of 0-1 range)
-    for fi in face_indices:
-        face = mesh.polygons[fi]
-        for loop_idx in face.loop_indices:
-            uv = uv_layer[loop_idx].uv
-            if uv.x < 0 or uv.x > 1 or uv.y < 0 or uv.y > 1:
-                issues.append("invalid_uvs")
-                break
-        if "invalid_uvs" in issues:
-            break
-
-    # Check for degenerated UVs (all UVs identical)
-    if face_indices:
-        # Collect all UVs from these faces
-        all_uvs = []
-        for fi in face_indices:
-            face = mesh.polygons[fi]
-            for loop_idx in face.loop_indices:
-                all_uvs.append(uv_layer[loop_idx].uv)
-        if all_uvs:
-            first_uv = all_uvs[0]
-            degenerated = True
-            for uv in all_uvs[1:]:
-                if (abs(uv.x - first_uv.x) > 0.0001 or abs(uv.y - first_uv.y) > 0.0001):
-                    degenerated = False
-                    break
-            if degenerated:
-                issues.append("degenerated_uvs")
-
-    # Check for triblock UV validity if faces are all triangles
-    faces = [mesh.polygons[i] for i in face_indices]
-    if len(face_indices) == 4 and all(len(f.vertices) == 3 for f in faces):
-        # Simplified triblock UV check: need at least one pair of triangles sharing 2 UVs
-        triangles_uvs = []
-        for fi in face_indices:
-            face = mesh.polygons[fi]
-            uvs = []
-            for loop_idx in face.loop_indices:
-                uv = uv_layer[loop_idx].uv
-                uvs.append({'uv': uv, 'uv_key': (round(uv.x, 4), round(uv.y, 4))})
-            triangles_uvs.append(uvs)
-        valid_pair_found = False
-        for i in range(4):
-            for j in range(i+1, 4):
-                shared_keys = set(k['uv_key'] for k in triangles_uvs[i]) & set(k['uv_key'] for k in triangles_uvs[j])
-                if len(shared_keys) >= 2:
-                    valid_pair_found = True
-                    break
-            if valid_pair_found:
-                break
-        if not valid_pair_found:
-            issues.append("invalid_triblock_uvs")
-
-    return list(set(issues))  # remove duplicates
-
-
+# Triblock-specific UV check ---
 def analyze_faces_for_block(obj, face_indices):
     """
     Analyze the given faces (belonging to a potential quadblock or triblock)
@@ -452,8 +465,13 @@ def analyze_faces_for_block(obj, face_indices):
         else:
             issues.append("invalid_geometry")
 
-    # Add UV issues
+    # Add general UV issues
     uv_issues = get_face_uv_issues(obj, face_indices)
     issues.extend(uv_issues)
+
+    # If it's a triblock, check triblock-specific UV validity
+    if is_tri:
+        if not are_faces_triblock_uvs_valid(obj, face_indices):
+            issues.append("invalid_triblock_uvs")
 
     return issues

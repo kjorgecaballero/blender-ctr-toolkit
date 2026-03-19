@@ -12,9 +12,7 @@ from bpy.props import StringProperty, BoolProperty
 from ...ui.qb_tb_list.list_helpers import get_block_material_name
 
 
-
 # Helper function to get visible items based on current filters
-
 def _get_filtered_display_items(context, obj, scene):
     """Return list of dicts with visible items (quadblocks/triblocks) in current list."""
     items = []
@@ -84,8 +82,42 @@ def _get_filtered_display_items(context, obj, scene):
                  search in str(it['block_id']) or
                  search in it['block_type'].lower()]
 
-    return items
+    # Apply issue filter (only for vertex groups)
+    if display_type == 'VERTEX_GROUPS' and scene.list_issue_filter != 'ALL':
+        issues_dict = {}
+        if "vertex_group_issues" in obj:
+            issues_dict = dict(obj["vertex_group_issues"])
 
+        filtered = []
+        for it in items:
+            item_issues = issues_dict.get(it['name'], [])
+            show = True
+            issue_filter = scene.list_issue_filter
+
+            if issue_filter == 'VALID':
+                # Valid means has 'quadblock' or 'triblock' and no other issues
+                if not ('quadblock' in item_issues or 'triblock' in item_issues):
+                    show = False
+                else:
+                    other_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
+                    show = len(other_issues) == 0
+            elif issue_filter == 'NO_ISSUES':
+                show = len(item_issues) == 0
+            elif issue_filter == 'INVALID_GEOMETRY':
+                show = 'invalid_geometry' in item_issues
+            elif issue_filter == 'INVALID_UVS':
+                show = 'invalid_uvs' in item_issues
+            elif issue_filter == 'INVALID_TRIBLOCK_UVS':
+                show = 'invalid_triblock_uvs' in item_issues
+            elif issue_filter == 'DEGENERATED_UVS':
+                show = 'degenerated_uvs' in item_issues
+
+            if show:
+                filtered.append(it)
+
+        items = filtered
+
+    return items
 
 
 class LIST_OT_ToggleMultiSelection(Operator):
