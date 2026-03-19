@@ -123,13 +123,16 @@ class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
             self.report({'INFO'}, f"Found {len(start_elements)} valid navigation points: {nav_points_str}")
         
 
-        # PHASE 2: NAVIGATE FROM ALL STARTING POINTS
+        # PHASE 2: NAVIGATE FROM ALL STARTING POINTS WITH GLOBAL FACE CONFLICT DETECTION
 
         all_results = qb_tb_navigator.QbTbBlockResult()
+        # We'll maintain a global used_faces set across all starts
+        global_used_faces = set()
         visited_centers = set()
         visited_faces = set()
         
-        for i, start_element in enumerate(start_elements):
+        for start_element in start_elements:
+            # Skip if we've already processed this exact center (though unlikely with different types)
             if isinstance(start_element, bmesh.types.BMVert):
                 if start_element.index in visited_centers:
                     continue
@@ -137,40 +140,49 @@ class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
                 if start_element.index in visited_faces:
                     continue
             
-            result = qb_tb_navigator.find_qb_tb_with_groups(start_element, bm)
+            # Run BFS from this start element
+            result = qb_tb_navigator.find_qb_tb_with_groups(start_element, bm, used_faces_initial=global_used_faces, skip_grouping=True)
             
+            # Now we need to add blocks from this result only if their faces are not already in global_used_faces
+            # For quadblocks
             for center in result.quadblock_centers:
-                if center.index not in visited_centers:
-                    all_results.quadblock_centers.append(center)
-                    visited_centers.add(center.index)
+                if center.index in visited_centers:
+                    continue
+                # Get the faces of this quadblock
+                faces = set(center.link_faces)  # quadblock faces are exactly the 4 faces around center
+                # Check if any of these faces are already used globally
+                if faces & global_used_faces:
+                    # Conflict: skip this block
+                    print(f"Skipping quadblock at vertex {center.index} because its faces are already used")
+                    continue
+                # Otherwise, add it
+                all_results.quadblock_centers.append(center)
+                visited_centers.add(center.index)
+                global_used_faces.update(faces)
+                # Update maps
+                for face in faces:
+                    all_results.face_to_quadblock[face.index] = center.index
+                    all_results.quadblock_faces_map[center.index].append(face.index)
             
+            # For triblocks
             for center in result.triblock_centers:
-                if center.index not in visited_faces:
-                    all_results.triblock_centers.append(center)
-                    visited_faces.add(center.index)
+                if center.index in visited_faces:
+                    continue
+                # Get the faces of this triblock
+                adjacent = qb_tb_navigator.find_adjacent_triangular_faces(center)
+                faces = {center} | set(adjacent)
+                if faces & global_used_faces:
+                    print(f"Skipping triblock at face {center.index} because its faces are already used")
+                    continue
+                all_results.triblock_centers.append(center)
+                visited_faces.add(center.index)
+                global_used_faces.update(faces)
+                for face in faces:
+                    all_results.face_to_triblock[face.index] = center.index
+                    all_results.triblock_faces_map[center.index].append(face.index)
             
-            all_results.used_faces.update(result.used_faces)
-            all_results.visited_verts.update(result.visited_verts)
-            all_results.visited_faces.update(result.visited_faces)
-            
-            all_results.face_to_quadblock.update(result.face_to_quadblock)
-            all_results.face_to_triblock.update(result.face_to_triblock)
-            
-            for block_id, faces in result.quadblock_faces_map.items():
-                if block_id not in all_results.quadblock_faces_map:
-                    all_results.quadblock_faces_map[block_id] = faces
-                else:
-                    existing_faces = set(all_results.quadblock_faces_map[block_id])
-                    new_faces = [f for f in faces if f not in existing_faces]
-                    all_results.quadblock_faces_map[block_id].extend(new_faces)
-            
-            for block_id, faces in result.triblock_faces_map.items():
-                if block_id not in all_results.triblock_faces_map:
-                    all_results.triblock_faces_map[block_id] = faces
-                else:
-                    existing_faces = set(all_results.triblock_faces_map[block_id])
-                    new_faces = [f for f in faces if f not in existing_faces]
-                    all_results.triblock_faces_map[block_id].extend(new_faces)
+            # Also update used_faces in all_results for later group calculation? We'll do groups after all.
+            all_results.used_faces.update(global_used_faces)
         
 
         # PHASE 3: CALCULATE GROUPS ONCE FOR ALL ACCUMULATED BLOCKS
@@ -186,16 +198,21 @@ class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
 
         # PHASE 4: APPLY SELECTION AND SAVE RESULTS
 
+        # Clear current selection
         for v in bm.verts:
-            v.select = v in all_results.visited_verts
+            v.select = False
         for f in bm.faces:
-            f.select = f in all_results.visited_faces
+            f.select = False
+        
+        # Select all visited elements (optional, but original did)
+        for v in all_results.visited_verts:
+            v.select = True
+        for f in all_results.visited_faces:
+            f.select = True
         
         bmesh.update_edit_mesh(obj.data)
         
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
-        
+        # Store results in object properties
         obj["quadblock_centers"] = [v.index for v in all_results.quadblock_centers]
         obj["triblock_faces"] = [f.index for f in all_results.triblock_centers]
         obj["used_face_indices"] = [f.index for f in all_results.used_faces]
@@ -223,6 +240,7 @@ class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
         obj["quadblock_faces_map"] = {str(k): v for k, v in all_results.quadblock_faces_map.items()}
         obj["triblock_faces_map"] = {str(k): v for k, v in all_results.triblock_faces_map.items()}
         
+        # Report statistics
         quad_stats = []
         for group in sorted(all_results.quad_group_members.keys()):
             count = len(all_results.quad_group_members[group])
