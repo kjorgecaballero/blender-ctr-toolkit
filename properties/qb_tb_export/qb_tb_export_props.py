@@ -123,12 +123,18 @@ def register():
         default=False
     )
     
-    # Property for duplicate export path
-    bpy.types.Scene.duplicate_export_path = bpy.props.StringProperty(
-        name="Duplicate Export Path",
-        description="Last used folder for duplicate exports",
-        default="",
-        subtype='DIR_PATH'
+    # Duplicate export properties
+    bpy.types.Scene.export_duplicates = bpy.props.BoolProperty(
+        name="Export Duplicates",
+        description="Export duplicates of detected blocks to a 'Duplicates' subfolder (ignores UV/range filters)",
+        default=False
+    )
+    
+    # Export processed duplicates with user settings
+    bpy.types.Scene.export_processed_duplicates = bpy.props.BoolProperty(
+        name="Export Processed Duplicates",
+        description="After duplication, export the processed objects using current export settings (filters, folder, etc.)",
+        default=False
     )
 
 def unregister():
@@ -150,4 +156,5 @@ def unregister():
     del bpy.types.Scene.export_details
     del bpy.types.Scene.allow_out_of_range
     del bpy.types.Scene.use_selection
-    del bpy.types.Scene.duplicate_export_path
+    del bpy.types.Scene.export_duplicates
+    del bpy.types.Scene.export_processed_duplicates

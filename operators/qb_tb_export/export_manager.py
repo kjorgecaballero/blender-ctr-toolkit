@@ -309,9 +309,15 @@ class ExportManager:
         return result
     
     def restore_state(self):
-        """Restore Blender selection and active object to original state."""
-        bpy.ops.object.select_all(action='DESELECT')
+        """
+        Restore Blender selection and active object to original state.
+        Uses direct API to avoid context‑dependent operator errors.
+        """
+        # Deselect all objects using direct API (safe from any mode)
+        for obj in bpy.data.objects:
+            obj.select_set(False)
         
+        # Restore original selection
         for obj in self.original_selection:
             try:
                 if obj and obj.name in bpy.data.objects:
@@ -319,6 +325,7 @@ class ExportManager:
             except:
                 pass
         
+        # Restore active object
         if self.original_active:
             try:
                 if self.original_active and self.original_active.name in bpy.data.objects:

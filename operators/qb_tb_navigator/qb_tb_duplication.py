@@ -359,9 +359,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             self.report({'ERROR'}, "No directory selected")
             return {'CANCELLED'}
 
-        # Save the chosen path in scene property for later reference
-        context.scene.duplicate_export_path = self.directory
-
         # Clear the temporary global list before starting duplication
         _temp_duplicated_objects = []
 
@@ -492,7 +489,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             for obj in all_resulting_objects:
                 obj.select_set(True)
 
-            # We'll process each object using pure API for maximum speed
+            # We'll process each object using pure API for best performance
             for obj in all_resulting_objects:
                 if obj.type != 'MESH' or not obj.data.polygons:
                     continue
