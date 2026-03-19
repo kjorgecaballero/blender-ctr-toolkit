@@ -21,6 +21,11 @@ from ..qb_tb_export.texture_handler import TextureHandler
 _temp_duplicated_objects = []
 
 
+def strip_blender_suffix(name):
+    """Remove Blender's automatic .001, .002 suffixes from a string."""
+    return re.sub(r'\.\d+$', '', name)
+
+
 def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_dir, settings):
     """
     Export the list of objects to obj_filepath, copying textures to texture_dir if enabled.
@@ -510,8 +515,12 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 if "_ID" in mat_name:
                     parts = mat_name.rsplit("_ID", 1)
                     if len(parts) == 2:
-                        base_name = parts[0]
-                        id_suffix = parts[1]
+                        base_name_raw = parts[0]
+                        id_suffix_raw = parts[1]
+
+                        # Remove Blender suffixes from both parts
+                        base_name = strip_blender_suffix(base_name_raw)
+                        id_suffix = strip_blender_suffix(id_suffix_raw)
 
                         # Rename object
                         new_obj_name = id_suffix
@@ -535,7 +544,23 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     else:
                         target_mat = current_mat
                 else:
-                    target_mat = current_mat
+                    # Handle materials without "_ID" that may have numeric suffixes
+                    base_candidate = strip_blender_suffix(mat_name)
+                    if base_candidate != mat_name:
+                        # Material has a .001 suffix
+                        base_mat = bpy.data.materials.get(base_candidate)
+                        if base_mat is not None:
+                            # Use the base material
+                            target_mat = base_mat
+                        else:
+                            # Base material doesn't exist; rename current to base if available
+                            if base_candidate not in bpy.data.materials:
+                                current_mat.name = base_candidate
+                                target_mat = current_mat
+                            else:
+                                target_mat = current_mat
+                    else:
+                        target_mat = current_mat
 
                 # Ensure target material is in mesh.materials list
                 target_index = None
@@ -558,9 +583,13 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             bpy.ops.object.material_slot_remove_unused()
 
             # Delete any constant materials that are now unused
-            # Use list comprehension to avoid unnecessary iterations
             mats_to_remove = [mat for mat in bpy.data.materials if "_ID" in mat.name and mat.users == 0]
             for mat in mats_to_remove:
+                bpy.data.materials.remove(mat)
+
+            # Also remove any materials with numeric suffixes that have no users (leftovers)
+            suffixed_mats = [mat for mat in bpy.data.materials if re.search(r'\.\d+$', mat.name) and mat.users == 0]
+            for mat in suffixed_mats:
                 bpy.data.materials.remove(mat)
 
             self.report({'INFO'}, "Material consolidation and renaming completed.")
