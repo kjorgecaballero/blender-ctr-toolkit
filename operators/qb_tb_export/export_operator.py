@@ -398,7 +398,24 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         finally:
             # Restore original mode and active object
             if original_mode != context.mode:
-                bpy.ops.object.mode_set(mode=original_mode)
+                # Map context mode strings to valid mode_set enum values
+                mode_map = {
+                    'EDIT_MESH': 'EDIT',
+                    'EDIT_CURVE': 'EDIT',
+                    'EDIT_SURFACE': 'EDIT',
+                    'EDIT_METABALL': 'EDIT',
+                    'EDIT_TEXT': 'EDIT',
+                    'EDIT_ARMATURE': 'EDIT',
+                    'EDIT_LATTICE': 'EDIT',
+                    'EDIT_POINTCLOUD': 'EDIT',
+                    'EDIT_GREASE_PENCIL': 'EDIT',
+                }
+                target_mode = mode_map.get(original_mode, original_mode)
+                allowed_modes = {'OBJECT', 'EDIT', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'}
+                if target_mode in allowed_modes:
+                    bpy.ops.object.mode_set(mode=target_mode)
+                else:
+                    bpy.ops.object.mode_set(mode='OBJECT')
             if original_active_name:
                 obj = bpy.data.objects.get(original_active_name)
                 if obj:
