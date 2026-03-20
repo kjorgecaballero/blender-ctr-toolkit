@@ -353,6 +353,58 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
+
+    # Helper methods for managing the Processed_Blocks collection
+
+    def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
+        """
+        Delete all objects in the specified collection using the fast
+        unlink + purge method (Option B). This removes them entirely.
+        """
+        col = bpy.data.collections.get(collection_name)
+        if not col:
+            return
+
+        objects = list(col.objects)
+        if not objects:
+            return
+
+        # Unlink objects from all collections (they become orphans)
+        for obj in objects:
+            for coll in list(obj.users_collection):
+                coll.objects.unlink(obj)
+
+        # Purge all orphaned data blocks (including objects)
+        bpy.ops.outliner.orphans_purge()
+
+        # Optionally remove the now empty collection (it will be recreated later if needed)
+        bpy.data.collections.remove(col)
+
+        print(f"[Processed_Blocks] Cleared {len(objects)} old objects")
+
+    def _move_to_processed_collection(self, context, objects, collection_name="Processed_Blocks"):
+        """
+        Move the given objects exclusively to the specified collection.
+        If the collection does not exist, it is created.
+        """
+        # Ensure destination collection exists
+        col = bpy.data.collections.get(collection_name)
+        if not col:
+            col = bpy.data.collections.new(collection_name)
+            context.scene.collection.children.link(col)
+
+        for obj in objects:
+            # Unlink from all current collections
+            for coll in list(obj.users_collection):
+                coll.objects.unlink(obj)
+            # Link to the target collection
+            col.objects.link(obj)
+
+        print(f"[Processed_Blocks] Moved {len(objects)} objects to collection '{collection_name}'")
+
+
+    # Main execution
+
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -360,36 +412,37 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
     def execute(self, context):
         global _temp_duplicated_objects
 
-        if not self.directory:
-            self.report({'ERROR'}, "No directory selected")
-            return {'CANCELLED'}
+        # Clean previous processed objects
+        self._clear_processed_collection(context, "Processed_Blocks")
 
-        # Clear the temporary global list before starting duplication
+        # Reset global list 
         _temp_duplicated_objects = []
 
         quadblock_count = 0
         triblock_count = 0
 
         try:
-            # Store original mode to restore later if needed
+            # Store original mode and object for later restoration
             original_mode = context.mode
             original_obj = context.object
 
+            # Duplicate quadblocks if any
             if "quad_group_members" in context.object and context.object["quad_group_members"]:
                 bpy.ops.navigator.duplicate_quadblocks_by_group()
                 quad_group_members = context.object["quad_group_members"]
                 quadblock_count = sum(len(members) for members in quad_group_members.values())
 
+            # Duplicate triblocks if any
             if "tri_group_members" in context.object and context.object["tri_group_members"]:
                 bpy.ops.navigator.duplicate_triblocks_by_group()
                 tri_group_members = context.object["tri_group_members"]
                 triblock_count = sum(len(members) for members in tri_group_members.values())
 
-            # After duplication, we must be in OBJECT mode to export
+            # Ensure we are in OBJECT mode for export
             if context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Collect duplicated objects from the global list
+            # Collect the duplicated objects
             obj_names = _temp_duplicated_objects
             duplicated_objs = []
             for name in obj_names:
@@ -401,7 +454,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 self.report({'WARNING'}, "No objects were duplicated")
                 return {'CANCELLED'}
 
-            # Configure export settings (use current scene settings but force some options)
+            # Configure export settings
             settings = ExportSettings.from_scene_props(context)
             # Force export all duplicated objects (ignore UV filters, etc.)
             settings.export_quadblocks = True
@@ -410,7 +463,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             settings.export_degenerated_uvs = True
             settings.allow_out_of_range = True
 
-            # Base filepath inside the chosen folder (will be adjusted by prepare_export_paths)
+            # Base filepath inside the chosen folder
             base_filepath = os.path.join(self.directory, "duplicated_blocks.obj")
             settings.filepath = base_filepath
 
@@ -418,12 +471,9 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             manager = ExportManager(context)
             original_last_export = context.scene.last_export_path
             try:
-                # Temporarily set last_export_path to the chosen directory so that
-                # prepare_export_paths uses it as base.
                 context.scene.last_export_path = self.directory
                 export_paths = manager.prepare_export_paths(base_filepath, settings, is_quick_export=False)
             finally:
-                # Restore original last_export_path
                 context.scene.last_export_path = original_last_export
 
             # Export the objects
@@ -452,26 +502,17 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 self.report({'WARNING'}, "OBJ imported but with issues")
 
             # Batch separation of imported objects (optimized)
-            # Imported objects are automatically selected after import.
-            # Collect all imported mesh objects that have geometry.
             imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
 
             if not imported_objects:
                 separated_objects = []
             else:
-                # Activate one of them (any)
                 context.view_layer.objects.active = imported_objects[0]
-                # Enter edit mode with all selected meshes
                 bpy.ops.object.mode_set(mode='EDIT')
-                # Select all geometry (to separate all loose parts in all objects)
                 bpy.ops.mesh.select_all(action='SELECT')
-                # Separate by loose parts for all selected objects simultaneously
                 bpy.ops.mesh.separate(type='LOOSE')
-                # Exit edit mode
                 bpy.ops.object.mode_set(mode='OBJECT')
-                # Collect all objects that have geometry (the newly separated parts)
                 separated_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
-                # Remove the original objects that became empty
                 for obj in imported_objects:
                     if obj.type == 'MESH' and len(obj.data.polygons) == 0:
                         bpy.data.objects.remove(obj, do_unlink=True)
@@ -586,7 +627,11 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
             self.report({'INFO'}, "Material consolidation and renaming completed.")
 
+            # Move final objects to Processed_Blocks collection 
+            self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
+
             self.report({'INFO'}, f"Duplicated blocks exported to {export_paths['obj_filepath']} and imported")
+            self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
 
         finally:
             # Clean up the global list
