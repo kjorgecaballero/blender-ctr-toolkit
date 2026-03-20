@@ -17,7 +17,7 @@ from ..qb_tb_export.texture_handler import TextureHandler
 
 
 # Temporary global list to collect names of duplicated objects during a single
-# "Duplicate All" operation. It is cleared before use and not saved anywhere.
+# "Duplicate All" operation. It is cleared before use and not saved elsewhere.
 _temp_duplicated_objects = []
 
 
@@ -451,51 +451,43 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             if 'FINISHED' not in import_result:
                 self.report({'WARNING'}, "OBJ imported but with issues")
 
-            # OPTIMIZED SEPARATION 
-            bpy.ops.object.mode_set(mode='OBJECT')
-            imported_objects = context.selected_objects[:]
+            # Batch separation of imported objects (optimized)
+            # Imported objects are automatically selected after import.
+            # Collect all imported mesh objects that have geometry.
+            imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
 
             if not imported_objects:
-                self.report({'WARNING'}, "No imported objects found.")
-                return {'CANCELLED'}
-
-            # --- Step 1: Join all imported objects into one and separate by loose parts ---
-            if len(imported_objects) > 1:
-                bpy.ops.object.select_all(action='DESELECT')
-                for obj in imported_objects:
-                    obj.select_set(True)
-                context.view_layer.objects.active = imported_objects[0]
-                bpy.ops.object.join()
-                # Now we have one object (the active one)
-                joined_obj = context.view_layer.objects.active
+                separated_objects = []
             else:
-                joined_obj = imported_objects[0]
+                # Activate one of them (any)
+                context.view_layer.objects.active = imported_objects[0]
+                # Enter edit mode with all selected meshes
+                bpy.ops.object.mode_set(mode='EDIT')
+                # Select all geometry (to separate all loose parts in all objects)
+                bpy.ops.mesh.select_all(action='SELECT')
+                # Separate by loose parts for all selected objects simultaneously
+                bpy.ops.mesh.separate(type='LOOSE')
+                # Exit edit mode
+                bpy.ops.object.mode_set(mode='OBJECT')
+                # Collect all objects that have geometry (the newly separated parts)
+                separated_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
+                # Remove the original objects that became empty
+                for obj in imported_objects:
+                    if obj.type == 'MESH' and len(obj.data.polygons) == 0:
+                        bpy.data.objects.remove(obj, do_unlink=True)
 
-            # Enter edit mode, select all, separate by loose parts
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.separate(type='LOOSE')
-            bpy.ops.object.mode_set(mode='OBJECT')
+            self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
 
-            # After separation, all resulting parts are selected
-            all_resulting_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
-
-            # The original joined object may be empty, remove it if so
-            if joined_obj.name in bpy.data.objects and len(joined_obj.data.polygons) == 0:
-                bpy.data.objects.remove(joined_obj, do_unlink=True)
-
-            self.report({'INFO'}, f"Separation completed, generated {len(all_resulting_objects)} parts.")
-
-            # MATERIAL PROCESSING 
+            # Material processing
             base_materials_cache = {}
 
             # Ensure all objects are selected for later operations
             bpy.ops.object.select_all(action='DESELECT')
-            for obj in all_resulting_objects:
+            for obj in separated_objects:
                 obj.select_set(True)
 
-            # We'll process each object using pure API for best performance
-            for obj in all_resulting_objects:
+            # Process each object using pure API for best performance
+            for obj in separated_objects:
                 if obj.type != 'MESH' or not obj.data.polygons:
                     continue
 
@@ -593,7 +585,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 bpy.data.materials.remove(mat)
 
             self.report({'INFO'}, "Material consolidation and renaming completed.")
-            # END OF PROCESSING 
 
             self.report({'INFO'}, f"Duplicated blocks exported to {export_paths['obj_filepath']} and imported")
 
