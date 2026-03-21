@@ -420,6 +420,9 @@ class LIST_PT_BlockListPanel(Panel):
         
         type_icon = 'VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL'
         icons_container.operator("list.toggle_sort_type", text="", icon=type_icon)
+
+        # Duplicate button (Shift+D) – added for quick duplication of selected geometry
+        icons_container.operator("list.duplicate_selection", text="", icon='DUPLICATE')
         
         # Navigation toggle button (only for constant materials)
         if scene.list_display_type == 'CONSTANT_MATERIALS':
