@@ -522,10 +522,76 @@ class LIST_OT_ClearChecksInCurrentList(Operator):
         return {'FINISHED'}
 
 
+class LIST_OT_ShowVertexGroupIssues(Operator):
+    """Show detailed issues for a vertex group in a popup dialog"""
+    bl_idname = "list.show_vertex_group_issues"
+    bl_label = "Vertex Group Issues"
+    bl_description = "Show detailed issues for this vertex group"
+    bl_options = {'REGISTER'}
+
+    group_name: StringProperty(name="Group Name")
+
+    def execute(self, context):
+        obj = context.edit_object
+        if not obj or "vertex_group_issues" not in obj:
+            self.report({'WARNING'}, "No issue data found for this object.")
+            return {'CANCELLED'}
+
+        issues_dict = dict(obj["vertex_group_issues"])
+        issues = issues_dict.get(self.group_name, [])
+
+        if not issues:
+            self.report({'INFO'}, f"No issues for vertex group '{self.group_name}'.")
+            return {'FINISHED'}
+
+        # Build message
+        lines = []
+        lines.append(f"Issues for vertex group: {self.group_name}")
+        lines.append("-" * 30)
+
+        # Map issue keys to human-readable messages
+        issue_map = {
+            'quadblock': ("Valid Quadblock", 'INFO'),
+            'triblock': ("Valid Triblock", 'INFO'),
+            'invalid_geometry': ("Invalid Geometry", 'ERROR'),
+            'invalid_uvs': ("UVs outside 0-1 range", 'UV'),
+            'invalid_triblock_uvs': ("Invalid Triblock UV arrangement", 'ERROR'),
+            'degenerated_uvs': ("Degenerated UVs (all UVs identical)", 'GROUP_UVS'),
+        }
+
+        for issue in issues:
+            msg, icon = issue_map.get(issue, (f"Unknown: {issue}", 'QUESTION'))
+            lines.append(f"• {msg}")
+
+        # Show as a popup dialog
+        def draw_popup(self, context):
+            layout = self.layout
+            for line in lines:
+                if line.startswith("-"):
+                    layout.separator()
+                elif line.startswith("Issues for"):
+                    row = layout.row()
+                    row.label(text=line, icon='ERROR')
+                else:
+                    row = layout.row()
+                    # Try to extract the icon if available
+                    issue_key = None
+                    for key in issue_map:
+                        if key in line:
+                            issue_key = key
+                            break
+                    icon = issue_map.get(issue_key, (None, 'INFO'))[1] if issue_key else 'INFO'
+                    row.label(text=line, icon=icon)
+
+        context.window_manager.popup_menu(draw_popup, title="Vertex Group Issues", icon='ERROR')
+        return {'FINISHED'}
+
+
 classes = [
     LIST_OT_ToggleMultiSelection,
     LIST_OT_ClearMultiSelection,
     LIST_OT_SelectMultiChecked,
     LIST_OT_CheckAll,
     LIST_OT_ClearChecksInCurrentList,
+    LIST_OT_ShowVertexGroupIssues,
 ]

@@ -673,8 +673,12 @@ class LIST_PT_BlockListPanel(Panel):
                                 # Use a small icon at the end
                                 right_icon = row.row(align=True)
                                 right_icon.alignment = 'RIGHT'
-                                right_icon.label(text="", icon='ERROR')
-                            # Could also show specific icons for each issue, but we keep it simple
+                                # Show a button that opens the issue popup
+                                op = right_icon.operator("list.show_vertex_group_issues", 
+                                                         text="", 
+                                                         icon='ERROR',
+                                                         emboss=False)
+                                op.group_name = item['name']
                     
                 elif item['type'] == 'constant_material':
                     # Show only the constant material name (not QB/TB_ prefix)
