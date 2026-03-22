@@ -1,8 +1,3 @@
-"""
-Range Box operator for CTR Toolkit
-Creates a 1000x1000x1000 wireframe cube for track boundary visualization
-"""
-
 import bpy
 
 CUBE_NAME = "Range"
@@ -10,31 +5,48 @@ CUBE_SIZE = 1000
 
 def create_wireframe_cube():
     """Create or retrieve a wireframe cube for range visualization"""
+    # If the cube already exists, make sure it's in the current view layer
     if CUBE_NAME in bpy.data.objects:
         cube = bpy.data.objects[CUBE_NAME]
+        # Ensure the object is linked to the current view layer
+        if cube.name not in bpy.context.view_layer.objects:
+            bpy.context.scene.collection.objects.link(cube)
+        # Activate and select it
         bpy.context.view_layer.objects.active = cube
         cube.select_set(True)
         cube.hide_set(False)
         return cube
 
-    # Create new cube
+    # Create a new cube at world origin 
+    # Store original cursor location
+    original_cursor = bpy.context.scene.cursor.location.copy()
+    # Move cursor to world origin
+    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+
     bpy.ops.mesh.primitive_cube_add(size=CUBE_SIZE)
     cube = bpy.context.active_object
     cube.name = CUBE_NAME
-    
+
+    # Restore original cursor position
+    bpy.context.scene.cursor.location = original_cursor
+
     # Convert to wireframe
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.delete(type='ONLY_FACE')
     bpy.ops.object.mode_set(mode='OBJECT')
-    
+
     cube.display_type = 'WIRE'
-    
+
     # Lock transformations to prevent accidental modification
     cube.lock_location = [True, True, True]
     cube.lock_rotation = [True, True, True]
     cube.lock_scale = [True, True, True]
-    
+
+    # Ensure the new cube is linked to the current view layer
+    if cube.name not in bpy.context.view_layer.objects:
+        bpy.context.scene.collection.objects.link(cube)
+
     return cube
 
 def adjust_camera():
@@ -48,22 +60,19 @@ def adjust_camera():
 
 class CTR_OT_AddRangeBox(bpy.types.Operator):
     """Operator to add Range Box to scene"""
-    
     bl_idname = "ctr.add_range_box"
     bl_label = "Range Box"
     bl_description = "Adds a 1000x1000x1000 wireframe cube for track boundaries"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
-        """Check if operator can be executed"""
         return context.mode == 'OBJECT'
 
     def execute(self, context):
-        """Execute the operator"""
         create_wireframe_cube()
         adjust_camera()
-        self.report({'INFO'}, "Range Box created - 1000x1000x1000 wireframe cube")
+        self.report({'INFO'}, "Range Box created/restored - 1000x1000x1000 wireframe cube")
         return {'FINISHED'}
 
 def menu_func(self, context):
