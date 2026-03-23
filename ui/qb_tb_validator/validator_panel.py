@@ -3,42 +3,31 @@ import bpy
 def draw_validator(context, layout):
     scene = context.scene
 
-    # Main box containing the unified dropdown and the 2x2 button grid
     main_box = layout.box()
 
-    # Unified options dropdown (full width)
+    # Scope selection (Objects / Vertex Groups)
+    row = main_box.row(align=True)
+    row.prop(scene, "validator_scope", expand=True)
+
+    # Use a column with align=True to remove extra spacing between rows
+    col = main_box.column(align=True)
+
+    # First row: Suffix/Issues + Select
+    row1 = col.row(align=True)
+    if scene.validator_scope == 'OBJECTS':
+        row1.operator("qb_tb.object_qb_tb_suffix", text="Suffix", icon='SORTALPHA')
+        row1.operator("qb_tb.filter_select_objects", text="Select", icon='RESTRICT_SELECT_OFF')
+    else:
+        row1.operator("list.validate_vertex_groups", text="Issues", icon='ERROR')
+        row1.operator("qb_tb.select_vertex_groups_by_type", text="Select", icon='RESTRICT_SELECT_OFF')
+
+    # Second row: Clean/Clear + Validate
+    row2 = col.row(align=True)
+    if scene.validator_scope == 'OBJECTS':
+        row2.operator("qb_tb.clean_object_suffixes", text="Clean", icon='FILE_REFRESH')
+    else:
+        row2.operator("qb_tb.clear_vertex_group_issues", text="Clear", icon='TRASH')
+    row2.operator("qb_tb.validate", text="Validate", icon='CHECKMARK')
+
+    # Unified dropdown
     main_box.prop(scene, "validator_option", text="")
-
-    # 2x2 button grid
-    grid = main_box.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
-
-    # Button 1: Suffix
-    find_icon = get_icon(scene.validator_option)
-    grid.operator("qb_tb.object_qb_tb_suffix", text="Suffix", icon=find_icon)
-
-    # Button 2: Validate (unified)
-    grid.operator("qb_tb.validate", text="Validate", icon='CHECKMARK')
-
-    # Button 3: Select
-    select_icon = get_icon(scene.validator_option)
-    grid.operator("qb_tb.filter_select_objects", text="Select", icon=select_icon)
-
-    # Button 4: Clean
-    grid.operator("qb_tb.clean_object_suffixes", text="Clean", icon='FILE_REFRESH')
-
-
-def get_icon(option):
-    """Return icon for a given validator option."""
-    icon_mapping = {
-        'QUADBLOCK': 'MESH_CUBE',
-        'TRIBLOCK': 'MESH_CONE',
-        'INVALID_GEOMETRY': 'MESH_DATA',
-        'INVALID_UVS': 'UV',
-        'INVALID_TRIBLOCK_UVS': 'MESH_CONE',
-        'DEGENERATED_UVS': 'GROUP_UVS',
-        'NGONS': 'MESH_CYLINDER',
-        'NON_MESH': 'OUTLINER_OB_EMPTY',
-        'OUT_OF_RANGE': 'CUBE',
-        'ALL_INVALID': 'ERROR'
-    }
-    return icon_mapping.get(option, 'VIEWZOOM')

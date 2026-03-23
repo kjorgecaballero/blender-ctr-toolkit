@@ -12,5 +12,17 @@ def register():
         default='NAVIGATOR'
     )
 
+    # Scope for validator (Objects or Vertex Groups)
+    bpy.types.Scene.validator_scope = EnumProperty(
+        name="Scope",
+        description="What to validate",
+        items=[
+            ('OBJECTS', "Objects", "Validate all objects in the scene"),
+            ('VERTEX_GROUPS', "Vertex Groups", "Validate vertex groups of active mesh object"),
+        ],
+        default='OBJECTS'
+    )
+
 def unregister():
+    del bpy.types.Scene.validator_scope
     del bpy.types.Scene.ctr_tool_mode
