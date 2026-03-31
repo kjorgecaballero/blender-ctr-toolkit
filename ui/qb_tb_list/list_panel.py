@@ -705,6 +705,13 @@ class LIST_PT_BlockListPanel(Panel):
                                                icon=nav_icon, 
                                                emboss=False)
                     nav_op.material_name = item['name']
+                    
+                    # Button to update all materials derived from the same base material
+                    update_op = right_side.operator("list.update_all_from_base", 
+                                                    text="", 
+                                                    icon='FILE_REFRESH', 
+                                                    emboss=False)
+                    update_op.material_name = item['name']
             
 
             # NAVIGATION CONTROLS 

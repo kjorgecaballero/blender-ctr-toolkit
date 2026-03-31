@@ -1,7 +1,7 @@
 """
 QB/TB List Operators Initialization
 Registration of ALL operators for the block list system.
-Now includes vertex group validation operator.
+Now includes the update derived materials operator.
 """
 
 import bpy
@@ -14,18 +14,20 @@ from .list_group import classes as group_classes
 from .list_scroll import classes as scroll_classes
 from .list_sort_filter import classes as sort_filter_classes
 from .list_select import classes as select_classes
-from .list_duplicate import classes as duplicate_classes  
+from .list_duplicate import classes as duplicate_classes
+from .update_derived_materials import classes as update_derived_classes
 
 operator_classes = (
     constant_material_classes +
-    vertex_classes +          
+    vertex_classes +
     multi_selection_classes +
     navigation_classes +
     group_classes +
     scroll_classes +
     sort_filter_classes +
     select_classes +
-    duplicate_classes
+    duplicate_classes +
+    update_derived_classes
 )
 
 def register():
