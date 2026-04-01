@@ -424,6 +424,10 @@ class LIST_PT_BlockListPanel(Panel):
         # Duplicate button (Shift+D) – added for quick duplication of selected geometry
         icons_container.operator("list.duplicate_selection", text="", icon='DUPLICATE')
         
+        # Update Derived from checked items (only for constant materials)
+        if scene.list_display_type == 'CONSTANT_MATERIALS':
+            icons_container.operator("list.update_derived_from_checked", text="", icon='FILE_REFRESH')
+        
         # Navigation toggle button (only for constant materials)
         if scene.list_display_type == 'CONSTANT_MATERIALS':
             # Calculate the state to decide the icon
@@ -632,7 +636,7 @@ class LIST_PT_BlockListPanel(Panel):
                                              icon=checkbox_icon)
                 toggle_op.item_name = item['name']
                 
-                # Icon for block type (QB/TB) only - no text
+                # Icon for block type (QB/TB) only 
                 icon = 'VERTEXSEL' if item['block_type'] == 'quadblock' else 'FACESEL'
                 left_side.label(text="", icon=icon)
                 
@@ -706,12 +710,6 @@ class LIST_PT_BlockListPanel(Panel):
                                                emboss=False)
                     nav_op.material_name = item['name']
                     
-                    # Button to update all materials derived from the same base material
-                    update_op = right_side.operator("list.update_all_from_base", 
-                                                    text="", 
-                                                    icon='FILE_REFRESH', 
-                                                    emboss=False)
-                    update_op.material_name = item['name']
             
 
             # NAVIGATION CONTROLS 
