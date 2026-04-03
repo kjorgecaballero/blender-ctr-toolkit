@@ -16,15 +16,15 @@ class LIST_MT_NavigationFilterMenu(Menu):
         current = scene.list_navigation_filter
 
         icon = 'CHECKBOX_HLT' if current == 'ALL' else 'CHECKBOX_DEHLT'
-        op = layout.operator("list.set_navigation_filter", text="All Constant Materials", icon=icon)
+        op = layout.operator("list.set_navigation_filter", text="All", icon=icon)
         op.filter_type = 'ALL'
 
         icon = 'CHECKBOX_HLT' if current == 'NAVIGATION_POINTS' else 'CHECKBOX_DEHLT'
-        op = layout.operator("list.set_navigation_filter", text="Only Navigation Points", icon=icon)
+        op = layout.operator("list.set_navigation_filter", text="Navigation Points", icon=icon)
         op.filter_type = 'NAVIGATION_POINTS'
 
         icon = 'CHECKBOX_HLT' if current == 'NON_NAVIGATION' else 'CHECKBOX_DEHLT'
-        op = layout.operator("list.set_navigation_filter", text="Non-Navigation Materials", icon=icon)
+        op = layout.operator("list.set_navigation_filter", text="Constant Materials", icon=icon)
         op.filter_type = 'NON_NAVIGATION'
 
 

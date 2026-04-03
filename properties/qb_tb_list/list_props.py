@@ -1,9 +1,11 @@
 """
 QB/TB List Properties
-Property definitions for the block list system
-Now includes navigation point filtering
-Now includes separate material filters for each display mode
-Now includes issue filter for vertex groups
+Property definitions for the block list system.
+
+Provides filtering and sorting properties for vertex groups (QB/TB blocks)
+and constant materials, including navigation point filtering, material name
+filters per display mode, issue filtering for vertex groups, and UI state
+properties.
 """
 
 import bpy
@@ -70,7 +72,7 @@ def register():
         items=[
             ('ALL', 'All', 'Show all constant materials'),
             ('NAVIGATION_POINTS', 'Navigation Points', 'Show only materials marked as navigation points'),
-            ('NON_NAVIGATION', 'Non-Navigation', 'Show only materials NOT marked as navigation points'),
+            ('NON_NAVIGATION', 'Constant Materials', 'Show only materials NOT marked as navigation points'),
         ],
         default='ALL'
     )
