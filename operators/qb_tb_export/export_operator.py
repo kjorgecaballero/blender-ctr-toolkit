@@ -88,13 +88,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
-    global_scale: FloatProperty(
-        name="Scale",
-        description="Global export scale",
-        min=0.001, max=1000.0,
-        default=1.0,
-    )
-
     export_invalid_uvs: BoolProperty(
         name="Invalid UVs",
         description="Export objects with UVs outside 0-1 range",
@@ -151,12 +144,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     def draw(self, context):
-        """Draw the operator UI panel."""
+        """Draw the operator UI panel with the requested layout."""
         layout = self.layout
 
         draw_help_buttons(layout)
 
-        # Selection & Block Types section
+        # 1. Selection & Block Types
         box = layout.box()
         box.label(text="Selection & Block Types", icon='OBJECT_DATA')
         box.prop(self, "use_selection")
@@ -164,57 +157,43 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         col.prop(self, "export_quadblocks")
         col.prop(self, "export_triblocks")
 
-        # Export Settings section
-        box = layout.box()
-        box.label(text="Export Settings", icon='EXPORT')
-        box.prop(self, "export_colors")
-        box.prop(self, "export_details")
-
-        # Range Filtering section
-        box = layout.box()
-        box.label(text="Range Filtering", icon='SHADERFX')
-        box.prop(self, "allow_out_of_range")
-        if not self.allow_out_of_range:
-            box.label(text="Fixed 1000x1000x1000 cube", icon='INFO')
-            box.label(text="Center: (0,0,0)", icon='INFO')
-        else:
-            box.label(text="Ignore Range", icon='INFO')
-
-        # UV Issues Handling section - now with separate options
+        # 2. UV Issues Handling
         box = layout.box()
         box.label(text="UV Issues Handling", icon='UV')
         col = box.column(align=True)
         col.prop(self, "export_invalid_uvs", text="Invalid UVs (out of range)")
-        col.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs (structure)")
+        col.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs (Structure)")
         col.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
 
-        # Pre-Processing section
+        # 3. Export Settings (includes Export Details and Path Mode)
         box = layout.box()
-        box.label(text="Pre-Processing", icon='MODIFIER')
-        col = box.column()
-        col.prop(self, "apply_modifiers")
-        col.prop(self, "separate_loose_parts")
+        box.label(text="Export Settings", icon='EXPORT')
+        box.prop(self, "export_colors", text="Vertex Colors")
+        box.prop(self, "allow_out_of_range", text="Allow Out of Range")
+        box.prop(self, "apply_modifiers", text="Apply Modifiers")
+        box.prop(self, "separate_loose_parts", text="Separate by Loose Parts")
+        box.prop(self, "export_details", text="Export Details (JSON)")
+        box.prop(self, "path_mode", text="Path Mode")
 
-        # Folder Organization section
+        # 4. Duplicate Export
+        box = layout.box()
+        box.label(text="Duplicate Export", icon='DUPLICATE')
+        col = box.column(align=True)
+        col.prop(self, "export_duplicates", text="Export Duplicates")
+        if self.export_duplicates:
+            col.prop(self, "export_processed_duplicates", text="Export Processed Duplicates")
+
+        # 5. Folder Organization
         box = layout.box()
         box.label(text="Folder Organization", icon='FILE_FOLDER')
-        box.prop(self, "export_to_folder")
-
+        box.prop(self, "export_to_folder", text="Export to Folder")
         if self.export_to_folder:
-            col = box.column()
-            col.prop(self, "include_textures")
-
+            col = box.column(align=True)
+            col.prop(self, "include_textures", text="Include Textures")
             if self.include_textures:
-                col.prop(self, "remap_textures")
+                col.prop(self, "remap_textures", text="Remap Textures")
 
-            col.prop(self, "folder_behavior")
-
-        # Scale section
-        box = layout.box()
-        box.label(text="Scale", icon='ARROW_LEFTRIGHT')
-        box.prop(self, "global_scale")
-
-        # Quick Export Status section
+        # Quick Export Status (informational)
         if context.scene.last_export_path:
             layout.separator()
             box = layout.box()
@@ -223,18 +202,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             col.label(text=f"Last project: {os.path.basename(context.scene.last_export_path)}")
             col.label(text=f"Location: {context.scene.last_export_path}")
             col.label(text="Quick Export: Ctrl+Shift+E", icon='EVENT_CTRL')
-
-        # Duplicate Export section
-        layout.separator()
-        box = layout.box()
-        box.label(text="Duplicate Export", icon='DUPLICATE')
-        col = box.column(align=True)
-
-        col.prop(self, "export_duplicates")
-
-        if self.export_duplicates:
-            col.prop(self, "export_processed_duplicates")
-            col.label(text="Duplicates will be saved in a 'Duplicates' subfolder", icon='INFO')
 
     def invoke(self, context, event):
         """Initialize operator properties from scene settings."""
@@ -256,7 +223,8 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.folder_behavior = self.folder_behavior
         context.scene.apply_modifiers = self.apply_modifiers
         context.scene.separate_loose_parts = self.separate_loose_parts
-        context.scene.global_scale = self.global_scale
+        # Force scale to 1.0
+        context.scene.global_scale = 1.0
         context.scene.export_invalid_uvs = self.export_invalid_uvs
         context.scene.export_invalid_triblock_uvs = self.export_invalid_triblock_uvs
         context.scene.export_degenerated_uvs = self.export_degenerated_uvs
@@ -285,7 +253,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     remap_in_blender=True
                 )
                 if not success:
-                    pass  # Warning already shown
+                    pass
 
         return texture_remapper
 
@@ -313,7 +281,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             return
 
         proc_settings = ExportSettings.from_operator(self)
-        proc_settings.export_to_folder = False  # Already inside a specific folder
+        proc_settings.export_to_folder = False
         proc_settings.filepath = os.path.join(duplicates_dir, "processed_duplicates.obj")
 
         temp_manager = ExportManager(context)
@@ -348,17 +316,14 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
 
     def _find_block_object(self, context):
         """Find an object that contains quadblock or triblock data."""
-        # If in edit mode, use the edit object
         if context.mode == 'EDIT_MESH' and context.edit_object:
             return context.edit_object
 
-        # Check active object
         obj = context.object
         if obj and obj.type == 'MESH':
             if "quad_group_members" in obj or "tri_group_members" in obj:
                 return obj
 
-        # Scan all mesh objects
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
                 if "quad_group_members" in obj or "tri_group_members" in obj:
@@ -382,7 +347,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                 self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
                 return
 
-            # Switch to object mode if necessary, then to edit mode on the block object
             if context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
             context.view_layer.objects.active = block_obj
@@ -404,9 +368,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             traceback.print_exc()
 
         finally:
-            # Restore original mode and active object
             if original_mode != context.mode:
-                # Map context mode strings to valid mode_set enum values
                 mode_map = {
                     'EDIT_MESH': 'EDIT',
                     'EDIT_CURVE': 'EDIT',
@@ -431,17 +393,17 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
 
     def execute(self, context):
         """Main execution method for the export operator."""
-        # Validate block types
         if not self.export_quadblocks and not self.export_triblocks:
             self.report({'ERROR'}, "Must select at least one block type")
             return {'CANCELLED'}
 
         settings = ExportSettings.from_operator(self)
+        # Force scale to 1.0
+        settings.global_scale = 1.0
         self._save_export_settings(context)
 
         manager = ExportManager(context)
 
-        # Prepare paths early so they are available even if main export fails
         export_paths = manager.prepare_export_paths(self.filepath, settings, is_quick_export=False)
         settings.filepath = export_paths['obj_filepath']
 
@@ -457,7 +419,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             if not valid_objects:
                 error_msg = manager.get_no_objects_error(settings, stats)
                 self.report({'ERROR'}, error_msg)
-                # Continue to duplicates if requested
             else:
                 if settings.include_textures and not export_paths['texture_dir']:
                     self.report({'WARNING'}, "Could not create texture directory")
@@ -489,7 +450,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         finally:
             manager.restore_state()
 
-        # Duplicate export (if requested) runs even if main export failed
         if self.export_duplicates:
             self._export_duplicates(context, export_paths)
 
