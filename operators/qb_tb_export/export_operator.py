@@ -97,7 +97,13 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
 
     export_invalid_uvs: BoolProperty(
         name="Invalid UVs",
-        description="Export objects with invalid UVs",
+        description="Export objects with UVs outside 0-1 range",
+        default=False,
+    )
+
+    export_invalid_triblock_uvs: BoolProperty(
+        name="Invalid Triblock UVs",
+        description="Export triblocks with incorrect UV arrangement (shared vertices mismatch)",
         default=False,
     )
 
@@ -174,11 +180,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         else:
             box.label(text="Ignore Range", icon='INFO')
 
-        # UV Issues Handling section
+        # UV Issues Handling section - now with separate options
         box = layout.box()
         box.label(text="UV Issues Handling", icon='UV')
-        col = box.column()
-        col.prop(self, "export_invalid_uvs", text="Invalid UVs")
+        col = box.column(align=True)
+        col.prop(self, "export_invalid_uvs", text="Invalid UVs (out of range)")
+        col.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs (structure)")
         col.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
 
         # Pre-Processing section
@@ -251,6 +258,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.separate_loose_parts = self.separate_loose_parts
         context.scene.global_scale = self.global_scale
         context.scene.export_invalid_uvs = self.export_invalid_uvs
+        context.scene.export_invalid_triblock_uvs = self.export_invalid_triblock_uvs
         context.scene.export_degenerated_uvs = self.export_degenerated_uvs
         context.scene.path_mode = self.path_mode
         context.scene.export_details = self.export_details

@@ -82,7 +82,13 @@ def register():
     
     bpy.types.Scene.export_invalid_uvs = bpy.props.BoolProperty(
         name="Invalid UVs",
-        description="Export objects with invalid UVs",
+        description="Export objects with UVs outside 0-1 range",
+        default=False
+    )
+    
+    bpy.types.Scene.export_invalid_triblock_uvs = bpy.props.BoolProperty(
+        name="Invalid Triblock UVs",
+        description="Export triblocks with incorrect UV arrangement (shared vertices mismatch)",
         default=False
     )
     
@@ -151,6 +157,7 @@ def unregister():
     del bpy.types.Scene.separate_loose_parts
     del bpy.types.Scene.global_scale
     del bpy.types.Scene.export_invalid_uvs
+    del bpy.types.Scene.export_invalid_triblock_uvs
     del bpy.types.Scene.export_degenerated_uvs
     del bpy.types.Scene.path_mode
     del bpy.types.Scene.export_details

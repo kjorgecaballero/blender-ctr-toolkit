@@ -26,6 +26,7 @@ class ExportSettings:
         self.separate_loose_parts = False
         self.global_scale = 1.0
         self.export_invalid_uvs = False
+        self.export_invalid_triblock_uvs = False
         self.export_degenerated_uvs = False
         self.path_mode = 'COPY'
         self.folder_behavior = 'SUFFIX'
@@ -56,6 +57,7 @@ class ExportSettings:
         settings.separate_loose_parts = operator.separate_loose_parts
         settings.global_scale = operator.global_scale
         settings.export_invalid_uvs = operator.export_invalid_uvs
+        settings.export_invalid_triblock_uvs = operator.export_invalid_triblock_uvs
         settings.export_degenerated_uvs = operator.export_degenerated_uvs
         settings.path_mode = operator.path_mode
         settings.folder_behavior = operator.folder_behavior
@@ -85,6 +87,7 @@ class ExportSettings:
         settings.separate_loose_parts = context.scene.separate_loose_parts
         settings.global_scale = context.scene.global_scale
         settings.export_invalid_uvs = context.scene.export_invalid_uvs
+        settings.export_invalid_triblock_uvs = context.scene.export_invalid_triblock_uvs
         settings.export_degenerated_uvs = context.scene.export_degenerated_uvs
         settings.path_mode = context.scene.path_mode
         settings.folder_behavior = context.scene.folder_behavior
@@ -134,7 +137,7 @@ class ExportStats:
         
     def get_report_message(self):
         """
-        Generate user-friendly export report message.
+        Generate export report message.
         
         Returns:
             str: Formatted report message for Blender info panel

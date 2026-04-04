@@ -62,14 +62,13 @@ class ValidationHandler:
             issues = get_object_issues(obj)
             has_uv_issues = any('uv' in issue for issue in issues)
             
-            # Apply UV issue filters if object has issues
-            if has_uv_issues:
-                if 'invalid_uvs' in issues and not settings.export_invalid_uvs:
-                    continue
-                if 'degenerated_uvs' in issues and not settings.export_degenerated_uvs:
-                    continue
-                if 'invalid_triblock_uvs' in issues and not settings.export_invalid_uvs:
-                    continue
+            # Apply UV issue filters with separate handling
+            if 'invalid_uvs' in issues and not settings.export_invalid_uvs:
+                continue
+            if 'invalid_triblock_uvs' in issues and not settings.export_invalid_triblock_uvs:
+                continue
+            if 'degenerated_uvs' in issues and not settings.export_degenerated_uvs:
+                continue
             
             # Object passed all filters
             valid_objects.append(obj)
