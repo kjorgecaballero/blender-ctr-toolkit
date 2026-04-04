@@ -30,7 +30,7 @@ class LIST_OT_VerticalScroll(Operator):
         if not obj:
             return {'CANCELLED'}
 
-        #  Build item list for size
+        # Build item list for size
         items = []
         if scene.list_display_type == 'VERTEX_GROUPS':
             for vg in obj.vertex_groups:
@@ -51,8 +51,8 @@ class LIST_OT_VerticalScroll(Operator):
             items = [it for it in items if search in it.lower()]
 
         total = len(items)
-        per_page = scene.list_items_per_page
-        max_scroll = max(0, total - per_page)
+        ITEMS_PER_PAGE = 10
+        max_scroll = max(0, total - ITEMS_PER_PAGE)
 
         if self.direction == 'UP':
             scene.list_vertical_scroll = max(0, scene.list_vertical_scroll - 1)
@@ -98,10 +98,10 @@ class LIST_OT_JumpToPage(Operator):
             items = [it for it in items if search in it.lower()]
 
         total = len(items)
-        per_page = scene.list_items_per_page
-        total_pages = max(1, (total + per_page - 1) // per_page)
+        ITEMS_PER_PAGE = 10
+        total_pages = max(1, (total + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
         self.page_number = max(1, min(self.page_number, total_pages))
-        scene.list_vertical_scroll = (self.page_number - 1) * per_page
+        scene.list_vertical_scroll = (self.page_number - 1) * ITEMS_PER_PAGE
         return {'FINISHED'}
 
 

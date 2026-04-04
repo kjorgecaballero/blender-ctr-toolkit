@@ -218,8 +218,8 @@ class LIST_PT_BlockListPanel(Panel):
     def draw_custom_list(self, layout, context, obj, items, display_counts,
                         has_vertex_groups=False, has_constant_materials=False,
                         has_detected_blocks=False, nav_point_count=0):
-        """Draw a custom scrollable list with search, sort, material filter, and vertical scrollbar
-        REORGANIZED LAYOUT: Search bar at top, then filter dropdowns, then action buttons in a single row,
+        """Draw a custom scrollable list with search, sort, material filter, and vertical scrollbar,
+        Search bar at top, then filter dropdowns, then action buttons in a single row,
         then list, then pagination at bottom."""
         scene = context.scene
         search_text = scene.list_search_text.lower()
@@ -367,8 +367,8 @@ class LIST_PT_BlockListPanel(Panel):
         total_items = len(filtered_items)
 
         # Calculate visible range based on scroll position
-        items_per_page = scene.list_items_per_page
-        max_scroll = max(0, total_items - items_per_page)
+        ITEMS_PER_PAGE = 10
+        max_scroll = max(0, total_items - ITEMS_PER_PAGE)
 
         # Ensure vertical scroll position is valid
         current_scroll = scene.list_vertical_scroll
@@ -377,7 +377,7 @@ class LIST_PT_BlockListPanel(Panel):
 
         # Get visible items
         start_idx = current_scroll
-        end_idx = min(start_idx + items_per_page, total_items)
+        end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
         visible_items = filtered_items[start_idx:end_idx]
 
         # Create ITEM LIST BOX (main container)
@@ -592,17 +592,12 @@ class LIST_PT_BlockListPanel(Panel):
 
             # Pagination controls inside the scroll box
             if total_items > 0:
-                # Items per page (right aligned)
-                items_row = scroll_box.row(align=True)
-                items_row.alignment = 'RIGHT'
-                items_row.prop(scene, "list_items_per_page", text="")
-
                 # Pagination buttons
                 nav_row = scroll_box.row(align=True)
                 nav_row.alignment = 'CENTER'
 
-                current_page = (current_scroll // items_per_page) + 1
-                total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
+                current_page = (current_scroll // ITEMS_PER_PAGE) + 1
+                total_pages = max(1, (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
 
                 nav_row.enabled = current_scroll > 0
                 up_op = nav_row.operator("list.vertical_scroll", text="", icon='TRIA_UP')

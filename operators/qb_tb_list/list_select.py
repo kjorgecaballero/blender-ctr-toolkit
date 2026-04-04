@@ -1,6 +1,5 @@
 """
 Selection Operator for Quadblock/Triblock List
-Moved from ui/qb_tb_list/selection_list.py
 """
 
 import bpy
@@ -117,7 +116,6 @@ class LIST_OT_SelectListFromBlock(Operator):
         if search:
             items = [it for it in items if search in it.lower()]
 
-
         def sort_key(name):
             is_qb = name.startswith("QB_")
             return (0 if is_qb else 1, name.lower())
@@ -142,9 +140,9 @@ class LIST_OT_SelectListFromBlock(Operator):
         if target and target in items:
             idx = items.index(target)
             scene.list_list_index = idx
-            per_page = scene.list_items_per_page
-            page_start = (idx // per_page) * per_page
-            max_scroll = max(0, len(items) - per_page)
+            ITEMS_PER_PAGE = 10
+            page_start = (idx // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
+            max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
             scene.list_vertical_scroll = min(page_start, max_scroll)
 
 

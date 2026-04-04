@@ -173,14 +173,6 @@ def register():
         min=0
     )
     
-    bpy.types.Scene.list_items_per_page = IntProperty(
-        name="Items Per Page",
-        description="Number of items to display per page",
-        default=10,
-        min=5,
-        max=20
-    )
-
 
 def unregister():
     del bpy.types.Scene.list_display_type
@@ -200,4 +192,3 @@ def unregister():
     del bpy.types.Scene.list_list_index
     del bpy.types.Scene.list_scroll_position
     del bpy.types.Scene.list_vertical_scroll
-    del bpy.types.Scene.list_items_per_page
