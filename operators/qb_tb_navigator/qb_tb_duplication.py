@@ -346,13 +346,17 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
     bl_description = "Duplicate all quadblocks and triblocks by group, export to OBJ, and import back (optimized)"
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        """Only available in Edit Mode with a mesh object."""
+        return (context.edit_object is not None and context.mode == 'EDIT_MESH')
+
     directory: bpy.props.StringProperty(
         name="Export Directory",
         description="Choose a directory to export duplicated blocks",
         subtype='DIR_PATH',
         default=""
     )
-
 
     # Helper methods for managing the Processed_Blocks collection
 
@@ -401,7 +405,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             col.objects.link(obj)
 
         print(f"[Processed_Blocks] Moved {len(objects)} objects to collection '{collection_name}'")
-
 
     # Main execution
 
@@ -501,7 +504,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             if 'FINISHED' not in import_result:
                 self.report({'WARNING'}, "OBJ imported but with issues")
 
-            # Batch separation of imported objects (optimized)
+            # Batch separation of imported objects 
             imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
 
             if not imported_objects:
