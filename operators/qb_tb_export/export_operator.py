@@ -143,6 +143,14 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
+    # Hidden global scale property (always forced to 1.0)
+    global_scale: FloatProperty(
+        name="Scale",
+        description="Global export scale (forced to 1.0)",
+        default=1.0,
+        options={'HIDDEN'},
+    )
+
     def draw(self, context):
         """Draw the operator UI panel with the requested layout."""
         layout = self.layout
@@ -193,7 +201,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             if self.include_textures:
                 col.prop(self, "remap_textures", text="Remap Textures")
 
-        # Quick Export Status (informational)
+        # Quick Export Status 
         if context.scene.last_export_path:
             layout.separator()
             box = layout.box()
