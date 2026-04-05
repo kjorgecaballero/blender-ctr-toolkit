@@ -8,11 +8,9 @@ import bmesh
 from bpy.types import Operator
 from bpy.props import StringProperty, BoolProperty
 
-# Import helper from UI layer
 from ...ui.qb_tb_list.list_helpers import get_block_material_name
 
 
-# Helper function to get visible items based on current filters
 def _get_filtered_display_items(context, obj, scene):
     """Return list of dicts with visible items (quadblocks/triblocks) in current list."""
     items = []
@@ -95,7 +93,6 @@ def _get_filtered_display_items(context, obj, scene):
             issue_filter = scene.list_issue_filter
 
             if issue_filter == 'VALID':
-                # Valid means has 'quadblock' or 'triblock' and no other issues
                 if not ('quadblock' in item_issues or 'triblock' in item_issues):
                     show = False
                 else:
@@ -289,7 +286,11 @@ class LIST_OT_SelectMultiChecked(Operator):
         scene = context.scene
         display_type = scene.list_display_type
 
-        # --- Vertex Groups (optimized with deform layer) ---
+        # Ensure we are in Edit Mode
+        if context.mode != 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        # Vertex Groups (optimized with deform layer) 
         if display_type == 'VERTEX_GROUPS':
             target_vg_names = []
             if self.select_all:
@@ -367,7 +368,7 @@ class LIST_OT_SelectMultiChecked(Operator):
                 if original_mode == 'OBJECT':
                     bpy.ops.object.mode_set(mode='OBJECT')
 
-        # --- Constant Materials ---
+        # Constant Materials 
         elif display_type == 'CONSTANT_MATERIALS':
             if "constant_materials" not in obj or not obj["constant_materials"]:
                 self.report({'WARNING'}, "No constant materials found.")
@@ -393,10 +394,19 @@ class LIST_OT_SelectMultiChecked(Operator):
                 return {'CANCELLED'}
 
             original_mode = context.mode
+            # Ensure we are in OBJECT mode to safely manipulate selection
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
             try:
+                # Clear existing selection if requested
+                if self.clear_existing:
+                    # Deselect all faces and vertices in Edit Mode
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='DESELECT')
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+                # Get material indices for target materials
                 mat_indices = {}
                 for i, slot in enumerate(obj.material_slots):
                     if slot.material and slot.material.name in target_mats:
@@ -404,6 +414,7 @@ class LIST_OT_SelectMultiChecked(Operator):
 
                 face_count = 0
                 selected_verts = set()
+                # Select faces with target materials
                 for poly in obj.data.polygons:
                     if poly.material_index < len(obj.material_slots):
                         slot = obj.material_slots[poly.material_index]
@@ -413,6 +424,7 @@ class LIST_OT_SelectMultiChecked(Operator):
                             for v_idx in poly.vertices:
                                 selected_verts.add(v_idx)
 
+                # Select vertices and edges
                 for v_idx in selected_verts:
                     if v_idx < len(obj.data.vertices):
                         obj.data.vertices[v_idx].select = True
@@ -422,6 +434,7 @@ class LIST_OT_SelectMultiChecked(Operator):
                         edge.select = True
 
                 obj.data.update()
+                # Switch back to Edit Mode for display
                 bpy.ops.object.mode_set(mode='EDIT')
                 self.report({'INFO'}, f"Selected {len(target_mats)} materials ({face_count} faces)")
 
@@ -549,7 +562,6 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
         lines.append(f"Issues for vertex group: {self.group_name}")
         lines.append("-" * 30)
 
-        # Map issue keys to human-readable messages
         issue_map = {
             'quadblock': ("Valid Quadblock", 'INFO'),
             'triblock': ("Valid Triblock", 'INFO'),
@@ -563,7 +575,6 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
             msg, icon = issue_map.get(issue, (f"Unknown: {issue}", 'QUESTION'))
             lines.append(f"• {msg}")
 
-        # Show as a popup dialog
         def draw_popup(self, context):
             layout = self.layout
             for line in lines:
@@ -574,7 +585,6 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
                     row.label(text=line, icon='ERROR')
                 else:
                     row = layout.row()
-                    # Try to extract the icon if available
                     issue_key = None
                     for key in issue_map:
                         if key in line:

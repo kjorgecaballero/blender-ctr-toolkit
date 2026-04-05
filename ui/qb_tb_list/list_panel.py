@@ -440,20 +440,20 @@ class LIST_PT_BlockListPanel(Panel):
         action_row = item_list_box.row(align=True)
 
         if scene.list_display_type == 'VERTEX_GROUPS':
-            # All VG action buttons in one row
+            # All VG action buttons in one row - unified order
             action_row.prop(scene, "list_filter_show_qb", text="", icon='VERTEXSEL', toggle=True)
             action_row.prop(scene, "list_filter_show_tb", text="", icon='FACESEL', toggle=True)
-            action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
             action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
+            action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
 
         else:  # CONSTANT_MATERIALS
-
+            # Constant materials action buttons - unified order with VG
             action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
             action_row.prop(scene, "list_filter_cm_tb", text="", icon='FACESEL', toggle=True)
-            action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT') 
             action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
+            action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
             action_row.operator("list.update_derived_from_checked", text="", icon='FILE_REFRESH')

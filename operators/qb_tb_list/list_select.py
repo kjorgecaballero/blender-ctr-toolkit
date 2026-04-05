@@ -21,82 +21,130 @@ class LIST_OT_SelectListFromBlock(Operator):
         obj = context.edit_object
         scene = context.scene
 
-        if "face_to_quadblock" not in obj and "face_to_triblock" not in obj:
-            self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
-            return {'CANCELLED'}
+        if scene.list_display_type == 'CONSTANT_MATERIALS':
+            # Constant Materials mode: use material names from selected faces
+            if "constant_materials" not in obj:
+                self.report({'WARNING'}, "No constant materials found.")
+                return {'CANCELLED'}
 
-        bm = bmesh.from_edit_mesh(obj.data)
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
+            const_dict = obj["constant_materials"]
+            bm = bmesh.from_edit_mesh(obj.data)
+            selected_faces = [f for f in bm.faces if f.select]
+            if not selected_faces:
+                self.report({'WARNING'}, "No faces selected.")
+                return {'CANCELLED'}
 
-        selected_faces = [f for f in bm.faces if f.select]
-        selected_verts = [v for v in bm.verts if v.select]
+            added = []
+            for face in selected_faces:
+                mat_idx = face.material_index
+                if mat_idx < len(obj.material_slots):
+                    mat = obj.material_slots[mat_idx].material
+                    if mat and mat.name in const_dict:          # only constant materials
+                        if mat.name not in added:
+                            added.append(mat.name)
 
-        found_blocks = []
-        found_block_names = set()
+            if not added:
+                self.report({'WARNING'}, "Selected faces have no constant material.")
+                return {'CANCELLED'}
 
-        # Faces -> qb & tb
-        face_to_quad = obj.get("face_to_quadblock", {})
-        face_to_tri = obj.get("face_to_triblock", {})
+            # Mark in multi_selected_items
+            if "multi_selected_items" not in obj:
+                obj["multi_selected_items"] = {}
+            multi = obj["multi_selected_items"]
+            for mat_name in added:
+                multi[mat_name] = True
+            obj["multi_selected_items"] = multi
 
-        for face in selected_faces:
-            idx = str(face.index)
-            if idx in face_to_quad:
-                bid = int(face_to_quad[idx])
-                name = f"QB_{bid}"
-                if name not in found_block_names:
-                    found_blocks.append(('quadblock', bid, name))
-                    found_block_names.add(name)
-            elif idx in face_to_tri:
-                bid = int(face_to_tri[idx])
-                name = f"TB_{bid}"
-                if name not in found_block_names:
-                    found_blocks.append(('triblock', bid, name))
-                    found_block_names.add(name)
+            # Sync the list index (optional, for scrolling)
+            # Build visible items to find first added material
+            items = []
+            if "constant_materials" in obj:
+                for mat_name, info in obj["constant_materials"].items():
+                    bt = info.get("block_type", "")
+                    if (bt == "quadblock" and scene.list_filter_cm_qb) or \
+                       (bt == "triblock" and scene.list_filter_cm_tb):
+                        items.append(mat_name)
+            search = scene.list_search_text.lower()
+            if search:
+                items = [it for it in items if search in it.lower()]
+            items.sort(key=lambda x: x.lower())
+            if added and added[0] in items:
+                idx = items.index(added[0])
+                scene.list_list_index = idx
+                ITEMS_PER_PAGE = 10
+                page_start = (idx // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
+                max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
+                scene.list_vertical_scroll = min(page_start, max_scroll)
 
-        # Quadblock centers
-        for vert in selected_verts:
-            if "quadblock_centers" in obj and vert.index in obj["quadblock_centers"]:
-                name = f"QB_{vert.index}"
-                if name not in found_block_names:
-                    found_blocks.append(('quadblock', vert.index, name))
-                    found_block_names.add(name)
+            # Select the checked items in 3D view
+            bpy.ops.list.select_multi_checked(select_all=False)
+            self.report({'INFO'}, f"Added {len(added)} constant material(s) to checklist")
+            return {'FINISHED'}
 
-        if not found_blocks:
-            self.report({'WARNING'}, "No blocks found in selection.")
-            return {'CANCELLED'}
+        else:
+            # VERTEX_GROUPS mode: original logic (uses block indices and face maps)
+            if "face_to_quadblock" not in obj and "face_to_triblock" not in obj:
+                self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
+                return {'CANCELLED'}
 
-        # Check in multi selected items
-        if "multi_selected_items" not in obj:
-            obj["multi_selected_items"] = {}
-        multi = obj["multi_selected_items"]
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
 
-        for bt, bid, bname in found_blocks:
-            if scene.list_display_type == 'VERTEX_GROUPS':
-                if bname not in multi:
-                    multi[bname] = True
-            elif scene.list_display_type == 'CONSTANT_MATERIALS':
-                const_prop = f"constant_name_{bt}_{bid}"
-                if const_prop in obj:
-                    mat_name = obj[const_prop]
-                    if mat_name not in multi:
-                        multi[mat_name] = True
-                else:
+            selected_faces = [f for f in bm.faces if f.select]
+            selected_verts = [v for v in bm.verts if v.select]
+
+            found_blocks = []
+            found_block_names = set()
+
+            face_to_quad = obj.get("face_to_quadblock", {})
+            face_to_tri = obj.get("face_to_triblock", {})
+
+            for face in selected_faces:
+                idx = str(face.index)
+                if idx in face_to_quad:
+                    bid = int(face_to_quad[idx])
+                    name = f"QB_{bid}"
+                    if name not in found_block_names:
+                        found_blocks.append(('quadblock', bid, name))
+                        found_block_names.add(name)
+                elif idx in face_to_tri:
+                    bid = int(face_to_tri[idx])
+                    name = f"TB_{bid}"
+                    if name not in found_block_names:
+                        found_blocks.append(('triblock', bid, name))
+                        found_block_names.add(name)
+
+            for vert in selected_verts:
+                if "quadblock_centers" in obj and vert.index in obj["quadblock_centers"]:
+                    name = f"QB_{vert.index}"
+                    if name not in found_block_names:
+                        found_blocks.append(('quadblock', vert.index, name))
+                        found_block_names.add(name)
+
+            if not found_blocks:
+                self.report({'WARNING'}, "No blocks found in selection.")
+                return {'CANCELLED'}
+
+            if "multi_selected_items" not in obj:
+                obj["multi_selected_items"] = {}
+            multi = obj["multi_selected_items"]
+
+            for bt, bid, bname in found_blocks:
+                if scene.list_display_type == 'VERTEX_GROUPS':
                     if bname not in multi:
                         multi[bname] = True
 
-        obj["multi_selected_items"] = multi
+            obj["multi_selected_items"] = multi
 
-        # Sync index list
-        self._sync_list_index(context, obj, scene, found_blocks)
+            self._sync_list_index(context, obj, scene, found_blocks)
 
-        bpy.ops.list.select_multi_checked(select_all=False)
-        self.report({'INFO'}, f"Added {len(found_blocks)} blocks to checklist")
-        return {'FINISHED'}
+            bpy.ops.list.select_multi_checked(select_all=False)
+            self.report({'INFO'}, f"Added {len(found_blocks)} blocks to checklist")
+            return {'FINISHED'}
 
     def _sync_list_index(self, context, obj, scene, found_blocks):
         """Adjust the scroll to show the first block found."""
-        # Build visible items
         items = []
         if scene.list_display_type == 'VERTEX_GROUPS':
             for vg in obj.vertex_groups:
