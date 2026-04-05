@@ -358,6 +358,13 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
+    texture_dir: bpy.props.StringProperty(
+        name="Texture Directory",
+        description="Custom texture folder (if empty, uses 'Textures' inside the export directory)",
+        subtype='DIR_PATH',
+        default=""
+    )
+
     # Helper methods for managing the Processed_Blocks collection
 
     def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
@@ -465,26 +472,28 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             settings.export_invalid_uvs = True
             settings.export_degenerated_uvs = True
             settings.allow_out_of_range = True
+            settings.include_textures = True   # Ensure textures are copied
 
-            # Base filepath inside the chosen folder
-            base_filepath = os.path.join(self.directory, "duplicated_blocks.obj")
-            settings.filepath = base_filepath
+            # Build paths directly without using incremental folder logic
+            obj_filepath = os.path.join(self.directory, "duplicated_blocks.obj")
 
-            # Use ExportManager to generate the actual path according to folder_behavior
-            manager = ExportManager(context)
-            original_last_export = context.scene.last_export_path
-            try:
-                context.scene.last_export_path = self.directory
-                export_paths = manager.prepare_export_paths(base_filepath, settings, is_quick_export=False)
-            finally:
-                context.scene.last_export_path = original_last_export
+            # Determine texture directory:
+            # - If texture_dir was provided (from main export), use it.
+            # - Otherwise, create "Textures" inside self.directory.
+            if self.texture_dir:
+                tex_dir = self.texture_dir
+            else:
+                tex_dir = os.path.join(self.directory, "Textures")
+
+            # Create texture directory if it doesn't exist
+            os.makedirs(tex_dir, exist_ok=True)
 
             # Export the objects
             success = export_duplicated_objects_to_path(
                 context,
                 duplicated_objs,
-                export_paths['obj_filepath'],
-                export_paths['texture_dir'],
+                obj_filepath,
+                tex_dir,
                 settings
             )
 
@@ -500,7 +509,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             bpy.ops.object.delete()
 
             # Import the newly created OBJ file
-            import_result = execute_obj_import(export_paths['obj_filepath'])
+            import_result = execute_obj_import(obj_filepath)
             if 'FINISHED' not in import_result:
                 self.report({'WARNING'}, "OBJ imported but with issues")
 
@@ -633,7 +642,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             # Move final objects to Processed_Blocks collection 
             self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
 
-            self.report({'INFO'}, f"Duplicated blocks exported to {export_paths['obj_filepath']} and imported")
+            self.report({'INFO'}, f"Duplicated blocks exported to {obj_filepath} and imported")
             self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
 
         finally:

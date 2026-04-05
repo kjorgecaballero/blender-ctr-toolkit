@@ -143,7 +143,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
-    # Hidden global scale property (always forced to 1.0)
     global_scale: FloatProperty(
         name="Scale",
         description="Global export scale (forced to 1.0)",
@@ -152,9 +151,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     def draw(self, context):
-        """Draw the operator UI panel with the requested layout."""
         layout = self.layout
-
         draw_help_buttons(layout)
 
         # 1. Selection & Block Types
@@ -173,7 +170,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         col.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs (Structure)")
         col.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
 
-        # 3. Export Settings (includes Export Details and Path Mode)
+        # 3. Export Settings
         box = layout.box()
         box.label(text="Export Settings", icon='EXPORT')
         box.prop(self, "export_colors", text="Vertex Colors")
@@ -197,11 +194,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         box.prop(self, "export_to_folder", text="Export to Folder")
         if self.export_to_folder:
             col = box.column(align=True)
+            # Folder behavior selector 
+            col.prop(self, "folder_behavior")
             col.prop(self, "include_textures", text="Include Textures")
             if self.include_textures:
                 col.prop(self, "remap_textures", text="Remap Textures")
 
-        # Quick Export Status 
         if context.scene.last_export_path:
             layout.separator()
             box = layout.box()
@@ -212,7 +210,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             col.label(text="Quick Export: Ctrl+Shift+E", icon='EVENT_CTRL')
 
     def invoke(self, context, event):
-        """Initialize operator properties from scene settings."""
         self.folder_behavior = context.scene.folder_behavior
         self.use_selection = context.scene.use_selection
         self.export_duplicates = context.scene.export_duplicates
@@ -220,7 +217,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         return super().invoke(context, event)
 
     def _save_export_settings(self, context):
-        """Save current export settings to scene properties."""
         context.scene.use_selection = self.use_selection
         context.scene.export_quadblocks = self.export_quadblocks
         context.scene.export_triblocks = self.export_triblocks
@@ -231,7 +227,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.folder_behavior = self.folder_behavior
         context.scene.apply_modifiers = self.apply_modifiers
         context.scene.separate_loose_parts = self.separate_loose_parts
-        # Force scale to 1.0
         context.scene.global_scale = 1.0
         context.scene.export_invalid_uvs = self.export_invalid_uvs
         context.scene.export_invalid_triblock_uvs = self.export_invalid_triblock_uvs
@@ -242,61 +237,68 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.export_duplicates = self.export_duplicates
         context.scene.export_processed_duplicates = self.export_processed_duplicates
 
-    def _handle_textures(self, settings, export_paths, valid_objects):
-        """Copy and remap textures if requested."""
-        texture_remapper = None
-        if settings.include_textures and export_paths['texture_dir']:
-            try:
-                os.makedirs(export_paths['texture_dir'], exist_ok=True)
-            except OSError:
-                export_paths['texture_dir'] = None
+    def _export_processed_duplicates(self, context, output_dir, final_filename, main_texture_dir=None):
+        """
+        Export the objects from the Processed_Blocks collection to the final OBJ file.
+        The file is saved directly in output_dir with the given final_filename.
+        Textures are copied to main_texture_dir (or output_dir/Textures if None).
+        Remapping is applied ONLY to this final output (not to duplicates).
+        """
+        # Get the collection fresh from bpy.data to avoid stale references
+        processed_collection = bpy.data.collections.get("Processed_Blocks")
+        if not processed_collection:
+            self.report({'WARNING'}, "No Processed_Blocks collection found. Run duplication first.")
+            return False
 
-        if settings.include_textures and export_paths['texture_dir']:
-            if self.remap_textures:
-                texture_remapper = TextureRemapper()
-                success = texture_remapper.execute_remapping(
-                    settings.filepath,
-                    export_paths['texture_dir'],
-                    valid_objects,
-                    remap_in_blender=True
-                )
-                if not success:
-                    pass
-
-        return texture_remapper
-
-    def _export_additional_details(self, context, manager, valid_objects, stats, settings, export_paths):
-        """Export JSON details file if requested."""
-        export_index = context.scene.export_index
-        context.scene.export_index += 1
-
-        json_path = manager.export_details_if_needed(
-            valid_objects, stats, settings, export_paths['obj_filepath'],
-            self.export_details, export_index
-        )
-        if json_path:
-            export_data = manager.details_exporter.collect_export_details(
-                valid_objects, stats, settings, export_paths['obj_filepath'], export_index
-            )
-            detailed_report = manager.details_exporter.get_summary_report(export_data, max_objects_per_list=10)
-            print(detailed_report)
-
-    def _export_processed_duplicates(self, context, duplicates_dir):
-        """Export post‑processed duplicate objects using current user settings."""
-        processed_objs = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        # Get objects directly from the collection (new references)
+        processed_objs = [obj for obj in processed_collection.objects if obj.type == 'MESH']
         if not processed_objs:
-            self.report({'WARNING'}, "No processed objects found to export")
-            return
+            self.report({'WARNING'}, "No mesh objects found in Processed_Blocks collection.")
+            return False
 
         proc_settings = ExportSettings.from_operator(self)
         proc_settings.export_to_folder = False
-        proc_settings.filepath = os.path.join(duplicates_dir, "processed_duplicates.obj")
+        proc_settings.include_textures = self.include_textures
+        proc_settings.remap_textures = self.remap_textures
+        proc_settings.filepath = os.path.join(output_dir, final_filename)
+
+        if main_texture_dir:
+            texture_dir = main_texture_dir
+        else:
+            texture_dir = os.path.join(output_dir, "Textures")
+
+        # Copy textures if requested
+        if proc_settings.include_textures:
+            os.makedirs(texture_dir, exist_ok=True)
+            texture_handler = TextureHandler()
+            texture_handler.copy_textures_to_folder(texture_dir, processed_objs)
+
+        # Remap textures ONLY for the final output, with error protection
+        texture_remapper = None
+        if proc_settings.remap_textures and proc_settings.include_textures:
+            try:
+                texture_remapper = TextureRemapper()
+                texture_remapper.execute_remapping(
+                    proc_settings.filepath,
+                    texture_dir,
+                    processed_objs,
+                    remap_in_blender=True
+                )
+            except Exception as e:
+                self.report({'WARNING'}, f"Texture remapping failed, continuing without remap: {e}")
+                texture_remapper = None
 
         temp_manager = ExportManager(context)
         valid_objs, stats = temp_manager.validate_objects(processed_objs, proc_settings)
         if not valid_objs:
-            self.report({'WARNING'}, "No processed objects passed the current filters")
-            return
+            error_msg = temp_manager.get_no_objects_error(proc_settings, stats)
+            self.report({'WARNING'}, f"No processed objects passed filters: {error_msg}")
+            if texture_remapper:
+                try:
+                    texture_remapper.restore_blender_texture_paths()
+                except:
+                    pass
+            return False
 
         old_sel = context.selected_objects[:]
         old_active = context.view_layer.objects.active
@@ -317,153 +319,241 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         if old_active and old_active.name in bpy.data.objects:
             context.view_layer.objects.active = old_active
 
+        if texture_remapper:
+            try:
+                texture_remapper.restore_blender_texture_paths()
+            except:
+                pass
+
         if 'FINISHED' in result:
-            self.report({'INFO'}, f"Processed duplicates exported to {proc_settings.filepath}")
+            self.report({'INFO'}, f"Processed export saved as {proc_settings.filepath}")
+            return True
         else:
-            self.report({'WARNING'}, "Failed to export processed duplicates")
+            self.report({'WARNING'}, "Failed to export processed objects")
+            return False
 
     def _find_block_object(self, context):
-        """Find an object that contains quadblock or triblock data."""
+        # Try to get the active edit object first
         if context.mode == 'EDIT_MESH' and context.edit_object:
             return context.edit_object
-
+        # Check the active object
         obj = context.object
         if obj and obj.type == 'MESH':
             if "quad_group_members" in obj or "tri_group_members" in obj:
                 return obj
-
+        # Search all objects
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
                 if "quad_group_members" in obj or "tri_group_members" in obj:
                     return obj
-
         return None
 
     def _export_duplicates(self, context, export_paths):
-        """Execute duplicate export to a 'Duplicates' subfolder."""
+        """
+        Run the duplication operator. This creates Duplicates/ and populates Processed_Blocks.
+        Returns (duplicates_dir, main_texture_dir).
+        """
+        base_dir = export_paths.get('export_subfolder') or os.path.dirname(export_paths['obj_filepath'])
+        duplicates_dir = os.path.join(base_dir, "Duplicates")
+        os.makedirs(duplicates_dir, exist_ok=True)
+
+        main_texture_dir = export_paths.get('texture_dir')
+
+        block_obj = self._find_block_object(context)
+        if not block_obj:
+            self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
+            return None, None
+
+        # Store original mode and active object
         original_mode = context.mode
-        original_active = context.object
-        original_active_name = original_active.name if original_active else None
+        original_active = context.view_layer.objects.active
 
-        try:
-            base_dir = export_paths.get('export_subfolder') or os.path.dirname(export_paths['obj_filepath'])
-            duplicates_dir = os.path.join(base_dir, "Duplicates")
-            os.makedirs(duplicates_dir, exist_ok=True)
-
-            block_obj = self._find_block_object(context)
-            if not block_obj:
-                self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
-                return
-
-            if context.mode != 'OBJECT':
-                bpy.ops.object.mode_set(mode='OBJECT')
+        # Ensure we are in OBJECT mode with a valid active object
+        if context.mode != 'OBJECT':
             context.view_layer.objects.active = block_obj
-            bpy.ops.object.mode_set(mode='EDIT')
+            block_obj.select_set(True)
+            try:
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception as e:
+                self.report({'ERROR'}, f"Failed to switch to OBJECT mode: {e}")
+                return None, None
 
+        # Enter EDIT mode on the block object
+        context.view_layer.objects.active = block_obj
+        block_obj.select_set(True)
+        try:
+            bpy.ops.object.mode_set(mode='EDIT')
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to switch to EDIT mode: {e}")
+            # Restore original state
+            if original_active and original_active.name in bpy.data.objects:
+                context.view_layer.objects.active = original_active
+            if original_mode != 'OBJECT' and original_mode != context.mode:
+                try:
+                    bpy.ops.object.mode_set(mode=original_mode)
+                except:
+                    pass
+            return None, None
+
+        # Execute duplication operator (this will NOT remap textures)
+        try:
             bpy.ops.navigator.duplicate_all_blocks_by_group(
                 'EXEC_DEFAULT',
-                directory=duplicates_dir
+                directory=duplicates_dir,
+                texture_dir=main_texture_dir if main_texture_dir else ""
             )
-
-            self.report({'INFO'}, f"Duplicates exported to: {duplicates_dir}")
-
-            if self.export_processed_duplicates:
-                self._export_processed_duplicates(context, duplicates_dir)
-
         except Exception as e:
-            self.report({'WARNING'}, f"Duplicate export failed: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            self.report({'ERROR'}, f"Duplication operator failed: {e}")
+            # Try to exit edit mode
+            try:
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except:
+                pass
+            # Restore original active
+            if original_active and original_active.name in bpy.data.objects:
+                context.view_layer.objects.active = original_active
+            if original_mode != 'OBJECT' and original_mode != context.mode:
+                try:
+                    bpy.ops.object.mode_set(mode=original_mode)
+                except:
+                    pass
+            return None, None
 
-        finally:
-            if original_mode != context.mode:
-                mode_map = {
-                    'EDIT_MESH': 'EDIT',
-                    'EDIT_CURVE': 'EDIT',
-                    'EDIT_SURFACE': 'EDIT',
-                    'EDIT_METABALL': 'EDIT',
-                    'EDIT_TEXT': 'EDIT',
-                    'EDIT_ARMATURE': 'EDIT',
-                    'EDIT_LATTICE': 'EDIT',
-                    'EDIT_POINTCLOUD': 'EDIT',
-                    'EDIT_GREASE_PENCIL': 'EDIT',
-                }
-                target_mode = mode_map.get(original_mode, original_mode)
-                allowed_modes = {'OBJECT', 'EDIT', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'}
-                if target_mode in allowed_modes:
-                    bpy.ops.object.mode_set(mode=target_mode)
-                else:
-                    bpy.ops.object.mode_set(mode='OBJECT')
-            if original_active_name:
-                obj = bpy.data.objects.get(original_active_name)
-                if obj:
-                    context.view_layer.objects.active = obj
+        self.report({'INFO'}, f"Duplicates exported to: {duplicates_dir}")
+
+        # Restore original mode and active object
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except:
+            pass
+        if original_active and original_active.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active
+        if original_mode != 'OBJECT' and original_mode != context.mode:
+            try:
+                bpy.ops.object.mode_set(mode=original_mode)
+            except:
+                pass
+
+        return duplicates_dir, main_texture_dir
 
     def execute(self, context):
-        """Main execution method for the export operator."""
         if not self.export_quadblocks and not self.export_triblocks:
             self.report({'ERROR'}, "Must select at least one block type")
             return {'CANCELLED'}
 
         settings = ExportSettings.from_operator(self)
-        # Force scale to 1.0
         settings.global_scale = 1.0
         self._save_export_settings(context)
 
         manager = ExportManager(context)
-
         export_paths = manager.prepare_export_paths(self.filepath, settings, is_quick_export=False)
         settings.filepath = export_paths['obj_filepath']
 
-        try:
-            initial_objects = manager.prepare_objects(settings)
-            if not initial_objects:
-                self.report({'ERROR'}, "No objects to export")
+        # CASE 1: Both duplicate and processed export enabled
+        if self.export_duplicates and self.export_processed_duplicates:
+            try:
+                duplicates_dir, main_texture_dir = self._export_duplicates(context, export_paths)
+                if duplicates_dir is None:
+                    return {'CANCELLED'}
+
+                base_dir = export_paths.get('export_subfolder') or os.path.dirname(export_paths['obj_filepath'])
+                final_filename = os.path.basename(export_paths['obj_filepath'])
+
+                success = self._export_processed_duplicates(context, base_dir, final_filename, main_texture_dir)
+                if not success:
+                    self.report({'ERROR'}, "Failed to export processed objects as final output.")
+                    return {'CANCELLED'}
+
+                self.report({'INFO'}, "Export completed: final model saved (processed version).")
+                return {'FINISHED'}
+            except Exception as e:
+                self.report({'ERROR'}, f"Error during duplicate+processed export: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return {'CANCELLED'}
+            finally:
+                manager.restore_state()
 
-            processed_objects = manager.preprocess_objects(initial_objects, settings)
-            valid_objects, stats = manager.validate_objects(processed_objects, settings)
+        # CASE 2: Only duplicate export
+        elif self.export_duplicates and not self.export_processed_duplicates:
+            try:
+                self._export_duplicates(context, export_paths)
+                self.report({'INFO'}, "Duplicates exported (no final OBJ saved).")
+                return {'FINISHED'}
+            except Exception as e:
+                self.report({'ERROR'}, f"Error during duplicate export: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return {'CANCELLED'}
+            finally:
+                manager.restore_state()
 
-            if not valid_objects:
-                error_msg = manager.get_no_objects_error(settings, stats)
-                self.report({'ERROR'}, error_msg)
-            else:
+        # CASE 3: Normal export (no duplicates)
+        else:
+            try:
+                initial_objects = manager.prepare_objects(settings)
+                if not initial_objects:
+                    self.report({'ERROR'}, "No objects to export")
+                    return {'CANCELLED'}
+
+                processed_objects = manager.preprocess_objects(initial_objects, settings)
+                valid_objects, stats = manager.validate_objects(processed_objects, settings)
+
+                if not valid_objects:
+                    error_msg = manager.get_no_objects_error(settings, stats)
+                    self.report({'ERROR'}, error_msg)
+                    return {'CANCELLED'}
+
                 if settings.include_textures and not export_paths['texture_dir']:
                     self.report({'WARNING'}, "Could not create texture directory")
 
-                texture_remapper = self._handle_textures(settings, export_paths, valid_objects)
+                texture_remapper = None
+                if settings.include_textures and export_paths['texture_dir']:
+                    if self.remap_textures:
+                        texture_remapper = TextureRemapper()
+                        try:
+                            texture_remapper.execute_remapping(
+                                settings.filepath,
+                                export_paths['texture_dir'],
+                                valid_objects,
+                                remap_in_blender=True
+                            )
+                        except Exception as e:
+                            self.report({'WARNING'}, f"Texture remapping failed: {e}")
+                            texture_remapper = None
+
                 manager.prepare_export_operation(valid_objects)
                 export_result = manager.execute_export(settings, valid_objects)
 
                 if texture_remapper:
-                    texture_remapper.restore_blender_texture_paths()
+                    try:
+                        texture_remapper.restore_blender_texture_paths()
+                    except:
+                        pass
 
                 if 'FINISHED' not in export_result:
                     self.report({'ERROR'}, "Export failed")
                 else:
                     if self.export_details:
-                        self._export_additional_details(context, manager, valid_objects, stats, settings, export_paths)
-
+                        export_index = context.scene.export_index
+                        context.scene.export_index += 1
+                        manager.export_details_if_needed(
+                            valid_objects, stats, settings, export_paths['obj_filepath'],
+                            True, export_index
+                        )
                     stats_obj = ExportStats.from_dict(stats)
                     if settings.export_to_folder and export_paths['export_subfolder']:
                         stats_obj.exported_folder = os.path.basename(export_paths['export_subfolder'])
-
                     self.report({'INFO'}, stats_obj.get_report_message())
-
-        except Exception as e:
-            self.report({'ERROR'}, f"Error during export: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-        finally:
-            manager.restore_state()
-
-        if self.export_duplicates:
-            self._export_duplicates(context, export_paths)
-
-        return {'FINISHED'}
+                return {'FINISHED'}
+            except Exception as e:
+                self.report({'ERROR'}, f"Error during export: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return {'CANCELLED'}
+            finally:
+                manager.restore_state()
 
 
 def menu_func_export(self, context):
-    """Add export operator to Blender's File > Export menu."""
     self.layout.operator(QB_TB_OT_ExportQuadTriBlocks.bl_idname, text="Qb/Tb (.obj)")
