@@ -28,6 +28,19 @@ def duplicate_selected_faces_bmesh(bm):
     return new_faces, old_face_count
 
 
+def deep_copy_idprop_group(group):
+    """
+    Recursively convert Blender IDPropertyGroup (or any mapping/list)
+    to plain Python dicts/lists so we can safely copy and modify them.
+    """
+    if hasattr(group, 'items'):          # mapping (dict, IDPropertyGroup, etc.)
+        return {k: deep_copy_idprop_group(v) for k, v in group.items()}
+    elif isinstance(group, (list, tuple)):
+        return [deep_copy_idprop_group(item) for item in group]
+    else:
+        return group                     # primitive (str, int, float, bool)
+
+
 class LIST_OT_DuplicateSelection(Operator):
     bl_idname = "list.duplicate_selection"
     bl_label = "Duplicate Block(s) with Constant"
@@ -77,16 +90,18 @@ class LIST_OT_DuplicateSelection(Operator):
             self.report({'WARNING'}, "No blocks with constant material found in selection.")
             return {'CANCELLED'}
 
-        # 3. Store info for each block (including center coordinate)
+        # 3. Store info for each block (including center coordinate and navigation status)
         blocks_info = []
+        const_materials = obj.get("constant_materials", {})
         for block_type, block_id in found_blocks:
             const_prop = f"constant_name_{block_type}_{block_id}"
             if const_prop not in obj:
                 continue
             const_name = obj[const_prop]
-            const_info = obj["constant_materials"].get(const_name, {})
+            const_info = const_materials.get(const_name, {})
             base_mat_name = const_info.get("original_material",
                                             const_name.split('_ID')[0] if '_ID' in const_name else const_name)
+            is_nav_point = const_info.get("is_navigation_point", False)
 
             if block_type == 'quadblock':
                 center_vert = bm.verts[block_id] if block_id < len(bm.verts) else None
@@ -104,6 +119,7 @@ class LIST_OT_DuplicateSelection(Operator):
                 'const_name': const_name,
                 'base_mat_name': base_mat_name,
                 'center_co': center_co,
+                'is_navigation_point': is_nav_point,
             })
 
         if not blocks_info:
@@ -133,20 +149,15 @@ class LIST_OT_DuplicateSelection(Operator):
             # Find duplicated center by coordinate
             new_center = None
             if info['type'] == 'quadblock':
-                # For quadblocks, the center is a vertex.
-                # Use a more robust search: find the vertex whose coordinates match and whose link_faces count is 4.
                 for v in bm.verts:
                     if (v.co - info['center_co']).length < 0.001 and v.index != info['id']:
-                        # Also ensure it's a quadblock center
                         if len(v.link_faces) == 4:
                             new_center = v
                             break
             else:
-                # For triblocks, the center is a triangle face.
                 for f in bm.faces:
                     if (f.calc_center_bounds() - info['center_co']).length < 0.001 and f.index != info['id']:
                         if len(f.verts) == 3:
-                            # Additional check: does it have exactly 3 adjacent triangles?
                             adj = self.find_adjacent_triangular_faces(f)
                             if len(adj) == 3:
                                 new_center = f
@@ -157,10 +168,8 @@ class LIST_OT_DuplicateSelection(Operator):
 
             # Get the 4 faces of this block
             if info['type'] == 'quadblock':
-                # Quadblock faces are the 4 faces around the center vertex
                 face_indices = [f.index for f in new_center.link_faces]
             else:
-                # Triblock faces are the center face + its 3 adjacent triangles
                 adj = self.find_adjacent_triangular_faces(new_center)
                 if len(adj) != 3:
                     self.report({'WARNING'}, f"Triblock at face {new_center.index} does not have 3 adjacent triangles.")
@@ -203,7 +212,7 @@ class LIST_OT_DuplicateSelection(Operator):
                 bm.faces[idx].material_index = new_mat_index
             bmesh.update_edit_mesh(obj.data)
 
-            # Update constant_materials
+            # Update constant_materials - INHERIT navigation point status
             if "constant_materials" not in obj:
                 obj["constant_materials"] = {}
             const_dict = obj["constant_materials"]
@@ -212,7 +221,7 @@ class LIST_OT_DuplicateSelection(Operator):
                 "block_id": new_center.index if info['type'] == 'quadblock' else new_center.index,
                 "original_material": info['base_mat_name'],
                 "assigned_time": time.time(),
-                "is_navigation_point": const_dict.get(info['const_name'], {}).get("is_navigation_point", False),
+                "is_navigation_point": info['is_navigation_point'],   # Inherit from original
             }
             obj["constant_materials"] = const_dict
 
@@ -227,22 +236,37 @@ class LIST_OT_DuplicateSelection(Operator):
             new_const_names.append(final_new_name)
             processed += 1
 
-        # Temporary navigation point override 
+        # NAVIGATION POINT HANDLING (with inheritance) -----
+        # Temporarily replace constant_materials with only the newly created ones,
+        # but force them to be navigation points for the detection step.
         if new_const_names:
             print(f"DEBUG: New constant materials: {new_const_names}")
 
-            # Save original navigation status
-            const_dict = obj["constant_materials"]
-            original_nav_status = {}
-            for mat_name in const_dict:
-                original_nav_status[mat_name] = const_dict[mat_name].get("is_navigation_point", False)
+            # Save original constant_materials as a plain Python dict
+            original_const_materials = None
+            if "constant_materials" in obj:
+                original_const_materials = deep_copy_idprop_group(obj["constant_materials"])
 
-            # Disable all navigation points, then enable only the new ones
-            for mat_name in const_dict:
-                const_dict[mat_name]["is_navigation_point"] = False
+            # Build temporary dict containing only the new materials, marked as navigation points
+            temp_const_materials = {}
             for mat_name in new_const_names:
-                const_dict[mat_name]["is_navigation_point"] = True
-            obj["constant_materials"] = const_dict
+                if original_const_materials and mat_name in original_const_materials:
+                    # Copy the entry (plain dict)
+                    temp_const_materials[mat_name] = original_const_materials[mat_name].copy()
+                    # Force navigation point = True for detection
+                    temp_const_materials[mat_name]["is_navigation_point"] = True
+                else:
+                    # Fallback (should not happen)
+                    temp_const_materials[mat_name] = {
+                        "block_type": "quadblock",
+                        "block_id": 0,
+                        "original_material": "",
+                        "assigned_time": time.time(),
+                        "is_navigation_point": True,
+                    }
+
+            # Replace the property temporarily
+            obj["constant_materials"] = temp_const_materials
 
             # Force a full mesh update
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -255,21 +279,23 @@ class LIST_OT_DuplicateSelection(Operator):
             # Clear selection
             bpy.ops.mesh.select_all(action='DESELECT')
 
-            # Call find_blocks
-            print("DEBUG: Calling navigator.find_blocks with temporary navigation points")
+            # Call find_blocks – now it will only see the new blocks
+            print("DEBUG: Calling navigator.find_blocks with TEMPORARY constant materials (only new blocks)")
             bpy.ops.navigator.find_blocks()
 
-            # Restore original navigation status
-            for mat_name, was_nav in original_nav_status.items():
-                const_dict[mat_name]["is_navigation_point"] = was_nav
-            obj["constant_materials"] = const_dict
+            # Restore original constant_materials (which already has the correct inherited flags)
+            if original_const_materials is not None:
+                obj["constant_materials"] = original_const_materials
+            else:
+                if "constant_materials" in obj:
+                    del obj["constant_materials"]
 
             # Print the number of detected blocks after the call
             quad_count = len(obj.get("quadblock_centers", []))
             tri_count = len(obj.get("triblock_faces", []))
             print(f"DEBUG: After detection - quadblocks: {quad_count}, triblocks: {tri_count}")
 
-        # Select duplicated faces 
+        # Select duplicated faces
         bpy.ops.object.mode_set(mode='EDIT')
         bm = bmesh.from_edit_mesh(obj.data)
         for f in bm.faces:
