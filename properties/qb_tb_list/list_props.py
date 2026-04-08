@@ -30,7 +30,7 @@ def register():
         description="Type of elements to display in the block list",
         items=[
             ('VERTEX_GROUPS', 'Vertex Groups', 'Show block vertex groups (QB/TB)'),
-            ('CONSTANT_MATERIALS', 'Constant Materials', 'Show constant materials'),
+            ('CONSTANT_MATERIALS', 'Constant Mat', 'Show constant materials'),
         ],
         default='VERTEX_GROUPS'
     )
@@ -122,6 +122,13 @@ def register():
         default=False
     )
     
+    # Collapsible list section
+    bpy.types.Scene.list_show_items = BoolProperty(
+        name="Show Block List",
+        description="Show/hide the block list section",
+        default=True
+    )
+    
     # Search and sort properties
     bpy.types.Scene.list_search_text = StringProperty(
         name="Search",
@@ -186,6 +193,7 @@ def unregister():
     del bpy.types.Scene.list_issue_filter  
     del bpy.types.Scene.list_active_group
     del bpy.types.Scene.list_show_group_section
+    del bpy.types.Scene.list_show_items 
     del bpy.types.Scene.list_search_text
     del bpy.types.Scene.list_sort_name_direction
     del bpy.types.Scene.list_sort_type_direction

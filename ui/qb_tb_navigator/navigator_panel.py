@@ -11,10 +11,10 @@ def draw_navigator(context, layout):
     # Use an aligned column to minimize vertical spacing between rows
     col = box.column(align=True)
 
-    # First row: Navigate, Clear
+    # First row: Navigate, Reset
     row = col.row(align=True)
     row.operator("navigator.find_blocks", text="Navigate", icon='ZOOM_ALL')
-    row.operator("navigator.clear_block_cache", text="Clear", icon='TRASH')
+    row.operator("navigator.clear_block_cache", text="Reset", icon='TRASH')
 
     # Second row: Quadblock, Triblock
     row = col.row(align=True)
@@ -40,7 +40,7 @@ def draw_navigator(context, layout):
             inner_box = group_box.box()
             if "quad_group_members" in obj:
                 quad_group_members = obj["quad_group_members"]
-                inner_box.label(text="Select Quadblocks by Group:", icon='GROUP_VERTEX')
+                inner_box.label(text="Quadblocks Groups", icon='GROUP_VERTEX')
                 row = inner_box.row(align=True)
                 sorted_groups = []
                 for group_str in quad_group_members.keys():
@@ -57,7 +57,7 @@ def draw_navigator(context, layout):
 
             if "tri_group_members" in obj:
                 tri_group_members = obj["tri_group_members"]
-                inner_box.label(text="Select Triblocks by Group:", icon='MENU_PANEL')
+                inner_box.label(text="Triblocks Groups", icon='MENU_PANEL')
                 row = inner_box.row(align=True)
                 sorted_groups = []
                 for group_str in tri_group_members.keys():

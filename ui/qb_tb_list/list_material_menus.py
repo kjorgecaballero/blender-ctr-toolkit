@@ -1,9 +1,9 @@
 """
 Material Selection Menus for Quadblock/Triblock List
 Menus for selecting materials and constant materials
-Now includes Vertex Group selection menu
-Now with separate material filters for each display mode
-Now includes Issue Filter menu for vertex groups
+Vertex Group selection menu
+Material filters for each display mode
+Issue Filter menu for vertex groups
 """
 
 import bpy
@@ -14,7 +14,7 @@ from .list_helpers import get_block_material_name
 
 class LIST_MT_MaterialFilterMenu(bpy.types.Menu):
     """Menu for selecting materials from current list only with material image icons
-    Now with separate filters for each display mode"""
+    Separate filters for each display mode"""
     bl_label = "Select Material"
     
     def draw(self, layout):
@@ -28,7 +28,7 @@ class LIST_MT_MaterialFilterMenu(bpy.types.Menu):
             menu_title = "Filter by Material (Vertex Groups)"
         else:  # CONSTANT_MATERIALS
             current_filter = scene.list_material_filter_cm
-            menu_title = "Filter by Material (Constant Materials)"
+            menu_title = "Filter by Material (Const. Mat)"
         
         # Option to clear the filter
         op = layout.operator("list.set_material_filter", text="All", icon='MATERIAL')
