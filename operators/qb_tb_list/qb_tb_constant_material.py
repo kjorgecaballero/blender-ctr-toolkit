@@ -1,7 +1,7 @@
 """
 QB/TB Constant Material Operators
 Operators for assigning constant names to blocks via material duplication
-Now includes navigation point functionality and invalid material cleanup
+Includes navigation point functionality and invalid material cleanup
 Added reindex‑safe selection and clearing using material names only.
 """
 
@@ -10,12 +10,13 @@ import bmesh
 import time
 
 from ...utils.qb_tb_navigator import get_faces_by_material_name
+from ...utils.qb_tb_navigator.constant_material_utils import clear_all_constant_materials
 
 
 class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
     """Assign a constant name to the selected block by duplicating its material.
     The base material name is fixed; you can edit only the value after 'ID'.
-    The final name will be: base_name_IDvalue (e.g., Dirt_tex01_IDLavaPoint12).
+    The final name will be: base_name_IDvalue (e.g., Dirt_tex01_IDCustomName).
     If the resulting name already exists, a numeric suffix (.001, .002, etc.) is added automatically.
     """
     bl_idname = "list.assign_constant_material"
@@ -31,7 +32,7 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
 
     id_value: bpy.props.StringProperty(
         name="ID Value",
-        description="Custom value after 'ID' (you can edit this part, e.g., '123' or 'LavaPoint12')",
+        description="Custom value after 'ID' (you can edit this part, e.g., '123' or 'CustomName')",
         default=""
     )
 
@@ -456,27 +457,10 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         try:
-            def create_base_material_from_constant(const_mat_name):
-                """Create a new base material by duplicating the constant material and stripping '_ID' suffix."""
-                if '_ID' in const_mat_name:
-                    base_name = const_mat_name.rsplit('_ID', 1)[0]
-                else:
-                    base_name = const_mat_name
 
-                const_mat = bpy.data.materials.get(const_mat_name)
-                if not const_mat:
-                    return None, -1
-
-                new_mat = const_mat.copy()
-                new_mat.name = base_name
-
-                if new_mat.name not in obj.data.materials:
-                    obj.data.materials.append(new_mat)
-                new_index = obj.data.materials.find(new_mat.name)
-                return new_mat.name, new_index
+            # 1) Clear only invalid navigation points (unchanged, not refactored)
 
             if self.clear_invalid_only:
-                # Clear only invalid navigation points (same logic as before)
                 if "constant_materials" not in obj:
                     self.report({'WARNING'}, "No constant materials found.")
                     return {'CANCELLED'}
@@ -495,7 +479,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
                 cleared_count = 0
                 restored_with_fallback = 0
-                errors_count = 0
+                failed_materials = []
                 fallback_cache = {}
 
                 for mat_name in broken_points:
@@ -516,11 +500,12 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 if base_name in fallback_cache:
                                     new_mat_name, new_index = fallback_cache[base_name]
                                 else:
-                                    new_mat_name, new_index = create_base_material_from_constant(mat_name)
+                                    from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
+                                    new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
                                     if new_mat_name:
                                         fallback_cache[base_name] = (new_mat_name, new_index)
                                     else:
-                                        errors_count += 1
+                                        failed_materials.append(mat_name)
                                         continue
 
                                 block_faces = get_faces_by_material_name(obj, mat_name)
@@ -530,14 +515,16 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 obj.data.update()
                                 restored_with_fallback += 1
                             else:
-                                errors_count += 1
+                                failed_materials.append(mat_name)
                                 continue
                         else:
-                            pass
+                            # No fallback, cannot restore -> keep constant material untouched
+                            failed_materials.append(mat_name)
+                            continue
                     else:
                         block_faces = get_faces_by_material_name(obj, mat_name)
                         if not block_faces:
-                            errors_count += 1
+                            failed_materials.append(mat_name)
                             continue
 
                         if original_material_name not in obj.data.materials:
@@ -548,6 +535,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                         obj.data.update()
                         cleared_count += 1
 
+                    # Only if restoration succeeded do we delete the constant material
                     if mat_name in obj["constant_materials"]:
                         del obj["constant_materials"][mat_name]
                     const_prop_name = f"constant_name_{block_type}_{block_id}"
@@ -564,101 +552,32 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 except Exception as e:
                     self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
 
-                msg = f"Cleared {len(broken_points)} invalid constant materials. "
+                msg = f"Cleared {len(broken_points) - len(failed_materials)} invalid constant materials. "
                 if restored_with_fallback > 0:
-                    msg += f"Restored {restored_with_fallback} using fallback."
-                if errors_count > 0:
-                    msg += f" Errors: {errors_count}."
-                self.report({'INFO'}, msg)
+                    msg += f"Restored {restored_with_fallback} using fallback. "
+                if failed_materials:
+                    msg += f"Could NOT restore (missing original & fallback off): {', '.join(failed_materials)}"
+                self.report({'INFO'} if not failed_materials else {'WARNING'}, msg)
                 return {'FINISHED'}
+
+
+            # 2) Clear all constant materials (refactored to use utility)
 
             elif self.clear_all:
-                # Clear all constant materials (same logic as before)
-                if "constant_materials" not in obj:
-                    self.report({'WARNING'}, "No constant materials found.")
-                    return {'CANCELLED'}
-
-                constant_materials_dict = dict(obj["constant_materials"])
-                fallback_cache = {}
-                restored_with_fallback = 0
-                cleared_with_original = 0
-                errors = 0
-
-                for mat_name, block_info in constant_materials_dict.items():
-                    block_type = block_info.get("block_type", "")
-                    block_id = block_info.get("block_id", 0)
-                    original_material_name = block_info.get("original_material", "")
-
-                    block_faces = get_faces_by_material_name(obj, mat_name)
-                    if not block_faces:
-                        errors += 1
-                        continue
-
-                    original_material = None
-                    if original_material_name and original_material_name in bpy.data.materials:
-                        original_material = bpy.data.materials[original_material_name]
-
-                    if not original_material:
-                        if self.fallback_duplicate:
-                            const_mat = bpy.data.materials.get(mat_name)
-                            if const_mat:
-                                base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
-                                if base_name in fallback_cache:
-                                    new_mat_name, new_index = fallback_cache[base_name]
-                                else:
-                                    new_mat_name, new_index = create_base_material_from_constant(mat_name)
-                                    if new_mat_name:
-                                        fallback_cache[base_name] = (new_mat_name, new_index)
-                                    else:
-                                        errors += 1
-                                        continue
-
-                                for face_idx in block_faces:
-                                    obj.data.polygons[face_idx].material_index = new_index
-                                restored_with_fallback += 1
-                            else:
-                                errors += 1
-                                continue
-                        else:
-                            pass
-                    else:
-                        if original_material_name not in obj.data.materials:
-                            obj.data.materials.append(original_material)
-                        original_mat_index = obj.data.materials.find(original_material_name)
-                        for face_idx in block_faces:
-                            obj.data.polygons[face_idx].material_index = original_mat_index
-                        cleared_with_original += 1
-
-                    if mat_name in obj["constant_materials"]:
-                        del obj["constant_materials"][mat_name]
-                    const_prop_name = f"constant_name_{block_type}_{block_id}"
-                    if const_prop_name in obj:
-                        del obj[const_prop_name]
-
-                    if mat_name in bpy.data.materials:
-                        mat = bpy.data.materials[mat_name]
-                        if mat.users == 0:
-                            bpy.data.materials.remove(mat)
-
-                for prop in list(obj.keys()):
-                    if prop.startswith("constant_name_"):
-                        del obj[prop]
-
-                try:
-                    bpy.ops.object.material_slot_remove_unused()
-                except Exception as e:
-                    self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
-
-                msg = f"Cleared all constant materials. "
-                msg += f"Restored {cleared_with_original} with original, {restored_with_fallback} with fallback."
-                if errors > 0:
-                    msg += f" Errors: {errors}."
-                self.report({'INFO'}, msg)
+                cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, self.fallback_duplicate)
+                msg = f"Cleared all constant materials. Restored {cleared_orig} with original, {restored_fb} with fallback."
+                if failed:
+                    msg += f" Could NOT restore (missing original & fallback off): {', '.join(failed)}"
+                    self.report({'WARNING'}, msg)
+                else:
+                    self.report({'INFO'}, msg)
                 return {'FINISHED'}
 
+
+            # 3) Clear only from the selected block (unchanged)
+
             else:
-                # Clear only constant materials from the selected faces (reindex‑safe, works in Object Mode)
-                # We are already in OBJECT mode, so use mesh polygons directly.
+                # Already in OBJECT mode, use mesh polygons directly
                 selected_polys = [p for p in obj.data.polygons if p.select]
                 if not selected_polys:
                     self.report({'WARNING'}, "No faces selected. Select a block to clear its constant material.")
@@ -684,7 +603,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
                 cleared = 0
                 restored_with_fallback = 0
-                errors = 0
+                failed_materials = []
                 fallback_cache = {}
 
                 for mat_name in mats_to_clear:
@@ -692,10 +611,10 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                     original_mat_name = block_info.get("original_material", "")
                     original_mat = bpy.data.materials.get(original_mat_name)
 
-                    # Get all faces using this constant material (entire object)
+                    # Get all faces of the object that use this constant material
                     face_indices = get_faces_by_material_name(obj, mat_name)
                     if not face_indices:
-                        errors += 1
+                        failed_materials.append(mat_name)
                         continue
 
                     if not original_mat:
@@ -706,11 +625,12 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 if base_name in fallback_cache:
                                     new_mat_name, new_index = fallback_cache[base_name]
                                 else:
-                                    new_mat_name, new_index = create_base_material_from_constant(mat_name)
+                                    from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
+                                    new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
                                     if new_mat_name:
                                         fallback_cache[base_name] = (new_mat_name, new_index)
                                     else:
-                                        errors += 1
+                                        failed_materials.append(mat_name)
                                         continue
 
                                 for idx in face_indices:
@@ -718,10 +638,11 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                         obj.data.polygons[idx].material_index = new_index
                                 restored_with_fallback += 1
                             else:
-                                errors += 1
+                                failed_materials.append(mat_name)
                                 continue
                         else:
-                            self.report({'ERROR'}, f"Original material '{original_mat_name}' missing and fallback disabled.")
+                            # No fallback and original missing -> cannot restore
+                            self.report({'ERROR'}, f"Original material '{original_mat_name}' missing and fallback disabled for '{mat_name}'.")
                             return {'CANCELLED'}
                     else:
                         # Restore original material
@@ -732,16 +653,14 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             obj.data.polygons[idx].material_index = orig_idx
                         cleared += 1
 
-                    # Remove from constant_materials dict
+                    # Remove constant material from dictionaries
                     if mat_name in const_dict:
                         del const_dict[mat_name]
 
-                    # Remove any constant_name_* properties that point to this material
                     props_to_delete = [k for k in obj.keys() if k.startswith("constant_name_") and obj[k] == mat_name]
                     for prop in props_to_delete:
                         del obj[prop]
 
-                    # Delete the material if it is no longer used
                     const_mat = bpy.data.materials.get(mat_name)
                     if const_mat and const_mat.users == 0:
                         bpy.data.materials.remove(const_mat)
@@ -753,12 +672,13 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 except Exception as e:
                     self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
 
-                msg = f"Cleared {cleared} constant material(s)"
-                if restored_with_fallback > 0:
-                    msg += f", restored {restored_with_fallback} with fallback"
-                if errors > 0:
-                    msg += f", errors: {errors}"
-                self.report({'INFO'}, msg)
+                if failed_materials:
+                    self.report({'WARNING'}, f"Some materials could not be cleared (missing original & fallback off): {', '.join(failed_materials)}")
+                else:
+                    msg = f"Cleared {cleared} constant material(s)"
+                    if restored_with_fallback > 0:
+                        msg += f", restored {restored_with_fallback} with fallback"
+                    self.report({'INFO'}, msg)
 
         except Exception as e:
             self.report({'ERROR'}, f"Error: {str(e)}")
