@@ -36,7 +36,7 @@ class LIST_PT_BlockListPanel(Panel):
             layout.label(text="Select an object in Edit Mode", icon='ERROR')
             return
 
-        # Create a compact column without spacing between rows
+        # compact column 
         main_col = layout.column(align=True)
 
         # CALCULATE AND SHOW COUNT FIRST
@@ -204,14 +204,14 @@ class LIST_PT_BlockListPanel(Panel):
     def draw_custom_list(self, layout, context, obj, items, display_counts,
                         has_vertex_groups=False, has_constant_materials=False,
                         has_detected_blocks=False, nav_point_count=0):
-        """Draw a custom scrollable list with search, sort, material filter, and vertical scrollbar,
-        Search bar at top, then filter dropdowns, then action buttons in a single row,
-        then list, then pagination at bottom. The entire list section is collapsible.
+        """Draw a custom scrollable list with search, sort, material filter, vertical scrollbar,
+        Search bar at top, filter dropdowns, action buttons in a single row,
+         list, pagination at bottom. The entire list section is collapsible.
         Counts are displayed inside the scroll box just above the pagination.
         """
         scene = context.scene
 
-        # COLLAPSIBLE LIST SECTION 
+        # COLLAPSIBLE LIST SECTION
         list_box = layout.box()
         row = list_box.row(align=True)
         row.prop(scene, "list_show_items",
@@ -244,11 +244,11 @@ class LIST_PT_BlockListPanel(Panel):
             issue_text = {
                 'ALL': "All",
                 'VALID': "Valid",
+                'INVALID': "Invalid",
                 'INVALID_GEOMETRY': "Invalid Geo",
                 'INVALID_UVS': "Invalid UVs",
                 'INVALID_TRIBLOCK_UVS': "Invalid Triblock UVs",
                 'DEGENERATED_UVS': "Degenerated UVs",
-                'NO_ISSUES': "No Issues"
             }.get(scene.list_issue_filter, "All")
 
             right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
@@ -372,14 +372,12 @@ class LIST_PT_BlockListPanel(Panel):
             # Apply issue filter (only for vertex groups)
             if scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
                 item_issues = issues_dict.get(item['name'], [])
+                real_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
                 if issue_filter == 'VALID':
-                    if not ('quadblock' in item_issues or 'triblock' in item_issues):
-                        show = False
-                    else:
-                        other_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
-                        show = len(other_issues) == 0
-                elif issue_filter == 'NO_ISSUES':
-                    show = len(item_issues) == 0
+                    has_block_marker = ('quadblock' in item_issues or 'triblock' in item_issues)
+                    show = has_block_marker and len(real_issues) == 0
+                elif issue_filter == 'INVALID':
+                    show = len(real_issues) > 0
                 elif issue_filter == 'INVALID_GEOMETRY':
                     show = 'invalid_geometry' in item_issues
                 elif issue_filter == 'INVALID_UVS':
@@ -392,6 +390,8 @@ class LIST_PT_BlockListPanel(Panel):
                     show = True
                 if not show:
                     continue
+            # For 'ALL' we keep all items (no filtering)
+            # note that 'ALL' is not filtered
 
             # Apply navigation point filter (only for constant materials)
             if scene.list_display_type == 'CONSTANT_MATERIALS':
@@ -469,8 +469,8 @@ class LIST_PT_BlockListPanel(Panel):
         if visible_items or total_items > 0:
             scroll_box = list_box.box()
 
-            # COUNTER AND PAGINATION
-            info_col = scroll_box.column(align=True)   # eliminates extra vertical space between rows
+            # COUNTER AND PAGINATION 
+            info_col = scroll_box.column(align=True)
 
             # Counter row (always visible)
             count_row = info_col.row()

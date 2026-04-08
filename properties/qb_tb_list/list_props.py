@@ -14,13 +14,11 @@ from bpy.props import BoolProperty, IntProperty, EnumProperty, StringProperty
 def update_filter_vertex_groups(self, context):
     """Ensure at least one of the QB/TB filters is active"""
     if not self.list_filter_show_qb and not self.list_filter_show_tb:
-        # If both are disabled, activate QB by default
         self.list_filter_show_qb = True
 
 def update_filter_constant_materials(self, context):
     """Ensure at least one of the QB/TB filters is active"""
     if not self.list_filter_cm_qb and not self.list_filter_cm_tb:
-        # If both are disabled, activate QB by default
         self.list_filter_cm_qb = True
 
 def register():
@@ -77,7 +75,6 @@ def register():
         default='ALL'
     )
     
-    # SEPARATE MATERIAL FILTERS FOR EACH DISPLAY TYPE
     # Material filter for Vertex Groups mode
     bpy.types.Scene.list_material_filter_vg = StringProperty(
         name="Material Filter (Vertex Groups)",
@@ -92,18 +89,18 @@ def register():
         default=""
     )
     
-    # Issue filter for Vertex Groups mode
+    # Issue filter for Vertex Groups mode 
     bpy.types.Scene.list_issue_filter = EnumProperty(
         name="Issue Filter",
         description="Filter vertex groups by validation issues",
         items=[
-            ('ALL', 'All', 'Show all vertex groups'),
-            ('VALID', 'Valid Blocks', 'Show only blocks with no issues'),
+            ('ALL', 'All', 'Show all blocks (valid and invalid)'),
+            ('VALID', 'Valid', 'Show only valid blocks'),
+            ('INVALID', 'Invalid', 'Show only blocks with any issue'),
             ('INVALID_GEOMETRY', 'Invalid Geometry', 'Show blocks with invalid geometry'),
             ('INVALID_UVS', 'Invalid UVs', 'Show blocks with UVs outside 0-1 range'),
             ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Show triblocks with incorrect UV arrangement'),
             ('DEGENERATED_UVS', 'Degenerated UVs', 'Show blocks with all UVs identical'),
-            ('NO_ISSUES', 'No Issues', 'Show blocks that are valid (alias for Valid Blocks)'),
         ],
         default='ALL'
     )
@@ -115,21 +112,18 @@ def register():
         default=""
     )
     
-    # Group management section visibility
     bpy.types.Scene.list_show_group_section = BoolProperty(
         name="Show Group Section",
         description="Show/hide the group management section",
         default=False
     )
     
-    # Collapsible list section
     bpy.types.Scene.list_show_items = BoolProperty(
         name="Show Block List",
         description="Show/hide the block list section",
         default=True
     )
     
-    # Search and sort properties
     bpy.types.Scene.list_search_text = StringProperty(
         name="Search",
         description="Search items by name, type, or ID",
@@ -137,7 +131,6 @@ def register():
         update=lambda self, context: setattr(self, 'list_scroll_position', 0)
     )
     
-    # Independent sort properties for name and type
     bpy.types.Scene.list_sort_name_direction = EnumProperty(
         name="Name Sort Direction",
         description="Direction for sorting by name",
@@ -158,13 +151,11 @@ def register():
         default='ASC'
     )
     
-    # List index for selection
     bpy.types.Scene.list_list_index = IntProperty(
         name="List Index",
         default=0
     )
     
-    # Horizontal scroll position for the list
     bpy.types.Scene.list_scroll_position = IntProperty(
         name="Scroll Position",
         description="Horizontal scroll position in the list",
@@ -172,14 +163,12 @@ def register():
         min=0
     )
     
-    # Vertical scroll properties
     bpy.types.Scene.list_vertical_scroll = IntProperty(
         name="Vertical Stack",
         description="Vertical scroll position in the list",
         default=0,
         min=0
     )
-    
 
 def unregister():
     del bpy.types.Scene.list_display_type
@@ -190,10 +179,10 @@ def unregister():
     del bpy.types.Scene.list_navigation_filter
     del bpy.types.Scene.list_material_filter_vg
     del bpy.types.Scene.list_material_filter_cm
-    del bpy.types.Scene.list_issue_filter  
+    del bpy.types.Scene.list_issue_filter
     del bpy.types.Scene.list_active_group
     del bpy.types.Scene.list_show_group_section
-    del bpy.types.Scene.list_show_items 
+    del bpy.types.Scene.list_show_items
     del bpy.types.Scene.list_search_text
     del bpy.types.Scene.list_sort_name_direction
     del bpy.types.Scene.list_sort_type_direction

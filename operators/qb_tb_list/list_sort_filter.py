@@ -50,7 +50,7 @@ class LIST_OT_SetMaterialFilter(Operator):
         return {'FINISHED'}
 
 
-# Operator to set issue filter
+# Operator to set issue filter - UPDATED to match new enum values
 class LIST_OT_SetIssueFilter(Operator):
     bl_idname = "list.set_issue_filter"
     bl_label = "Set Issue Filter"
@@ -60,13 +60,13 @@ class LIST_OT_SetIssueFilter(Operator):
     filter_type: EnumProperty(
         name="Filter Type",
         items=[
-            ('ALL', 'All', ''),
-            ('VALID', 'Valid Blocks', ''),
-            ('INVALID_GEOMETRY', 'Invalid Geometry', ''),
-            ('INVALID_UVS', 'Invalid UVs', ''),
-            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', ''),
-            ('DEGENERATED_UVS', 'Degenerated UVs', ''),
-            ('NO_ISSUES', 'No Issues', ''),
+            ('ALL', 'All', 'Show all blocks (valid and invalid)'),
+            ('VALID', 'Valid', 'Show only valid blocks'),
+            ('INVALID', 'Invalid', 'Show only blocks with any issue'),
+            ('INVALID_GEOMETRY', 'Invalid Geometry', 'Show blocks with invalid geometry'),
+            ('INVALID_UVS', 'Invalid UVs', 'Show blocks with UVs outside 0-1 range'),
+            ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Show triblocks with incorrect UV arrangement'),
+            ('DEGENERATED_UVS', 'Degenerated UVs', 'Show blocks with all UVs identical'),
         ],
         default='ALL'
     )
@@ -80,5 +80,5 @@ classes = [
     LIST_OT_ToggleSortName,
     LIST_OT_ToggleSortType,
     LIST_OT_SetMaterialFilter,
-    LIST_OT_SetIssueFilter,  
+    LIST_OT_SetIssueFilter,
 ]

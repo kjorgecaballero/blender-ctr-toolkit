@@ -1,6 +1,5 @@
 """
 Multi-Selection Operators for Quadblock/Triblock List
-Moved from ui/qb_tb_list/multi_selection_list.py
 """
 
 import bpy
@@ -81,7 +80,7 @@ def _get_filtered_display_items(context, obj, scene):
                  search in it['block_type'].lower()]
 
     # Apply issue filter (only for vertex groups)
-    if display_type == 'VERTEX_GROUPS' and scene.list_issue_filter != 'ALL':
+    if display_type == 'VERTEX_GROUPS':
         issues_dict = {}
         if "vertex_group_issues" in obj:
             issues_dict = dict(obj["vertex_group_issues"])
@@ -89,29 +88,30 @@ def _get_filtered_display_items(context, obj, scene):
         filtered = []
         for it in items:
             item_issues = issues_dict.get(it['name'], [])
-            show = True
+            real_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
             issue_filter = scene.list_issue_filter
 
-            if issue_filter == 'VALID':
-                if not ('quadblock' in item_issues or 'triblock' in item_issues):
-                    show = False
-                else:
-                    other_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
-                    show = len(other_issues) == 0
-            elif issue_filter == 'NO_ISSUES':
-                show = len(item_issues) == 0
-            elif issue_filter == 'INVALID_GEOMETRY':
-                show = 'invalid_geometry' in item_issues
-            elif issue_filter == 'INVALID_UVS':
-                show = 'invalid_uvs' in item_issues
-            elif issue_filter == 'INVALID_TRIBLOCK_UVS':
-                show = 'invalid_triblock_uvs' in item_issues
-            elif issue_filter == 'DEGENERATED_UVS':
-                show = 'degenerated_uvs' in item_issues
-
-            if show:
+            if issue_filter == 'ALL':
                 filtered.append(it)
-
+            elif issue_filter == 'VALID':
+                has_block_marker = ('quadblock' in item_issues or 'triblock' in item_issues)
+                if has_block_marker and len(real_issues) == 0:
+                    filtered.append(it)
+            elif issue_filter == 'INVALID':
+                if len(real_issues) > 0:
+                    filtered.append(it)
+            elif issue_filter == 'INVALID_GEOMETRY':
+                if 'invalid_geometry' in item_issues:
+                    filtered.append(it)
+            elif issue_filter == 'INVALID_UVS':
+                if 'invalid_uvs' in item_issues:
+                    filtered.append(it)
+            elif issue_filter == 'INVALID_TRIBLOCK_UVS':
+                if 'invalid_triblock_uvs' in item_issues:
+                    filtered.append(it)
+            elif issue_filter == 'DEGENERATED_UVS':
+                if 'degenerated_uvs' in item_issues:
+                    filtered.append(it)
         items = filtered
 
     return items
@@ -271,7 +271,7 @@ class LIST_OT_ClearMultiSelection(Operator):
 class LIST_OT_SelectMultiChecked(Operator):
     bl_idname = "list.select_multi_checked"
     bl_label = "Select Multi Checked"
-    bl_description = "Select all checked quadblocks/triblocks in the 3D view (optimized for performance)"
+    bl_description = "Select all checked quadblocks/triblocks in the 3D view"
     bl_options = {'REGISTER', 'UNDO'}
 
     select_all: BoolProperty(default=False)
@@ -286,11 +286,9 @@ class LIST_OT_SelectMultiChecked(Operator):
         scene = context.scene
         display_type = scene.list_display_type
 
-        # Ensure we are in Edit Mode
         if context.mode != 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='EDIT')
 
-        # Vertex Groups (optimized with deform layer) 
         if display_type == 'VERTEX_GROUPS':
             target_vg_names = []
             if self.select_all:
@@ -368,7 +366,6 @@ class LIST_OT_SelectMultiChecked(Operator):
                 if original_mode == 'OBJECT':
                     bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Constant Materials 
         elif display_type == 'CONSTANT_MATERIALS':
             if "constant_materials" not in obj or not obj["constant_materials"]:
                 self.report({'WARNING'}, "No constant materials found.")
@@ -394,19 +391,15 @@ class LIST_OT_SelectMultiChecked(Operator):
                 return {'CANCELLED'}
 
             original_mode = context.mode
-            # Ensure we are in OBJECT mode to safely manipulate selection
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
             try:
-                # Clear existing selection if requested
                 if self.clear_existing:
-                    # Deselect all faces and vertices in Edit Mode
                     bpy.ops.object.mode_set(mode='EDIT')
                     bpy.ops.mesh.select_all(action='DESELECT')
                     bpy.ops.object.mode_set(mode='OBJECT')
 
-                # Get material indices for target materials
                 mat_indices = {}
                 for i, slot in enumerate(obj.material_slots):
                     if slot.material and slot.material.name in target_mats:
@@ -414,7 +407,6 @@ class LIST_OT_SelectMultiChecked(Operator):
 
                 face_count = 0
                 selected_verts = set()
-                # Select faces with target materials
                 for poly in obj.data.polygons:
                     if poly.material_index < len(obj.material_slots):
                         slot = obj.material_slots[poly.material_index]
@@ -424,7 +416,6 @@ class LIST_OT_SelectMultiChecked(Operator):
                             for v_idx in poly.vertices:
                                 selected_verts.add(v_idx)
 
-                # Select vertices and edges
                 for v_idx in selected_verts:
                     if v_idx < len(obj.data.vertices):
                         obj.data.vertices[v_idx].select = True
@@ -434,7 +425,6 @@ class LIST_OT_SelectMultiChecked(Operator):
                         edge.select = True
 
                 obj.data.update()
-                # Switch back to Edit Mode for display
                 bpy.ops.object.mode_set(mode='EDIT')
                 self.report({'INFO'}, f"Selected {len(target_mats)} materials ({face_count} faces)")
 
@@ -557,7 +547,6 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
             self.report({'INFO'}, f"No issues for vertex group '{self.group_name}'.")
             return {'FINISHED'}
 
-        # Build message
         lines = []
         lines.append(f"Issues for vertex group: {self.group_name}")
         lines.append("-" * 30)
