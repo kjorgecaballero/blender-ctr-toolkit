@@ -358,13 +358,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
-    texture_dir: bpy.props.StringProperty(
-        name="Texture Directory",
-        description="Custom texture folder (if empty, uses 'Textures' inside the export directory)",
-        subtype='DIR_PATH',
-        default=""
-    )
-
     # Helper methods for managing the Processed_Blocks collection
 
     def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
@@ -474,16 +467,13 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             settings.allow_out_of_range = True
             settings.include_textures = True   # Ensure textures are copied
 
-            # Build paths directly without using incremental folder logic
-            obj_filepath = os.path.join(self.directory, "duplicated_blocks.obj")
+            # Create a "Duplicates" subfolder inside the chosen directory
+            duplicates_dir = os.path.join(self.directory, "Duplicates")
+            os.makedirs(duplicates_dir, exist_ok=True)
 
-            # Determine texture directory:
-            # - If texture_dir was provided (from main export), use it.
-            # - Otherwise, create "Textures" inside self.directory.
-            if self.texture_dir:
-                tex_dir = self.texture_dir
-            else:
-                tex_dir = os.path.join(self.directory, "Textures")
+            # Build paths inside the Duplicates folder
+            obj_filepath = os.path.join(duplicates_dir, "duplicated_blocks.obj")
+            tex_dir = os.path.join(duplicates_dir, "Textures")
 
             # Create texture directory if it doesn't exist
             os.makedirs(tex_dir, exist_ok=True)
