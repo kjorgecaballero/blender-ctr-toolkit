@@ -269,7 +269,7 @@ def get_triblock_uv_validation_details(obj, tolerance=0.0001):
     reason = 'Valid' if valid else 'No adjacent triangle shares both shared UVs with central triangle'
     return {'valid': valid, 'reason': reason}
 
-# UV issue function 
+# UV issue function
 def get_face_uv_issues(obj, face_indices):
     """Check UVs for the given faces and return a list of UV-related issues.
        Possible issues: 'invalid_uvs', 'degenerated_uvs'"""
@@ -277,13 +277,19 @@ def get_face_uv_issues(obj, face_indices):
     mesh = obj.data
     if not mesh.uv_layers:
         return issues
-    uv_layer = mesh.uv_layers.active.data
+    uv_layer = mesh.uv_layers.active
+    if not uv_layer or len(uv_layer.data) == 0:
+        return issues
+
+    uv_data = uv_layer.data
 
     # Check for invalid UVs (out of 0-1 range)
     for fi in face_indices:
         face = mesh.polygons[fi]
         for loop_idx in face.loop_indices:
-            uv = uv_layer[loop_idx].uv
+            if loop_idx >= len(uv_data):
+                continue  # skip if out of range
+            uv = uv_data[loop_idx].uv
             if uv.x < 0 or uv.x > 1 or uv.y < 0 or uv.y > 1:
                 issues.append("invalid_uvs")
                 break
@@ -296,7 +302,9 @@ def get_face_uv_issues(obj, face_indices):
         for fi in face_indices:
             face = mesh.polygons[fi]
             for loop_idx in face.loop_indices:
-                all_uvs.append(uv_layer[loop_idx].uv)
+                if loop_idx >= len(uv_data):
+                    continue
+                all_uvs.append(uv_data[loop_idx].uv)
         if all_uvs:
             first_uv = all_uvs[0]
             degenerated = True

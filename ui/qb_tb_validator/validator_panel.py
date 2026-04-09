@@ -21,13 +21,13 @@ def draw_validator(context, layout):
         row1.operator("list.validate_vertex_groups", text="Issues", icon='ERROR')
         row1.operator("qb_tb.select_vertex_groups_by_type", text="Select", icon='RESTRICT_SELECT_OFF')
 
-    # Third row: Clean/Clear + Validate
+    # Third row: Clear + Remove 
     row2 = col.row(align=True)
     if scene.validator_scope == 'OBJECTS':
-        row2.operator("qb_tb.clean_object_suffixes", text="Clean", icon='FILE_REFRESH')
+        row2.operator("qb_tb.clean_object_suffixes", text="Clear", icon='FILE_REFRESH')
     else:
         row2.operator("qb_tb.clear_vertex_group_issues", text="Clear", icon='TRASH')
-    row2.operator("qb_tb.validate", text="Validate", icon='CHECKMARK')
+    row2.operator("qb_tb.validate", text="Remove", icon='CHECKMARK')
 
     # Dropdown placed below the compact column (optional visual separation)
     main_box.prop(scene, "validator_option", text="")

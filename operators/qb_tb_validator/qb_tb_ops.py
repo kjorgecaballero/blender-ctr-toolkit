@@ -39,7 +39,8 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
             elif option == 'INVALID_GEOMETRY':
                 match = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
             elif option == 'INVALID_UVS':
-                match = any(issue in issues for issue in ["invalid_uvs", "invalid_triblock_uvs"])
+                # Only UVs out of 0-1 range, not triblock-specific UV issues
+                match = "invalid_uvs" in issues
             elif option == 'INVALID_TRIBLOCK_UVS':
                 match = "invalid_triblock_uvs" in issues
             elif option == 'DEGENERATED_UVS':
@@ -63,13 +64,11 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
         return {'FINISHED'}
 
 
-
 # Unified Validate Operator (Objects or Vertex Groups)
-
 class QB_TB_OT_Validate(Operator):
     bl_idname = "qb_tb.validate"
-    bl_label = "Validate"
-    bl_description = "Validate objects or vertex groups with common options"
+    bl_label = "Remove"
+    bl_description = "Remove objects or faces based on selected options"
     bl_options = {'REGISTER', 'UNDO'}
 
     # Only removal options remain
@@ -119,7 +118,6 @@ class QB_TB_OT_Validate(Operator):
 
 
     # Object validation 
-
     def execute_objects(self, context):
         triblock_count = 0
         quadblock_count = 0
@@ -253,7 +251,6 @@ class QB_TB_OT_Validate(Operator):
 
 
     # Vertex group validation 
-
     def execute_vertex_groups(self, context):
         obj = context.active_object
         if not obj or obj.type != 'MESH':
@@ -420,11 +417,12 @@ class QB_TB_OT_FilterSelectObjects(Operator):
             elif option == 'INVALID_GEOMETRY':
                 select_this = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
             elif option == 'INVALID_UVS':
-                select_this = any(issue in issues for issue in ["invalid_uvs", "invalid_triblock_uvs"])
-            elif option == 'DEGENERATED_UVS':
-                select_this = "degenerated_uvs" in issues
+                # Only UVs out of 0-1 range, not triblock-specific UV issues
+                select_this = "invalid_uvs" in issues
             elif option == 'INVALID_TRIBLOCK_UVS':
                 select_this = "invalid_triblock_uvs" in issues
+            elif option == 'DEGENERATED_UVS':
+                select_this = "degenerated_uvs" in issues
             elif option == 'TRIBLOCK':
                 select_this = mesh_type == 'TRIBLOCK'
             elif option == 'QUADBLOCK':
@@ -457,8 +455,8 @@ class QB_TB_OT_FilterSelectObjects(Operator):
 
 class QB_TB_OT_CleanObjectSuffixes(Operator):
     bl_idname = "qb_tb.clean_object_suffixes"
-    bl_label = "Clean Suffix"
-    bl_description = "Clean all suffixes from object names"
+    bl_label = "Clear Suffix"
+    bl_description = "Clear all suffixes from object names"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -611,14 +609,16 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
             self.report({'INFO'}, f"No vertex groups match the filter '{option}'.")
             return {'FINISHED'}
 
-        # Mark matched groups in the multi-selection list
-        if "multi_selected_items" not in obj:
+        # --- CLEAR PREVIOUS SELECTION (only for this operation) ---
+        if "multi_selected_items" in obj:
+            obj["multi_selected_items"].clear()
+        else:
             obj["multi_selected_items"] = {}
-        multi = obj["multi_selected_items"]
 
+        # Mark matched groups in the multi-selection list
+        multi = obj["multi_selected_items"]
         for name in matched_groups:
             multi[name] = True
-
         obj["multi_selected_items"] = multi
 
         # Switch display type to VERTEX_GROUPS to show the list with checkboxes
