@@ -98,6 +98,7 @@ class QB_TB_OT_Validate(Operator):
 
     def draw(self, context):
         layout = self.layout
+        scope = context.scene.validator_scope
 
         # Options box (only removal options)
         box = layout.box()
@@ -107,7 +108,10 @@ class QB_TB_OT_Validate(Operator):
         col.prop(self, "remove_invalid_geometry")
         col.prop(self, "remove_invalid_uvs")
         col.prop(self, "remove_degenerated_uvs")
-        col.prop(self, "remove_out_of_range")
+
+        # Only show Out of Range option for OBJECTS scope
+        if scope == 'OBJECTS':
+            col.prop(self, "remove_out_of_range")
 
     def execute(self, context):
         scope = context.scene.validator_scope
@@ -292,7 +296,7 @@ class QB_TB_OT_Validate(Operator):
                         group_faces[g_idx].append(face.index)
         bm.free()
 
-        # Determine out-of-range groups
+        # Determine out-of-range groups (used only for information, not for removal)
         dims = get_range_dimensions()
         min_co = Vector(dims['min'])
         max_co = Vector(dims['max'])
@@ -331,8 +335,7 @@ class QB_TB_OT_Validate(Operator):
                 vg_name_to_index[name] for name, iss in issues_dict.items()
                 if 'degenerated_uvs' in iss and name in vg_name_to_index
             )
-        if self.remove_out_of_range:
-            groups_to_remove_faces.update(out_of_range_groups)
+        # remove_out_of_range is intentionally ignored for vertex groups
 
         removed_face_count = 0
         if groups_to_remove_faces:
@@ -417,7 +420,7 @@ class QB_TB_OT_FilterSelectObjects(Operator):
             elif option == 'INVALID_GEOMETRY':
                 select_this = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
             elif option == 'INVALID_UVS':
-                # Only UVs out of 0-1 range, not triblock-specific UV issues
+                # Only UVs out of 0-1 range
                 select_this = "invalid_uvs" in issues
             elif option == 'INVALID_TRIBLOCK_UVS':
                 select_this = "invalid_triblock_uvs" in issues
@@ -516,6 +519,11 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
         option = context.scene.validator_option
         scene = context.scene
 
+        # Options that are not applicable to vertex groups
+        if option in {'NGONS', 'NON_MESH', 'OUT_OF_RANGE'}:
+            self.report({'INFO'}, f"Option '{option}' is not available for vertex groups.")
+            return {'CANCELLED'}
+
         # Ensure vertex group issues are available
         if "vertex_group_issues" not in obj:
             try:
@@ -526,7 +534,7 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
 
         issues_dict = dict(obj.get("vertex_group_issues", {}))
 
-        # Prepare range box for out_of_range detection
+        # Prepare range box for out_of_range detection (not used for selection)
         dims = get_range_dimensions()
         min_co = Vector(dims['min'])
         max_co = Vector(dims['max'])
@@ -591,11 +599,11 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
             elif option == 'DEGENERATED_UVS':
                 match = 'degenerated_uvs' in issues
             elif option == 'NGONS':
-                match = 'ngon' in issues
+                match = False
             elif option == 'NON_MESH':
                 match = False
             elif option == 'OUT_OF_RANGE':
-                match = is_group_out_of_range(name)
+                match = False
             elif option == 'ALL_INVALID':
                 other_issues = [iss for iss in issues if iss not in ('quadblock', 'triblock')]
                 match = bool(other_issues)
