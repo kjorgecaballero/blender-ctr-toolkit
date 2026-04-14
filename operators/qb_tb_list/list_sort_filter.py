@@ -1,7 +1,5 @@
 """
 Sort and Filter Operators for Quadblock/Triblock List
-Moved from ui/qb_tb_list/list_sort_filters.py
-Now includes operator for issue filter
 """
 
 import bpy
@@ -50,7 +48,6 @@ class LIST_OT_SetMaterialFilter(Operator):
         return {'FINISHED'}
 
 
-# Operator to set issue filter - UPDATED to match new enum values
 class LIST_OT_SetIssueFilter(Operator):
     bl_idname = "list.set_issue_filter"
     bl_label = "Set Issue Filter"
@@ -67,6 +64,7 @@ class LIST_OT_SetIssueFilter(Operator):
             ('INVALID_UVS', 'Invalid UVs', 'Show blocks with UVs outside 0-1 range'),
             ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Show triblocks with incorrect UV arrangement'),
             ('DEGENERATED_UVS', 'Degenerated UVs', 'Show blocks with all UVs identical'),
+            ('OUT_OF_RANGE', 'Out of Range', 'Show blocks with vertices outside the range box'),
         ],
         default='ALL'
     )

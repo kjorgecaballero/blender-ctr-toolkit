@@ -155,6 +155,7 @@ class LIST_MT_IssueFilterMenu(bpy.types.Menu):
             ('INVALID_UVS', "Invalid UVs", 'UV'),
             ('INVALID_TRIBLOCK_UVS', "Invalid Triblock UVs", 'MESH_CONE'),
             ('DEGENERATED_UVS', "Degenerated UVs", 'GROUP_UVS'),
+            ('OUT_OF_RANGE', "Out of Range", 'BOUNDS'),
         ]
 
         for filter_type, label, icon in items:

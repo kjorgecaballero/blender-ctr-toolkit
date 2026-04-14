@@ -39,7 +39,6 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
             elif option == 'INVALID_GEOMETRY':
                 match = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
             elif option == 'INVALID_UVS':
-                # Only UVs out of 0-1 range, not triblock-specific UV issues
                 match = "invalid_uvs" in issues
             elif option == 'INVALID_TRIBLOCK_UVS':
                 match = "invalid_triblock_uvs" in issues
@@ -71,7 +70,6 @@ class QB_TB_OT_Validate(Operator):
     bl_description = "Remove objects or faces based on selected options"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # Only removal options remain
     remove_invalid_geometry: BoolProperty(
         name="Remove Invalid Geometry",
         description="For objects: remove objects with invalid geometry. For groups: remove faces of groups with invalid geometry",
@@ -98,9 +96,6 @@ class QB_TB_OT_Validate(Operator):
 
     def draw(self, context):
         layout = self.layout
-        scope = context.scene.validator_scope
-
-        # Options box (only removal options)
         box = layout.box()
         box.label(text="Options", icon='OPTIONS')
         col = box.column(align=True)
@@ -108,10 +103,7 @@ class QB_TB_OT_Validate(Operator):
         col.prop(self, "remove_invalid_geometry")
         col.prop(self, "remove_invalid_uvs")
         col.prop(self, "remove_degenerated_uvs")
-
-        # Only show Out of Range option for OBJECTS scope
-        if scope == 'OBJECTS':
-            col.prop(self, "remove_out_of_range")
+        col.prop(self, "remove_out_of_range")
 
     def execute(self, context):
         scope = context.scene.validator_scope
@@ -120,8 +112,6 @@ class QB_TB_OT_Validate(Operator):
         else:
             return self.execute_vertex_groups(context)
 
-
-    # Object validation 
     def execute_objects(self, context):
         triblock_count = 0
         quadblock_count = 0
@@ -253,22 +243,17 @@ class QB_TB_OT_Validate(Operator):
         self.report({'INFO'}, " ".join(message_parts))
         return {'FINISHED'}
 
-
-    # Vertex group validation 
     def execute_vertex_groups(self, context):
         obj = context.active_object
         if not obj or obj.type != 'MESH':
             self.report({'WARNING'}, "No active mesh object to validate vertex groups.")
             return {'CANCELLED'}
 
-        # Use stored issues – do NOT re-run validation automatically.
-        # The user must click "Issues" first to generate the issue list.
         issues_dict = obj.get("vertex_group_issues", {})
         if not issues_dict:
             self.report({'WARNING'}, "No vertex group issues found. Run 'Issues' first.")
             return {'CANCELLED'}
 
-        # Build mapping from group indices to face indices (only groups with issues)
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
@@ -296,7 +281,6 @@ class QB_TB_OT_Validate(Operator):
                         group_faces[g_idx].append(face.index)
         bm.free()
 
-        # Determine out-of-range groups (used only for information, not for removal)
         dims = get_range_dimensions()
         min_co = Vector(dims['min'])
         max_co = Vector(dims['max'])
@@ -318,7 +302,6 @@ class QB_TB_OT_Validate(Operator):
             if out_of_range:
                 out_of_range_groups.add(g_idx)
 
-        # Collect groups to remove faces from based on options
         groups_to_remove_faces = set()
         if self.remove_invalid_geometry:
             groups_to_remove_faces.update(
@@ -335,7 +318,8 @@ class QB_TB_OT_Validate(Operator):
                 vg_name_to_index[name] for name, iss in issues_dict.items()
                 if 'degenerated_uvs' in iss and name in vg_name_to_index
             )
-        # remove_out_of_range is intentionally ignored for vertex groups
+        if self.remove_out_of_range:
+            groups_to_remove_faces.update(out_of_range_groups)
 
         removed_face_count = 0
         if groups_to_remove_faces:
@@ -420,7 +404,6 @@ class QB_TB_OT_FilterSelectObjects(Operator):
             elif option == 'INVALID_GEOMETRY':
                 select_this = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
             elif option == 'INVALID_UVS':
-                # Only UVs out of 0-1 range
                 select_this = "invalid_uvs" in issues
             elif option == 'INVALID_TRIBLOCK_UVS':
                 select_this = "invalid_triblock_uvs" in issues
@@ -477,9 +460,6 @@ class QB_TB_OT_CleanObjectSuffixes(Operator):
         return {'FINISHED'}
 
 
-
-# Operators for Vertex Groups scope
-
 class QB_TB_OT_ClearVertexGroupIssues(Operator):
     """Clear vertex group issues (warnings) from the active mesh object"""
     bl_idname = "qb_tb.clear_vertex_group_issues"
@@ -503,7 +483,7 @@ class QB_TB_OT_ClearVertexGroupIssues(Operator):
 
 
 class QB_TB_OT_SelectVertexGroupsByType(Operator):
-    """Select vertex groups in the checklist based on the current filter option"""
+    """Select vertex groups in the checklist based on the current filter option (including OUT_OF_RANGE)"""
     bl_idname = "qb_tb.select_vertex_groups_by_type"
     bl_label = "Select Vertex Groups by Type"
     bl_description = "Mark vertex groups in the navigation list and select them in 3D view according to the selected validator option"
@@ -519,12 +499,11 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
         option = context.scene.validator_option
         scene = context.scene
 
-        # Options that are not applicable to vertex groups
-        if option in {'NGONS', 'NON_MESH', 'OUT_OF_RANGE'}:
+        # Options not applicable to vertex groups
+        if option in {'NGONS', 'NON_MESH'}:
             self.report({'INFO'}, f"Option '{option}' is not available for vertex groups.")
             return {'CANCELLED'}
 
-        # Ensure vertex group issues are available
         if "vertex_group_issues" not in obj:
             try:
                 bpy.ops.list.validate_vertex_groups()
@@ -534,48 +513,6 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
 
         issues_dict = dict(obj.get("vertex_group_issues", {}))
 
-        # Prepare range box for out_of_range detection (not used for selection)
-        dims = get_range_dimensions()
-        min_co = Vector(dims['min'])
-        max_co = Vector(dims['max'])
-
-        # Helper to get faces of a vertex group
-        def get_group_faces(vg_name):
-            vg = obj.vertex_groups.get(vg_name)
-            if not vg:
-                return []
-            vert_indices = []
-            for v in obj.data.vertices:
-                try:
-                    if vg.weight(v.index) > 0:
-                        vert_indices.append(v.index)
-                except RuntimeError:
-                    pass
-            if not vert_indices:
-                return []
-            vert_set = set(vert_indices)
-            face_indices = []
-            for i, face in enumerate(obj.data.polygons):
-                if all(v in vert_set for v in face.vertices):
-                    face_indices.append(i)
-            return face_indices
-
-        def is_group_out_of_range(vg_name):
-            face_indices = get_group_faces(vg_name)
-            if not face_indices:
-                return False
-            mesh = obj.data
-            for fi in face_indices:
-                face = mesh.polygons[fi]
-                for v_idx in face.vertices:
-                    co = obj.matrix_world @ mesh.vertices[v_idx].co
-                    if (co.x < min_co.x or co.x > max_co.x or
-                        co.y < min_co.y or co.y > max_co.y or
-                        co.z < min_co.z or co.z > max_co.z):
-                        return True
-            return False
-
-        # Determine which groups match the filter
         matched_groups = []
         for vg in obj.vertex_groups:
             name = vg.name
@@ -598,12 +535,8 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
                 match = 'invalid_triblock_uvs' in issues
             elif option == 'DEGENERATED_UVS':
                 match = 'degenerated_uvs' in issues
-            elif option == 'NGONS':
-                match = False
-            elif option == 'NON_MESH':
-                match = False
             elif option == 'OUT_OF_RANGE':
-                match = False
+                match = 'out_of_range' in issues
             elif option == 'ALL_INVALID':
                 other_issues = [iss for iss in issues if iss not in ('quadblock', 'triblock')]
                 match = bool(other_issues)
@@ -617,22 +550,18 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
             self.report({'INFO'}, f"No vertex groups match the filter '{option}'.")
             return {'FINISHED'}
 
-        # --- CLEAR PREVIOUS SELECTION (only for this operation) ---
         if "multi_selected_items" in obj:
             obj["multi_selected_items"].clear()
         else:
             obj["multi_selected_items"] = {}
 
-        # Mark matched groups in the multi-selection list
         multi = obj["multi_selected_items"]
         for name in matched_groups:
             multi[name] = True
         obj["multi_selected_items"] = multi
 
-        # Switch display type to VERTEX_GROUPS to show the list with checkboxes
         scene.list_display_type = 'VERTEX_GROUPS'
 
-        # Select geometry in 3D view
         original_mode = context.mode
         if original_mode != 'EDIT_MESH':
             try:
@@ -643,9 +572,7 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
                 return {'FINISHED'}
 
         try:
-            # Explicitly clear any existing selection before selecting the new groups
             bpy.ops.mesh.select_all(action='DESELECT')
-            # Use the existing operator to select checked items (clears previous selection)
             bpy.ops.list.select_multi_checked(select_all=False, clear_existing=True)
             self.report({'INFO'}, f"Marked and selected {len(matched_groups)} vertex groups. List switched to Vertex Groups mode.")
         except Exception as e:

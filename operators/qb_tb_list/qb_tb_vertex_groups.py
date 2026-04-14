@@ -1,17 +1,19 @@
 """
 QB/TB Vertex Groups Operators
 Operators for creating vertex groups for each detected block
-Now includes operator to validate vertex groups (blocks)
+Validate vertex groups quadblock/triblock
 """
 
 import bpy
 import bmesh
 from collections import defaultdict
+from mathutils import Vector
 
 from ...utils.qb_tb_validator.qb_tb_validation import (
     get_faces_of_vertex_group,
     analyze_faces_for_block
 )
+from ...utils.range_box.range_utils import get_range_dimensions
 
 
 class LIST_OT_CreateBlockVertexGroups(bpy.types.Operator):
@@ -512,7 +514,7 @@ class LIST_OT_SelectBlockByVertexGroup(bpy.types.Operator):
 
 
 class LIST_OT_ValidateVertexGroups(bpy.types.Operator):
-    """Validate all vertex groups (quadblocks/triblocks) for geometry and UV issues"""
+    """Validate all vertex groups (quadblocks/triblocks) for geometry, UV issues, and out-of-range detection."""
     bl_idname = "list.validate_vertex_groups"
     bl_label = "Validate Groups"
     bl_description = "Analyze each vertex group (QB/TB) and report issues (stored for filtering)"
@@ -566,6 +568,21 @@ class LIST_OT_ValidateVertexGroups(bpy.types.Operator):
                 for g_idx in common_groups:
                     group_faces[g_idx].append(face.index)
 
+            # Helper to check if a group is out of range
+            def is_group_out_of_range(face_indices):
+                dims = get_range_dimensions()
+                min_co = Vector(dims['min'])
+                max_co = Vector(dims['max'])
+                for fi in face_indices:
+                    face = mesh.polygons[fi]
+                    for v_idx in face.vertices:
+                        co = obj.matrix_world @ mesh.vertices[v_idx].co
+                        if (co.x < min_co.x or co.x > max_co.x or
+                            co.y < min_co.y or co.y > max_co.y or
+                            co.z < min_co.z or co.z > max_co.z):
+                            return True
+                return False
+
             # Step 3: For each block group, retrieve its faces and analyze
             issues_dict = {}
             total = len(block_group_indices)
@@ -578,6 +595,8 @@ class LIST_OT_ValidateVertexGroups(bpy.types.Operator):
                     issues_dict[vg_name] = ["invalid_geometry"]
                 else:
                     issues = analyze_faces_for_block(obj, face_indices)
+                    if is_group_out_of_range(face_indices):
+                        issues.append("out_of_range")
                     issues_dict[vg_name] = issues
                 validated += 1
                 if validated % 20 == 0:

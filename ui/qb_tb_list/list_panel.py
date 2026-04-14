@@ -249,6 +249,7 @@ class LIST_PT_BlockListPanel(Panel):
                 'INVALID_UVS': "Invalid UVs",
                 'INVALID_TRIBLOCK_UVS': "Invalid Triblock UVs",
                 'DEGENERATED_UVS': "Degenerated UVs",
+                'OUT_OF_RANGE': "Out of Range",
             }.get(scene.list_issue_filter, "All")
 
             right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
@@ -369,7 +370,7 @@ class LIST_PT_BlockListPanel(Panel):
                     if item['name'] != material_filter:
                         continue
 
-            # Apply issue filter (only for vertex groups)
+            # Apply issue filter (only for vertex groups) 
             if scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
                 item_issues = issues_dict.get(item['name'], [])
                 real_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
@@ -386,12 +387,13 @@ class LIST_PT_BlockListPanel(Panel):
                     show = 'invalid_triblock_uvs' in item_issues
                 elif issue_filter == 'DEGENERATED_UVS':
                     show = 'degenerated_uvs' in item_issues
+                elif issue_filter == 'OUT_OF_RANGE':
+                    show = 'out_of_range' in item_issues
                 else:
                     show = True
                 if not show:
                     continue
             # For 'ALL' we keep all items (no filtering)
-            # note that 'ALL' is not filtered
 
             # Apply navigation point filter (only for constant materials)
             if scene.list_display_type == 'CONSTANT_MATERIALS':

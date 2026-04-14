@@ -24,6 +24,7 @@ def get_validator_items(self, context):
             ('INVALID_UVS', "Invalid UVs", "Groups with UVs outside 0-1 range"),
             ('INVALID_TRIBLOCK_UVS', "Invalid Triblock UVs", "Triblocks with incorrect UV arrangement"),
             ('DEGENERATED_UVS', "Degenerated UVs", "Groups with all UVs identical"),
+            ('OUT_OF_RANGE', "Out of Range", "Groups with vertices outside the range box"),
             ('ALL_INVALID', "All Invalid", "All groups with any issue"),
         ]
     return items

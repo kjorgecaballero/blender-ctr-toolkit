@@ -79,7 +79,7 @@ def _get_filtered_display_items(context, obj, scene):
                  search in str(it['block_id']) or
                  search in it['block_type'].lower()]
 
-    # Apply issue filter (only for vertex groups)
+    # Apply issue filter (only for vertex groups) 
     if display_type == 'VERTEX_GROUPS':
         issues_dict = {}
         if "vertex_group_issues" in obj:
@@ -111,6 +111,9 @@ def _get_filtered_display_items(context, obj, scene):
                     filtered.append(it)
             elif issue_filter == 'DEGENERATED_UVS':
                 if 'degenerated_uvs' in item_issues:
+                    filtered.append(it)
+            elif issue_filter == 'OUT_OF_RANGE':
+                if 'out_of_range' in item_issues:
                     filtered.append(it)
         items = filtered
 
@@ -558,6 +561,7 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
             'invalid_uvs': ("UVs outside 0-1 range", 'UV'),
             'invalid_triblock_uvs': ("Invalid Triblock UV arrangement", 'ERROR'),
             'degenerated_uvs': ("Degenerated UVs (all UVs identical)", 'GROUP_UVS'),
+            'out_of_range': ("Vertices outside range box (500 units)", 'BOUNDS'),
         }
 
         for issue in issues:
