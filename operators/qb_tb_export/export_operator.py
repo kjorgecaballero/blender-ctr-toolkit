@@ -399,8 +399,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         try:
             bpy.ops.navigator.duplicate_all_blocks_by_group(
                 'EXEC_DEFAULT',
-                directory=duplicates_dir,
-                texture_dir=main_texture_dir if main_texture_dir else ""
+                directory=duplicates_dir
             )
         except Exception as e:
             self.report({'ERROR'}, f"Duplication operator failed: {e}")
