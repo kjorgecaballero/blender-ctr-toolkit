@@ -1,56 +1,52 @@
+"""
+Range Box operator for CTR Toolkit
+Creates a visual 1000x1000x1000 boundary box using an Empty cube
+"""
+
 import bpy
 
-CUBE_NAME = "Range"
-CUBE_SIZE = 1000
+EMPTY_NAME = "Range"
+EMPTY_SCALE = 500.0      # Base empty cube size is 2x2x2, scale 500 gives 1000x1000x1000
 
-def create_wireframe_cube():
-    """Create or retrieve a wireframe cube for range visualization"""
-    # If the cube already exists, make sure it's in the current view layer
-    if CUBE_NAME in bpy.data.objects:
-        cube = bpy.data.objects[CUBE_NAME]
+
+def create_range_empty():
+    """Create or retrieve an empty cube for range visualization."""
+    # If the empty already exists, ensure it's visible and in the view layer
+    if EMPTY_NAME in bpy.data.objects:
+        empty = bpy.data.objects[EMPTY_NAME]
         # Ensure the object is linked to the current view layer
-        if cube.name not in bpy.context.view_layer.objects:
-            bpy.context.scene.collection.objects.link(cube)
-        # Activate and select it
-        bpy.context.view_layer.objects.active = cube
-        cube.select_set(True)
-        cube.hide_set(False)
-        return cube
+        if empty.name not in bpy.context.view_layer.objects:
+            bpy.context.scene.collection.objects.link(empty)
+        empty.hide_set(False)
+        empty.hide_viewport = False
+        return empty
 
-    # Create a new cube at world origin 
-    # Store original cursor location
+    # Create a new empty cube at world origin
     original_cursor = bpy.context.scene.cursor.location.copy()
-    # Move cursor to world origin
     bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
 
-    bpy.ops.mesh.primitive_cube_add(size=CUBE_SIZE)
-    cube = bpy.context.active_object
-    cube.name = CUBE_NAME
+    bpy.ops.object.empty_add(type='CUBE', location=(0, 0, 0))
+    empty = bpy.context.active_object
+    empty.name = EMPTY_NAME
+    empty.scale = (EMPTY_SCALE, EMPTY_SCALE, EMPTY_SCALE)
 
     # Restore original cursor position
     bpy.context.scene.cursor.location = original_cursor
 
-    # Convert to wireframe
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.delete(type='ONLY_FACE')
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    cube.display_type = 'WIRE'
-
     # Lock transformations to prevent accidental modification
-    cube.lock_location = [True, True, True]
-    cube.lock_rotation = [True, True, True]
-    cube.lock_scale = [True, True, True]
+    empty.lock_location = [True, True, True]
+    empty.lock_rotation = [True, True, True]
+    empty.lock_scale = [True, True, True]
 
-    # Ensure the new cube is linked to the current view layer
-    if cube.name not in bpy.context.view_layer.objects:
-        bpy.context.scene.collection.objects.link(cube)
+    # Ensure the empty is linked to the current view layer
+    if empty.name not in bpy.context.view_layer.objects:
+        bpy.context.scene.collection.objects.link(empty)
 
-    return cube
+    return empty
+
 
 def adjust_camera():
-    """Adjust camera settings to properly view the range box"""
+    """Adjust camera clip end to properly view the range box."""
     for area in bpy.context.screen.areas:
         if area.type == 'VIEW_3D':
             for space in area.spaces:
@@ -58,11 +54,12 @@ def adjust_camera():
                     space.clip_end = 9000
                     return
 
+
 class CTR_OT_AddRangeBox(bpy.types.Operator):
-    """Operator to add Range Box to scene"""
+    """Operator to add Range Box to scene."""
     bl_idname = "ctr.add_range_box"
     bl_label = "Range Box"
-    bl_description = "Adds a 1000x1000x1000 wireframe cube for track boundaries"
+    bl_description = "Adds a 1000x1000x1000 visual boundary box (empty cube)"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -70,21 +67,24 @@ class CTR_OT_AddRangeBox(bpy.types.Operator):
         return context.mode == 'OBJECT'
 
     def execute(self, context):
-        create_wireframe_cube()
+        create_range_empty()
         adjust_camera()
-        self.report({'INFO'}, "Range Box created/restored - 1000x1000x1000 wireframe cube")
+        self.report({'INFO'}, "Range Box added")
         return {'FINISHED'}
 
+
 def menu_func(self, context):
-    """Add operator to Blender's Add menu"""
+    """Add operator to Blender's Add menu."""
     self.layout.operator(CTR_OT_AddRangeBox.bl_idname, text="Range Box", icon='CUBE')
 
+
 def register():
-    """Register the operator with Blender"""
+    """Register the operator with Blender."""
     bpy.utils.register_class(CTR_OT_AddRangeBox)
     bpy.types.VIEW3D_MT_add.append(menu_func)
 
+
 def unregister():
-    """Unregister the operator from Blender"""
+    """Unregister the operator from Blender."""
     bpy.utils.unregister_class(CTR_OT_AddRangeBox)
     bpy.types.VIEW3D_MT_add.remove(menu_func)
