@@ -1,7 +1,8 @@
 """
 QB/TB Duplication Operators
 Operators for duplicating blocks by group
-Now with export to OBJ and re-import functionality for optimized performance.
+Export to OBJ and re-import functionality for optimized performance.
+Avoid references to deleted objects when exporting processed duplicates.
 """
 
 import bpy
@@ -34,23 +35,19 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
     if not objects:
         return False
 
-    # Ensure we are in OBJECT mode before manipulating selection
     previous_mode = context.mode
     if previous_mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Save current selection and active object
     original_active = context.view_layer.objects.active
     original_selection = context.selected_objects[:]
 
-    # Select only the objects to export
     bpy.ops.object.select_all(action='DESELECT')
     for obj in objects:
         obj.select_set(True)
     if objects:
         context.view_layer.objects.active = objects[0]
 
-    # Temporary properties container for export
     class TempExportProps:
         def __init__(self):
             self.filepath = obj_filepath
@@ -59,7 +56,6 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
             self.export_textures = settings.include_textures
             self.path_mode = settings.path_mode
             self.global_scale = settings.global_scale
-            # Force export of everything (ignore filters)
             self.export_quadblocks = True
             self.export_triblocks = True
             self.export_invalid_uvs = True
@@ -69,7 +65,6 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
 
     temp_props = TempExportProps()
 
-    # Copy textures if enabled
     if settings.include_textures and texture_dir:
         try:
             os.makedirs(texture_dir, exist_ok=True)
@@ -78,10 +73,8 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
         except Exception as e:
             print(f"Error copying textures: {e}")
 
-    # Execute export
     result = execute_obj_export(temp_props, objects)
 
-    # Restore original selection
     bpy.ops.object.select_all(action='DESELECT')
     for obj in original_selection:
         if obj.name in bpy.data.objects:
@@ -89,12 +82,11 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
     if original_active and original_active.name in bpy.data.objects:
         context.view_layer.objects.active = original_active
 
-    # Restore previous mode if it was not OBJECT
     if previous_mode != 'OBJECT' and previous_mode is not None:
         try:
             bpy.ops.object.mode_set(mode=previous_mode)
         except:
-            pass  # In case the mode cannot be restored
+            pass
 
     return 'FINISHED' in result
 
@@ -198,7 +190,6 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
 
                 duplicated_objects.append(new_obj)
 
-                # Store the new object name in the global temporary list
                 _temp_duplicated_objects.append(new_obj.name)
 
                 obj.select_set(True)
@@ -320,7 +311,6 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
 
                 duplicated_objects.append(new_obj)
 
-                # Store the new object name in the global temporary list
                 _temp_duplicated_objects.append(new_obj.name)
 
                 obj.select_set(True)
@@ -348,7 +338,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        """Only available in Edit Mode with a mesh object."""
         return (context.edit_object is not None and context.mode == 'EDIT_MESH')
 
     directory: bpy.props.StringProperty(
@@ -358,55 +347,30 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
-    # Helper methods for managing the Processed_Blocks collection
-
     def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
-        """
-        Delete all objects in the specified collection using the fast
-        unlink + purge method (Option B). This removes them entirely.
-        """
         col = bpy.data.collections.get(collection_name)
         if not col:
             return
-
         objects = list(col.objects)
         if not objects:
             return
-
-        # Unlink objects from all collections (they become orphans)
         for obj in objects:
             for coll in list(obj.users_collection):
                 coll.objects.unlink(obj)
-
-        # Purge all orphaned data blocks (including objects)
         bpy.ops.outliner.orphans_purge()
-
-        # Optionally remove the now empty collection (it will be recreated later if needed)
         bpy.data.collections.remove(col)
-
         print(f"[Processed_Blocks] Cleared {len(objects)} old objects")
 
     def _move_to_processed_collection(self, context, objects, collection_name="Processed_Blocks"):
-        """
-        Move the given objects exclusively to the specified collection.
-        If the collection does not exist, it is created.
-        """
-        # Ensure destination collection exists
         col = bpy.data.collections.get(collection_name)
         if not col:
             col = bpy.data.collections.new(collection_name)
             context.scene.collection.children.link(col)
-
         for obj in objects:
-            # Unlink from all current collections
             for coll in list(obj.users_collection):
                 coll.objects.unlink(obj)
-            # Link to the target collection
             col.objects.link(obj)
-
         print(f"[Processed_Blocks] Moved {len(objects)} objects to collection '{collection_name}'")
-
-    # Main execution
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -415,37 +379,29 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
     def execute(self, context):
         global _temp_duplicated_objects
 
-        # Clean previous processed objects
         self._clear_processed_collection(context, "Processed_Blocks")
-
-        # Reset global list 
         _temp_duplicated_objects = []
 
         quadblock_count = 0
         triblock_count = 0
 
         try:
-            # Store original mode and object for later restoration
             original_mode = context.mode
             original_obj = context.object
 
-            # Duplicate quadblocks if any
             if "quad_group_members" in context.object and context.object["quad_group_members"]:
                 bpy.ops.navigator.duplicate_quadblocks_by_group()
                 quad_group_members = context.object["quad_group_members"]
                 quadblock_count = sum(len(members) for members in quad_group_members.values())
 
-            # Duplicate triblocks if any
             if "tri_group_members" in context.object and context.object["tri_group_members"]:
                 bpy.ops.navigator.duplicate_triblocks_by_group()
                 tri_group_members = context.object["tri_group_members"]
                 triblock_count = sum(len(members) for members in tri_group_members.values())
 
-            # Ensure we are in OBJECT mode for export
             if context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Collect the duplicated objects
             obj_names = _temp_duplicated_objects
             duplicated_objs = []
             for name in obj_names:
@@ -457,28 +413,21 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 self.report({'WARNING'}, "No objects were duplicated")
                 return {'CANCELLED'}
 
-            # Configure export settings
             settings = ExportSettings.from_scene_props(context)
-            # Force export all duplicated objects (ignore UV filters, etc.)
             settings.export_quadblocks = True
             settings.export_triblocks = True
             settings.export_invalid_uvs = True
             settings.export_degenerated_uvs = True
             settings.allow_out_of_range = True
-            settings.include_textures = True   # Ensure textures are copied
+            settings.include_textures = True
 
-            # Create a "Duplicates" subfolder inside the chosen directory
-            duplicates_dir = os.path.join(self.directory, "Duplicates")
+            duplicates_dir = os.path.join(self.directory, "duplicates")
             os.makedirs(duplicates_dir, exist_ok=True)
 
-            # Build paths inside the Duplicates folder
-            obj_filepath = os.path.join(duplicates_dir, "duplicated_blocks.obj")
-            tex_dir = os.path.join(duplicates_dir, "Textures")
-
-            # Create texture directory if it doesn't exist
+            obj_filepath = os.path.join(duplicates_dir, "duplicates.obj")
+            tex_dir = os.path.join(duplicates_dir, "textures")
             os.makedirs(tex_dir, exist_ok=True)
 
-            # Export the objects
             success = export_duplicated_objects_to_path(
                 context,
                 duplicated_objs,
@@ -491,19 +440,21 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 self.report({'ERROR'}, "Export failed")
                 return {'CANCELLED'}
 
-            # Delete the temporary duplicated objects
+            # Safe deletion of temporary objects
             bpy.ops.object.select_all(action='DESELECT')
             for obj in duplicated_objs:
                 if obj.name in bpy.data.objects:
                     obj.select_set(True)
-            bpy.ops.object.delete()
+            bpy.ops.object.delete(use_global=False)
+            bpy.context.view_layer.update()
+            duplicated_objs.clear()
+            _temp_duplicated_objects.clear()
 
-            # Import the newly created OBJ file
+            # Import the OBJ file
             import_result = execute_obj_import(obj_filepath)
             if 'FINISHED' not in import_result:
                 self.report({'WARNING'}, "OBJ imported but with issues")
 
-            # Batch separation of imported objects 
             imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
 
             if not imported_objects:
@@ -523,41 +474,28 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
             # Material processing
             base_materials_cache = {}
-
-            # Ensure all objects are selected for later operations
             bpy.ops.object.select_all(action='DESELECT')
             for obj in separated_objects:
                 obj.select_set(True)
 
-            # Process each object using pure API for best performance
             for obj in separated_objects:
                 if obj.type != 'MESH' or not obj.data.polygons:
                     continue
-
                 mesh = obj.data
-
-                # Determine current material (use first polygon's material)
                 first_poly = mesh.polygons[0]
                 if first_poly.material_index >= len(mesh.materials):
                     continue
                 current_mat = mesh.materials[first_poly.material_index]
                 if not current_mat:
                     continue
-
                 mat_name = current_mat.name
-
-                # Check for constant material pattern
                 if "_ID" in mat_name:
                     parts = mat_name.rsplit("_ID", 1)
                     if len(parts) == 2:
                         base_name_raw = parts[0]
                         id_suffix_raw = parts[1]
-
-                        # Remove Blender suffixes from both parts
                         base_name = strip_blender_suffix(base_name_raw)
                         id_suffix = strip_blender_suffix(id_suffix_raw)
-
-                        # Rename object
                         new_obj_name = id_suffix
                         count = 1
                         orig_new_name = new_obj_name
@@ -565,8 +503,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                             new_obj_name = f"{orig_new_name}_{count:03d}"
                             count += 1
                         obj.name = new_obj_name
-
-                        # Get or create base material
                         base_mat = base_materials_cache.get(base_name)
                         if base_mat is None:
                             base_mat = bpy.data.materials.get(base_name)
@@ -574,21 +510,16 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                                 base_mat = current_mat.copy()
                                 base_mat.name = base_name
                             base_materials_cache[base_name] = base_mat
-
                         target_mat = base_mat
                     else:
                         target_mat = current_mat
                 else:
-                    # Handle materials without "_ID" that may have numeric suffixes
                     base_candidate = strip_blender_suffix(mat_name)
                     if base_candidate != mat_name:
-                        # Material has a .001 suffix
                         base_mat = bpy.data.materials.get(base_candidate)
                         if base_mat is not None:
-                            # Use the base material
                             target_mat = base_mat
                         else:
-                            # Base material doesn't exist; rename current to base if available
                             if base_candidate not in bpy.data.materials:
                                 current_mat.name = base_candidate
                                 target_mat = current_mat
@@ -597,46 +528,36 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     else:
                         target_mat = current_mat
 
-                # Ensure target material is in mesh.materials list
                 target_index = None
                 for i, mat in enumerate(mesh.materials):
                     if mat == target_mat:
                         target_index = i
                         break
                 if target_index is None:
-                    # Append material to mesh.materials (this creates a slot automatically)
                     mesh.materials.append(target_mat)
                     target_index = len(mesh.materials) - 1
 
-                # Assign target_index to all faces using foreach_set (much faster)
                 poly_count = len(mesh.polygons)
                 indices = [target_index] * poly_count
                 mesh.polygons.foreach_set("material_index", indices)
-                mesh.update()  # Required after foreach_set
+                mesh.update()
 
-            # Remove unused material slots from all objects at once
             bpy.ops.object.material_slot_remove_unused()
-
-            # Delete any constant materials that are now unused
             mats_to_remove = [mat for mat in bpy.data.materials if "_ID" in mat.name and mat.users == 0]
             for mat in mats_to_remove:
                 bpy.data.materials.remove(mat)
-
-            # Also remove any materials with numeric suffixes that have no users (leftovers)
             suffixed_mats = [mat for mat in bpy.data.materials if re.search(r'\.\d+$', mat.name) and mat.users == 0]
             for mat in suffixed_mats:
                 bpy.data.materials.remove(mat)
 
             self.report({'INFO'}, "Material consolidation and renaming completed.")
 
-            # Move final objects to Processed_Blocks collection 
             self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
 
             self.report({'INFO'}, f"Duplicated blocks exported to {obj_filepath} and imported")
             self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
 
         finally:
-            # Clean up the global list
             _temp_duplicated_objects = []
 
         return {'FINISHED'}
