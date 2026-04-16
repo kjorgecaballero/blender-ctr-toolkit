@@ -15,7 +15,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
 
     bl_idname = "export_scene.qb_tb_obj"
     bl_label = "Qb/Tb (.obj)"
-    bl_description = "Export Quadblocks and Triblocks to OBJ format (Quick Export: Ctrl+Shift+E)"
+    bl_description = "Export Quadblocks and Triblocks to OBJ format"
 
     filename_ext = ".obj"
 
@@ -55,7 +55,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     include_textures: BoolProperty(
-        name="Include Textures",
+        name="Copy Textures",
         description="Copy textures to texture folder",
         default=False,
     )
@@ -67,11 +67,11 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     folder_behavior: EnumProperty(
-        name="Behavior",
+        name="Folder Behavior",
         description="How to handle existing folders when exporting to folder",
         items=[
             ('REPLACE', 'Replace', 'Replace existing folder'),
-            ('INCREMENTAL', 'Numerical Increment', 'Create folder with numerical increment'),
+            ('INCREMENTAL', 'Incremental', 'Create folder with numerical increment'),
         ],
         default='INCREMENTAL',
     )
@@ -126,7 +126,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     allow_out_of_range: BoolProperty(
-        name="Allow Out of Range",
+        name="Out of Range",
         description="Export objects outside the 1000x1000x1000 range",
         default=False,
     )
@@ -138,7 +138,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
     )
 
     export_processed_duplicates: BoolProperty(
-        name="Export Processed Duplicates",
+        name="Export Processed",
         description="After duplication, export the processed objects using current export settings (filters, folder, etc.)",
         default=False,
     )
@@ -154,54 +154,68 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         layout = self.layout
         draw_help_buttons(layout)
 
+        # Export Scope
         box = layout.box()
-        box.label(text="Selection & Block Types", icon='OBJECT_DATA')
+        row = box.row(align=True)
+        row.label(text="Export Scope", icon='OBJECT_DATA')
         box.prop(self, "use_selection")
-        col = box.column()
-        col.prop(self, "export_quadblocks")
-        col.prop(self, "export_triblocks")
 
+        # Types
         box = layout.box()
-        box.label(text="UV Issues Handling", icon='UV')
-        col = box.column(align=True)
-        col.prop(self, "export_invalid_uvs", text="Invalid UVs (out of range)")
-        col.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs (Structure)")
-        col.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
+        box.label(text="Types", icon='CUBE')
+        box.prop(self, "export_quadblocks")
+        box.prop(self, "export_triblocks")
 
+        # Preprocessing
         box = layout.box()
-        box.label(text="Export Settings", icon='EXPORT')
-        box.prop(self, "export_colors", text="Vertex Colors")
-        box.prop(self, "allow_out_of_range", text="Allow Out of Range")
-        box.prop(self, "apply_modifiers", text="Apply Modifiers")
-        box.prop(self, "separate_loose_parts", text="Separate by Loose Parts")
-        box.prop(self, "export_details", text="Export Details (JSON)")
-        box.prop(self, "path_mode", text="Path Mode")
+        box.label(text="Preprocessing", icon='MODIFIER')
+        box.prop(self, "apply_modifiers")
+        box.prop(self, "separate_loose_parts")
 
+        # Issue Filtering
         box = layout.box()
-        box.label(text="Duplicate Export", icon='DUPLICATE')
-        col = box.column(align=True)
-        col.prop(self, "export_duplicates", text="Export Duplicates")
+        box.label(text="Issue Filtering", icon='FILTER')
+        box.prop(self, "allow_out_of_range", text="Out of Range")
+        box.prop(self, "export_invalid_uvs", text="Invalid UVs")
+        box.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs")
+        box.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
+
+        # Duplicates
+        box = layout.box()
+        box.label(text="Duplicates", icon='DUPLICATE')
+        box.prop(self, "export_duplicates", text="Export Duplicates")
         if self.export_duplicates:
-            col.prop(self, "export_processed_duplicates", text="Export Processed Duplicates")
+            box.prop(self, "export_processed_duplicates", text="Export Processed")
 
+        # Output
         box = layout.box()
-        box.label(text="Folder Organization", icon='FILE_FOLDER')
+        box.label(text="Output", icon='FILE_FOLDER')
         box.prop(self, "export_to_folder", text="Export to Folder")
-        if self.export_to_folder:
-            col = box.column(align=True)
-            col.prop(self, "folder_behavior")
-            col.prop(self, "include_textures", text="Include Textures")
-            if self.include_textures:
-                col.prop(self, "remap_textures", text="Remap Textures")
 
+        if self.export_to_folder:
+            box.prop(self, "folder_behavior", text="Behavior")
+            box.prop(self, "path_mode", text="Path Mode")
+
+            tex_box = box.box()
+            tex_box.label(text="Textures", icon='TEXTURE')
+            tex_box.prop(self, "include_textures", text="Copy Textures")
+            if self.include_textures:
+                tex_box.prop(self, "remap_textures", text="Remap Textures")
+        else:
+            box.prop(self, "path_mode", text="Path Mode")
+
+        # Metadata
+        box = layout.box()
+        box.label(text="Metadata", icon='INFO')
+        box.prop(self, "export_details", text="Export Details (JSON)")
+
+        # Last export info 
         if context.scene.last_export_path:
             layout.separator()
             box = layout.box()
-            box.label(text="Quick Export Status", icon='INFO')
-            col = box.column(align=True)
-            col.label(text=f"Last project: {os.path.basename(context.scene.last_export_path)}")
-            col.label(text=f"Location: {context.scene.last_export_path}")
-            col.label(text="Quick Export: Ctrl+Shift+E", icon='EVENT_CTRL')
+            box.label(text="Last export", icon='TIME')
+            box.label(text=f"  {os.path.basename(context.scene.last_export_path)}")
+            box.label(text=f"  {context.scene.last_export_path}")
 
     def invoke(self, context, event):
         self.folder_behavior = context.scene.folder_behavior
