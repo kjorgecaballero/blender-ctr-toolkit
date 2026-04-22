@@ -199,8 +199,6 @@ def cleanup_temporarily_linked_objects(temporarily_linked, context):
                 print(f"Error unlinking {obj.name}: {e}")
 
 
-# Functions for OBJ import compatibility 
-
 def should_use_wm_obj_import():
     """Return True if wm.obj_import exists (Blender 3.3+), else False."""
     return hasattr(bpy.ops.wm, 'obj_import')
@@ -220,3 +218,16 @@ def execute_obj_import(filepath):
         return bpy.ops.wm.obj_import(filepath=filepath)
     else:
         return bpy.ops.import_scene.obj(filepath=filepath)
+
+
+# HELPERS FOR RENDER MODULE
+
+
+def is_blender_ge_4_0():
+    """Return True if Blender version is 4.0.0 or higher."""
+    return bpy.app.version >= (4, 0, 0)
+
+
+def is_blender_ge_5_0():
+    """Return True if Blender version is 5.0.0 or higher."""
+    return bpy.app.version >= (5, 0, 0)
