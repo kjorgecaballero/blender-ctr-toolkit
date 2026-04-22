@@ -8,11 +8,11 @@ def register():
         items=[
             ('NAVIGATOR', "Navigator", "Quadblock/Triblock navigation tools"),
             ('VALIDATOR', "Validator", "QB/TB validation tools"),
+            ('RENDER', "Render", "PS1-style rendering tools"),
         ],
         default='NAVIGATOR'
     )
 
-    # Scope for validator (Objects or Vertex Groups)
     bpy.types.Scene.validator_scope = EnumProperty(
         name="Scope",
         description="What to validate",
