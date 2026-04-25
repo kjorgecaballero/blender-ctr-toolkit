@@ -2,7 +2,8 @@ import bpy
 from bpy.types import Panel
 from .qb_tb_navigator import draw_navigator
 from .qb_tb_validator import draw_validator
-from .help_utils import draw_help_buttons   # Import help buttons
+from .render import draw_render
+from .help_utils import draw_help_buttons
 
 class CTR_PT_MainPanel(Panel):
     bl_label = "CTR Toolkit"
@@ -15,17 +16,17 @@ class CTR_PT_MainPanel(Panel):
         layout = self.layout
         scene = context.scene
 
-        # Top row: mode switcher on the left, help buttons on the right
         row = layout.row(align=True)
-        row.prop(scene, "ctr_tool_mode", text="")     
-        row.separator(factor=2.0)                      # Spacing
-        draw_help_buttons(row)                          # Help icons aligned to the right
+        row.prop(scene, "ctr_tool_mode", text="")
+        row.separator(factor=2.0)
+        draw_help_buttons(row)
 
-        # Delegate drawing to the appropriate submodule
         if scene.ctr_tool_mode == 'NAVIGATOR':
             draw_navigator(context, layout)
-        else:
+        elif scene.ctr_tool_mode == 'VALIDATOR':
             draw_validator(context, layout)
+        else:   # RENDER
+            draw_render(context, layout)
 
 def register():
     bpy.utils.register_class(CTR_PT_MainPanel)
