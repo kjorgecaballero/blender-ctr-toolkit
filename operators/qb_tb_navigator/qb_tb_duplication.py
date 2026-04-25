@@ -15,6 +15,13 @@ from ...utils.compat import execute_obj_export, execute_obj_import
 from ..qb_tb_export.export_manager import ExportManager
 from ..qb_tb_export.export_settings import ExportSettings
 from ..qb_tb_export.texture_handler import TextureHandler
+from ...utils.export_helpers import (
+    temporary_disable_ps1_render,
+    restore_ps1_render,
+    get_vertex_snap_modifiers,
+    disable_vertex_snap_modifiers,
+    restore_vertex_snap_modifiers
+)
 
 
 # Temporary global list to collect names of duplicated objects during a single
@@ -389,173 +396,186 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             original_mode = context.mode
             original_obj = context.object
 
-            if "quad_group_members" in context.object and context.object["quad_group_members"]:
-                bpy.ops.navigator.duplicate_quadblocks_by_group()
-                quad_group_members = context.object["quad_group_members"]
-                quadblock_count = sum(len(members) for members in quad_group_members.values())
+            # --- Temporarily disable PS1 render and vertex snap modifiers on the source object ---
+            ps1_was_active = temporary_disable_ps1_render(context)
+            # Get vertex snap modifiers from the source object (the one being edited)
+            source_obj = context.edit_object
+            snap_mods = get_vertex_snap_modifiers([source_obj])
+            snap_states = disable_vertex_snap_modifiers(snap_mods)
 
-            if "tri_group_members" in context.object and context.object["tri_group_members"]:
-                bpy.ops.navigator.duplicate_triblocks_by_group()
-                tri_group_members = context.object["tri_group_members"]
-                triblock_count = sum(len(members) for members in tri_group_members.values())
+            try:
+                if "quad_group_members" in context.object and context.object["quad_group_members"]:
+                    bpy.ops.navigator.duplicate_quadblocks_by_group()
+                    quad_group_members = context.object["quad_group_members"]
+                    quadblock_count = sum(len(members) for members in quad_group_members.values())
 
-            if context.mode != 'OBJECT':
-                bpy.ops.object.mode_set(mode='OBJECT')
+                if "tri_group_members" in context.object and context.object["tri_group_members"]:
+                    bpy.ops.navigator.duplicate_triblocks_by_group()
+                    tri_group_members = context.object["tri_group_members"]
+                    triblock_count = sum(len(members) for members in tri_group_members.values())
 
-            obj_names = _temp_duplicated_objects
-            duplicated_objs = []
-            for name in obj_names:
-                obj = bpy.data.objects.get(name)
-                if obj:
-                    duplicated_objs.append(obj)
+                if context.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
 
-            if not duplicated_objs:
-                self.report({'WARNING'}, "No objects were duplicated")
-                return {'CANCELLED'}
+                obj_names = _temp_duplicated_objects
+                duplicated_objs = []
+                for name in obj_names:
+                    obj = bpy.data.objects.get(name)
+                    if obj:
+                        duplicated_objs.append(obj)
 
-            settings = ExportSettings.from_scene_props(context)
-            settings.export_quadblocks = True
-            settings.export_triblocks = True
-            settings.export_invalid_uvs = True
-            settings.export_degenerated_uvs = True
-            settings.allow_out_of_range = True
-            settings.include_textures = True
+                if not duplicated_objs:
+                    self.report({'WARNING'}, "No objects were duplicated")
+                    return {'CANCELLED'}
 
-            duplicates_dir = os.path.join(self.directory, "duplicates")
-            os.makedirs(duplicates_dir, exist_ok=True)
+                settings = ExportSettings.from_scene_props(context)
+                settings.export_quadblocks = True
+                settings.export_triblocks = True
+                settings.export_invalid_uvs = True
+                settings.export_degenerated_uvs = True
+                settings.allow_out_of_range = True
+                settings.include_textures = True
 
-            obj_filepath = os.path.join(duplicates_dir, "duplicates.obj")
-            tex_dir = os.path.join(duplicates_dir, "textures")
-            os.makedirs(tex_dir, exist_ok=True)
+                duplicates_dir = os.path.join(self.directory, "duplicates")
+                os.makedirs(duplicates_dir, exist_ok=True)
 
-            success = export_duplicated_objects_to_path(
-                context,
-                duplicated_objs,
-                obj_filepath,
-                tex_dir,
-                settings
-            )
+                obj_filepath = os.path.join(duplicates_dir, "duplicates.obj")
+                tex_dir = os.path.join(duplicates_dir, "textures")
+                os.makedirs(tex_dir, exist_ok=True)
 
-            if not success:
-                self.report({'ERROR'}, "Export failed")
-                return {'CANCELLED'}
+                success = export_duplicated_objects_to_path(
+                    context,
+                    duplicated_objs,
+                    obj_filepath,
+                    tex_dir,
+                    settings
+                )
 
-            # Safe deletion of temporary objects
-            bpy.ops.object.select_all(action='DESELECT')
-            for obj in duplicated_objs:
-                if obj.name in bpy.data.objects:
-                    obj.select_set(True)
-            bpy.ops.object.delete(use_global=False)
-            bpy.context.view_layer.update()
-            duplicated_objs.clear()
-            _temp_duplicated_objects.clear()
+                if not success:
+                    self.report({'ERROR'}, "Export failed")
+                    return {'CANCELLED'}
 
-            # Import the OBJ file
-            import_result = execute_obj_import(obj_filepath)
-            if 'FINISHED' not in import_result:
-                self.report({'WARNING'}, "OBJ imported but with issues")
+                # Safe deletion of temporary objects
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in duplicated_objs:
+                    if obj.name in bpy.data.objects:
+                        obj.select_set(True)
+                bpy.ops.object.delete(use_global=False)
+                bpy.context.view_layer.update()
+                duplicated_objs.clear()
+                _temp_duplicated_objects.clear()
 
-            imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
+                # Import the OBJ file
+                import_result = execute_obj_import(obj_filepath)
+                if 'FINISHED' not in import_result:
+                    self.report({'WARNING'}, "OBJ imported but with issues")
 
-            if not imported_objects:
-                separated_objects = []
-            else:
-                context.view_layer.objects.active = imported_objects[0]
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.separate(type='LOOSE')
-                bpy.ops.object.mode_set(mode='OBJECT')
-                separated_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
-                for obj in imported_objects:
-                    if obj.type == 'MESH' and len(obj.data.polygons) == 0:
-                        bpy.data.objects.remove(obj, do_unlink=True)
+                imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
 
-            self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
-
-            # Material processing
-            base_materials_cache = {}
-            bpy.ops.object.select_all(action='DESELECT')
-            for obj in separated_objects:
-                obj.select_set(True)
-
-            for obj in separated_objects:
-                if obj.type != 'MESH' or not obj.data.polygons:
-                    continue
-                mesh = obj.data
-                first_poly = mesh.polygons[0]
-                if first_poly.material_index >= len(mesh.materials):
-                    continue
-                current_mat = mesh.materials[first_poly.material_index]
-                if not current_mat:
-                    continue
-                mat_name = current_mat.name
-                if "_ID" in mat_name:
-                    parts = mat_name.rsplit("_ID", 1)
-                    if len(parts) == 2:
-                        base_name_raw = parts[0]
-                        id_suffix_raw = parts[1]
-                        base_name = strip_blender_suffix(base_name_raw)
-                        id_suffix = strip_blender_suffix(id_suffix_raw)
-                        new_obj_name = id_suffix
-                        count = 1
-                        orig_new_name = new_obj_name
-                        while new_obj_name in bpy.data.objects:
-                            new_obj_name = f"{orig_new_name}_{count:03d}"
-                            count += 1
-                        obj.name = new_obj_name
-                        base_mat = base_materials_cache.get(base_name)
-                        if base_mat is None:
-                            base_mat = bpy.data.materials.get(base_name)
-                            if base_mat is None:
-                                base_mat = current_mat.copy()
-                                base_mat.name = base_name
-                            base_materials_cache[base_name] = base_mat
-                        target_mat = base_mat
-                    else:
-                        target_mat = current_mat
+                if not imported_objects:
+                    separated_objects = []
                 else:
-                    base_candidate = strip_blender_suffix(mat_name)
-                    if base_candidate != mat_name:
-                        base_mat = bpy.data.materials.get(base_candidate)
-                        if base_mat is not None:
+                    context.view_layer.objects.active = imported_objects[0]
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.separate(type='LOOSE')
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    separated_objects = [obj for obj in context.selected_objects if obj.type == 'MESH' and len(obj.data.polygons) > 0]
+                    for obj in imported_objects:
+                        if obj.type == 'MESH' and len(obj.data.polygons) == 0:
+                            bpy.data.objects.remove(obj, do_unlink=True)
+
+                self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
+
+                # Material processing
+                base_materials_cache = {}
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in separated_objects:
+                    obj.select_set(True)
+
+                for obj in separated_objects:
+                    if obj.type != 'MESH' or not obj.data.polygons:
+                        continue
+                    mesh = obj.data
+                    first_poly = mesh.polygons[0]
+                    if first_poly.material_index >= len(mesh.materials):
+                        continue
+                    current_mat = mesh.materials[first_poly.material_index]
+                    if not current_mat:
+                        continue
+                    mat_name = current_mat.name
+                    if "_ID" in mat_name:
+                        parts = mat_name.rsplit("_ID", 1)
+                        if len(parts) == 2:
+                            base_name_raw = parts[0]
+                            id_suffix_raw = parts[1]
+                            base_name = strip_blender_suffix(base_name_raw)
+                            id_suffix = strip_blender_suffix(id_suffix_raw)
+                            new_obj_name = id_suffix
+                            count = 1
+                            orig_new_name = new_obj_name
+                            while new_obj_name in bpy.data.objects:
+                                new_obj_name = f"{orig_new_name}_{count:03d}"
+                                count += 1
+                            obj.name = new_obj_name
+                            base_mat = base_materials_cache.get(base_name)
+                            if base_mat is None:
+                                base_mat = bpy.data.materials.get(base_name)
+                                if base_mat is None:
+                                    base_mat = current_mat.copy()
+                                    base_mat.name = base_name
+                                base_materials_cache[base_name] = base_mat
                             target_mat = base_mat
                         else:
-                            if base_candidate not in bpy.data.materials:
-                                current_mat.name = base_candidate
-                                target_mat = current_mat
-                            else:
-                                target_mat = current_mat
+                            target_mat = current_mat
                     else:
-                        target_mat = current_mat
+                        base_candidate = strip_blender_suffix(mat_name)
+                        if base_candidate != mat_name:
+                            base_mat = bpy.data.materials.get(base_candidate)
+                            if base_mat is not None:
+                                target_mat = base_mat
+                            else:
+                                if base_candidate not in bpy.data.materials:
+                                    current_mat.name = base_candidate
+                                    target_mat = current_mat
+                                else:
+                                    target_mat = current_mat
+                        else:
+                            target_mat = current_mat
 
-                target_index = None
-                for i, mat in enumerate(mesh.materials):
-                    if mat == target_mat:
-                        target_index = i
-                        break
-                if target_index is None:
-                    mesh.materials.append(target_mat)
-                    target_index = len(mesh.materials) - 1
+                    target_index = None
+                    for i, mat in enumerate(mesh.materials):
+                        if mat == target_mat:
+                            target_index = i
+                            break
+                    if target_index is None:
+                        mesh.materials.append(target_mat)
+                        target_index = len(mesh.materials) - 1
 
-                poly_count = len(mesh.polygons)
-                indices = [target_index] * poly_count
-                mesh.polygons.foreach_set("material_index", indices)
-                mesh.update()
+                    poly_count = len(mesh.polygons)
+                    indices = [target_index] * poly_count
+                    mesh.polygons.foreach_set("material_index", indices)
+                    mesh.update()
 
-            bpy.ops.object.material_slot_remove_unused()
-            mats_to_remove = [mat for mat in bpy.data.materials if "_ID" in mat.name and mat.users == 0]
-            for mat in mats_to_remove:
-                bpy.data.materials.remove(mat)
-            suffixed_mats = [mat for mat in bpy.data.materials if re.search(r'\.\d+$', mat.name) and mat.users == 0]
-            for mat in suffixed_mats:
-                bpy.data.materials.remove(mat)
+                bpy.ops.object.material_slot_remove_unused()
+                mats_to_remove = [mat for mat in bpy.data.materials if "_ID" in mat.name and mat.users == 0]
+                for mat in mats_to_remove:
+                    bpy.data.materials.remove(mat)
+                suffixed_mats = [mat for mat in bpy.data.materials if re.search(r'\.\d+$', mat.name) and mat.users == 0]
+                for mat in suffixed_mats:
+                    bpy.data.materials.remove(mat)
 
-            self.report({'INFO'}, "Material consolidation and renaming completed.")
+                self.report({'INFO'}, "Material consolidation and renaming completed.")
 
-            self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
+                self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
 
-            self.report({'INFO'}, f"Duplicated blocks exported to {obj_filepath} and imported")
-            self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
+                self.report({'INFO'}, f"Duplicated blocks exported to {obj_filepath} and imported")
+                self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
+
+            finally:
+                # Restore vertex snap modifiers and PS1 render
+                restore_vertex_snap_modifiers(snap_states)
+                restore_ps1_render(context, ps1_was_active)
 
         finally:
             _temp_duplicated_objects = []

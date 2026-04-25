@@ -8,6 +8,13 @@ from .export_settings import ExportSettings, ExportStats
 from .texture_handler import TextureHandler
 from .texture_remapper import TextureRemapper
 from ...ui.help_utils import draw_help_buttons
+from ...utils.export_helpers import (
+    temporary_disable_ps1_render,
+    restore_ps1_render,
+    get_vertex_snap_modifiers,
+    disable_vertex_snap_modifiers,
+    restore_vertex_snap_modifiers
+)
 
 
 class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
@@ -209,7 +216,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         box.label(text="Metadata", icon='INFO')
         box.prop(self, "export_details", text="Export Details (JSON)")
 
-        # Last export info 
+        # Last export info
         if context.scene.last_export_path:
             layout.separator()
             box = layout.box()
@@ -457,66 +464,75 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'WARNING'}, "No mesh objects in Processed_Blocks.")
                     return {'CANCELLED'}
 
-                if proc_settings.include_textures:
-                    texture_dir = os.path.join(export_root, "export", "textures")
-                    os.makedirs(texture_dir, exist_ok=True)
-                    if proc_settings.remap_textures:
-                        texture_remapper = TextureRemapper()
-                        try:
-                            texture_remapper.execute_remapping(
-                                proc_settings.filepath,
-                                texture_dir,
-                                processed_objs,
-                                remap_in_blender=True
-                            )
-                        except Exception as e:
-                            self.report({'WARNING'}, f"Texture remapping failed: {e}")
-                            texture_remapper = None
-                    else:
-                        texture_handler = TextureHandler()
-                        texture_handler.copy_textures_to_folder(texture_dir, processed_objs)
+                # --- TEMPORARILY DISABLE RENDER AND VERTEX SNAP ---
+                ps1_was_active = temporary_disable_ps1_render(context)
+                snap_mods = get_vertex_snap_modifiers(processed_objs)
+                snap_states = disable_vertex_snap_modifiers(snap_mods)
 
-                temp_manager = ExportManager(context)
-                valid_objs, stats = temp_manager.validate_objects(processed_objs, proc_settings)
-                if not valid_objs:
-                    error_msg = temp_manager.get_no_objects_error(proc_settings, stats)
-                    self.report({'ERROR'}, error_msg)
-                    return {'CANCELLED'}
+                try:
+                    if proc_settings.include_textures:
+                        texture_dir = os.path.join(export_root, "export", "textures")
+                        os.makedirs(texture_dir, exist_ok=True)
+                        if proc_settings.remap_textures:
+                            texture_remapper = TextureRemapper()
+                            try:
+                                texture_remapper.execute_remapping(
+                                    proc_settings.filepath,
+                                    texture_dir,
+                                    processed_objs,
+                                    remap_in_blender=True
+                                )
+                            except Exception as e:
+                                self.report({'WARNING'}, f"Texture remapping failed: {e}")
+                                texture_remapper = None
+                        else:
+                            texture_handler = TextureHandler()
+                            texture_handler.copy_textures_to_folder(texture_dir, processed_objs)
 
-                old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
-                old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
+                    temp_manager = ExportManager(context)
+                    valid_objs, stats = temp_manager.validate_objects(processed_objs, proc_settings)
+                    if not valid_objs:
+                        error_msg = temp_manager.get_no_objects_error(proc_settings, stats)
+                        self.report({'ERROR'}, error_msg)
+                        return {'CANCELLED'}
 
-                bpy.ops.object.select_all(action='DESELECT')
-                for obj in valid_objs:
-                    obj.select_set(True)
-                if valid_objs:
-                    context.view_layer.objects.active = valid_objs[0]
+                    old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
+                    old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
 
-                temp_manager.prepare_export_operation(valid_objs)
-                export_result = temp_manager.execute_export(proc_settings, valid_objs)
+                    bpy.ops.object.select_all(action='DESELECT')
+                    for obj in valid_objs:
+                        obj.select_set(True)
+                    if valid_objs:
+                        context.view_layer.objects.active = valid_objs[0]
 
-                bpy.ops.object.select_all(action='DESELECT')
-                for name in old_sel_names:
-                    if name in bpy.data.objects:
-                        bpy.data.objects[name].select_set(True)
-                if old_active_name and old_active_name in bpy.data.objects:
-                    context.view_layer.objects.active = bpy.data.objects[old_active_name]
+                    temp_manager.prepare_export_operation(valid_objs)
+                    export_result = temp_manager.execute_export(proc_settings, valid_objs)
 
-                if 'FINISHED' not in export_result:
-                    self.report({'ERROR'}, "Processed export failed")
-                    return {'CANCELLED'}
+                    bpy.ops.object.select_all(action='DESELECT')
+                    for name in old_sel_names:
+                        if name in bpy.data.objects:
+                            bpy.data.objects[name].select_set(True)
+                    if old_active_name and old_active_name in bpy.data.objects:
+                        context.view_layer.objects.active = bpy.data.objects[old_active_name]
 
-                # Export JSON details if requested
-                if self.export_details:
-                    export_index = context.scene.export_index
-                    context.scene.export_index += 1
-                    temp_manager.export_details_if_needed(
-                        valid_objs, stats, proc_settings, proc_settings.filepath,
-                        True, export_index
-                    )
+                    if 'FINISHED' not in export_result:
+                        self.report({'ERROR'}, "Processed export failed")
+                        return {'CANCELLED'}
 
-                self.report({'INFO'}, f"Export completed: final model saved to {proc_settings.filepath}")
-                return {'FINISHED'}
+                    if self.export_details:
+                        export_index = context.scene.export_index
+                        context.scene.export_index += 1
+                        temp_manager.export_details_if_needed(
+                            valid_objs, stats, proc_settings, proc_settings.filepath,
+                            True, export_index
+                        )
+
+                    self.report({'INFO'}, f"Export completed: final model saved to {proc_settings.filepath}")
+                    return {'FINISHED'}
+                finally:
+                    # Restore vertex snap modifiers and PS1 render
+                    restore_vertex_snap_modifiers(snap_states)
+                    restore_ps1_render(context, ps1_was_active)
 
             except Exception as e:
                 self.report({'ERROR'}, f"Error during duplicate+processed export: {str(e)}")
@@ -562,42 +578,53 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'ERROR'}, error_msg)
                     return {'CANCELLED'}
 
-                if settings.include_textures and export_paths['texture_dir']:
-                    if self.remap_textures:
-                        texture_remapper = TextureRemapper()
-                        try:
-                            texture_remapper.execute_remapping(
-                                settings.filepath,
-                                export_paths['texture_dir'],
-                                valid_objects,
-                                remap_in_blender=True
-                            )
-                        except Exception as e:
-                            self.report({'WARNING'}, f"Texture remapping failed: {e}")
-                            texture_remapper = None
+                # --- TEMPORARILY DISABLE RENDER AND VERTEX SNAP ---
+                ps1_was_active = temporary_disable_ps1_render(context)
+                snap_mods = get_vertex_snap_modifiers(valid_objects)
+                snap_states = disable_vertex_snap_modifiers(snap_mods)
+
+                try:
+                    if settings.include_textures and export_paths['texture_dir']:
+                        if self.remap_textures:
+                            texture_remapper = TextureRemapper()
+                            try:
+                                texture_remapper.execute_remapping(
+                                    settings.filepath,
+                                    export_paths['texture_dir'],
+                                    valid_objects,
+                                    remap_in_blender=True
+                                )
+                            except Exception as e:
+                                self.report({'WARNING'}, f"Texture remapping failed: {e}")
+                                texture_remapper = None
+                        else:
+                            texture_handler = TextureHandler()
+                            texture_handler.copy_textures_to_folder(export_paths['texture_dir'], valid_objects)
+
+                    manager.prepare_export_operation(valid_objects)
+                    export_result = manager.execute_export(settings, valid_objects)
+
+                    if 'FINISHED' not in export_result:
+                        self.report({'ERROR'}, "Export failed")
+                        return {'CANCELLED'}
                     else:
-                        texture_handler = TextureHandler()
-                        texture_handler.copy_textures_to_folder(export_paths['texture_dir'], valid_objects)
+                        if self.export_details:
+                            export_index = context.scene.export_index
+                            context.scene.export_index += 1
+                            manager.export_details_if_needed(
+                                valid_objects, stats, settings, export_paths['obj_filepath'],
+                                True, export_index
+                            )
+                        stats_obj = ExportStats.from_dict(stats)
+                        if settings.export_to_folder and export_paths['export_subfolder']:
+                            stats_obj.exported_folder = os.path.basename(export_paths['export_subfolder'])
+                        self.report({'INFO'}, stats_obj.get_report_message())
+                        return {'FINISHED'}
+                finally:
+                    # Restore vertex snap modifiers and PS1 render
+                    restore_vertex_snap_modifiers(snap_states)
+                    restore_ps1_render(context, ps1_was_active)
 
-                manager.prepare_export_operation(valid_objects)
-                export_result = manager.execute_export(settings, valid_objects)
-
-                if 'FINISHED' not in export_result:
-                    self.report({'ERROR'}, "Export failed")
-                    return {'CANCELLED'}
-                else:
-                    if self.export_details:
-                        export_index = context.scene.export_index
-                        context.scene.export_index += 1
-                        manager.export_details_if_needed(
-                            valid_objects, stats, settings, export_paths['obj_filepath'],
-                            True, export_index
-                        )
-                    stats_obj = ExportStats.from_dict(stats)
-                    if settings.export_to_folder and export_paths['export_subfolder']:
-                        stats_obj.exported_folder = os.path.basename(export_paths['export_subfolder'])
-                    self.report({'INFO'}, stats_obj.get_report_message())
-                    return {'FINISHED'}
             except Exception as e:
                 self.report({'ERROR'}, f"Error during export: {str(e)}")
                 import traceback
