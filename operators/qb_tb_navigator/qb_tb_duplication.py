@@ -354,6 +354,34 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
+    def _sanitize_material_suffixes(self, obj):
+        """
+        Convert material names like 'name.001' to 'name_001'
+        to avoid collisions during the duplication process.
+        """
+        renamed_count = 0
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat:
+                continue
+            old_name = mat.name
+            # Match a dot followed by 1-3 digits at the end
+            match = re.search(r'\.(\d{1,3})$', old_name)
+            if match:
+                new_name = re.sub(r'\.(\d{1,3})$', r'_\1', old_name)
+                # Avoid collisions with existing material names
+                original_new = new_name
+                counter = 1
+                while new_name in bpy.data.materials and new_name != old_name:
+                    new_name = f"{original_new}_{counter:03d}"
+                    counter += 1
+                if new_name != old_name:
+                    mat.name = new_name
+                    renamed_count += 1
+                    print(f"  Renamed material: '{old_name}' -> '{new_name}'")
+        if renamed_count:
+            self.report({'INFO'}, f"Renamed {renamed_count} material(s) with .001 suffix to _001 in {obj.name}")
+
     def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
         col = bpy.data.collections.get(collection_name)
         if not col:
@@ -404,6 +432,9 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             snap_states = disable_vertex_snap_modifiers(snap_mods)
 
             try:
+                # --- Sanitize material names on the source object before any duplication ---
+                self._sanitize_material_suffixes(source_obj)
+
                 if "quad_group_members" in context.object and context.object["quad_group_members"]:
                     bpy.ops.navigator.duplicate_quadblocks_by_group()
                     quad_group_members = context.object["quad_group_members"]
