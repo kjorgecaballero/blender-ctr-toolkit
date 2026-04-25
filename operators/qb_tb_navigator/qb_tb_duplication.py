@@ -49,7 +49,9 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
     original_active = context.view_layer.objects.active
     original_selection = context.selected_objects[:]
 
-    bpy.ops.object.select_all(action='DESELECT')
+    # Deselect all using direct iteration (safe in OBJECT mode)
+    for ob in bpy.data.objects:
+        ob.select_set(False)
     for obj in objects:
         obj.select_set(True)
     if objects:
@@ -82,7 +84,9 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
 
     result = execute_obj_export(temp_props, objects)
 
-    bpy.ops.object.select_all(action='DESELECT')
+    # Deselect all again
+    for ob in bpy.data.objects:
+        ob.select_set(False)
     for obj in original_selection:
         if obj.name in bpy.data.objects:
             obj.select_set(True)
@@ -191,14 +195,30 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Quad_Group_{group_num}"
 
-                for col in new_obj.users_collection:
-                    col.objects.unlink(new_obj)
-                target_collection.objects.link(new_obj)
+                # Robust moving to collection (no select_all)
+                if target_collection.name not in context.scene.collection.children:
+                    context.scene.collection.children.link(target_collection)
+
+                # Deselect all using direct iteration
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
+                new_obj.select_set(True)
+                context.view_layer.objects.active = new_obj
+
+                try:
+                    bpy.ops.object.move_to_collection(collection_index=target_collection.id_data.collections.find(target_collection.name))
+                except Exception as e:
+                    print(f"move_to_collection failed: {e}, using fallback")
+                    for col in new_obj.users_collection:
+                        col.objects.unlink(new_obj)
+                    target_collection.objects.link(new_obj)
 
                 duplicated_objects.append(new_obj)
-
                 _temp_duplicated_objects.append(new_obj.name)
 
+                # Reset selection to only the original object
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
                 obj.select_set(True)
                 context.view_layer.objects.active = obj
 
@@ -207,6 +227,9 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
             bm.verts.ensure_lookup_table()
             bm.faces.ensure_lookup_table()
 
+        # Final selection reset
+        for ob in bpy.data.objects:
+            ob.select_set(False)
         obj.select_set(True)
         context.view_layer.objects.active = obj
 
@@ -312,14 +335,29 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Tri_Group_{group_num}"
 
-                for col in new_obj.users_collection:
-                    col.objects.unlink(new_obj)
-                target_collection.objects.link(new_obj)
+                # Robust moving to collection (no select_all)
+                if target_collection.name not in context.scene.collection.children:
+                    context.scene.collection.children.link(target_collection)
+
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
+                new_obj.select_set(True)
+                context.view_layer.objects.active = new_obj
+
+                try:
+                    bpy.ops.object.move_to_collection(collection_index=target_collection.id_data.collections.find(target_collection.name))
+                except Exception as e:
+                    print(f"move_to_collection failed: {e}, using fallback")
+                    for col in new_obj.users_collection:
+                        col.objects.unlink(new_obj)
+                    target_collection.objects.link(new_obj)
 
                 duplicated_objects.append(new_obj)
-
                 _temp_duplicated_objects.append(new_obj.name)
 
+                # Reset selection to only the original object
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
                 obj.select_set(True)
                 context.view_layer.objects.active = obj
 
@@ -328,6 +366,9 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
             bm.verts.ensure_lookup_table()
             bm.faces.ensure_lookup_table()
 
+        # Final selection reset
+        for ob in bpy.data.objects:
+            ob.select_set(False)
         obj.select_set(True)
         context.view_layer.objects.active = obj
 
@@ -365,11 +406,9 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             if not mat:
                 continue
             old_name = mat.name
-            # Match a dot followed by 1-3 digits at the end
             match = re.search(r'\.(\d{1,3})$', old_name)
             if match:
                 new_name = re.sub(r'\.(\d{1,3})$', r'_\1', old_name)
-                # Avoid collisions with existing material names
                 original_new = new_name
                 counter = 1
                 while new_name in bpy.data.materials and new_name != old_name:
@@ -424,10 +463,21 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             original_mode = context.mode
             original_obj = context.object
 
-            # --- Temporarily disable PS1 render and vertex snap modifiers on the source object ---
-            ps1_was_active = temporary_disable_ps1_render(context)
-            # Get vertex snap modifiers from the source object (the one being edited)
+            # Ensure source object is in the root collection
             source_obj = context.edit_object
+            root_collection = context.scene.collection
+            original_collections = list(source_obj.users_collection)
+            if root_collection not in original_collections:
+                self.report({'INFO'}, f"Temporarily moving '{source_obj.name}' to root collection to prevent duplication bug")
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
+                source_obj.select_set(True)
+                context.view_layer.objects.active = source_obj
+                bpy.ops.object.move_to_collection(collection_index=0)
+                context.view_layer.update()
+
+            # --- Temporarily disable PS1 render and vertex snap modifiers ---
+            ps1_was_active = temporary_disable_ps1_render(context)
             snap_mods = get_vertex_snap_modifiers([source_obj])
             snap_states = disable_vertex_snap_modifiers(snap_mods)
 
@@ -487,7 +537,8 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     return {'CANCELLED'}
 
                 # Safe deletion of temporary objects
-                bpy.ops.object.select_all(action='DESELECT')
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
                 for obj in duplicated_objs:
                     if obj.name in bpy.data.objects:
                         obj.select_set(True)
@@ -520,7 +571,8 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
                 # Material processing
                 base_materials_cache = {}
-                bpy.ops.object.select_all(action='DESELECT')
+                for ob in bpy.data.objects:
+                    ob.select_set(False)
                 for obj in separated_objects:
                     obj.select_set(True)
 
@@ -604,7 +656,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
 
             finally:
-                # Restore vertex snap modifiers and PS1 render
                 restore_vertex_snap_modifiers(snap_states)
                 restore_ps1_render(context, ps1_was_active)
 

@@ -306,7 +306,9 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
         old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
 
-        bpy.ops.object.select_all(action='DESELECT')
+        # Deselect all using direct iteration
+        for ob in bpy.data.objects:
+            ob.select_set(False)
         for obj in valid_objs:
             obj.select_set(True)
         if valid_objs:
@@ -315,7 +317,9 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         temp_manager.prepare_export_operation(valid_objs)
         result = temp_manager.execute_export(proc_settings, valid_objs)
 
-        bpy.ops.object.select_all(action='DESELECT')
+        # Restore selection
+        for ob in bpy.data.objects:
+            ob.select_set(False)
         for name in old_sel_names:
             if name in bpy.data.objects:
                 bpy.data.objects[name].select_set(True)
@@ -361,6 +365,20 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         if not block_obj:
             self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
             return None, None
+
+        # Ensure source object is in the root collection
+        root_collection = context.scene.collection
+        original_collections = list(block_obj.users_collection)
+        moved_to_root = False
+        if root_collection not in original_collections:
+            self.report({'INFO'}, f"Temporarily moving '{block_obj.name}' to root collection for duplication")
+            for ob in bpy.data.objects:
+                ob.select_set(False)
+            block_obj.select_set(True)
+            context.view_layer.objects.active = block_obj
+            bpy.ops.object.move_to_collection(collection_index=0)
+            context.view_layer.update()
+            moved_to_root = True
 
         original_mode = context.mode
         original_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
@@ -420,6 +438,20 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             except:
                 pass
 
+        # Restore original collection if we moved the object
+        if moved_to_root:
+            for ob in bpy.data.objects:
+                ob.select_set(False)
+            block_obj.select_set(True)
+            context.view_layer.objects.active = block_obj
+            for coll in original_collections:
+                if coll != root_collection:
+                    bpy.ops.object.move_to_collection(collection_index=coll.id_data.collections.find(coll.name))
+            if block_obj.name in root_collection.objects:
+                root_collection.objects.unlink(block_obj)
+            context.view_layer.update()
+            self.report({'INFO'}, f"Restored '{block_obj.name}' to its original collections")
+
         return duplicates_dir, main_texture_dir
 
     def execute(self, context):
@@ -464,7 +496,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'WARNING'}, "No mesh objects in Processed_Blocks.")
                     return {'CANCELLED'}
 
-                # --- TEMPORARILY DISABLE RENDER AND VERTEX SNAP ---
+                # Temporarily disable render and vertex snap
                 ps1_was_active = temporary_disable_ps1_render(context)
                 snap_mods = get_vertex_snap_modifiers(processed_objs)
                 snap_states = disable_vertex_snap_modifiers(snap_mods)
@@ -499,7 +531,8 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
                     old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
 
-                    bpy.ops.object.select_all(action='DESELECT')
+                    for ob in bpy.data.objects:
+                        ob.select_set(False)
                     for obj in valid_objs:
                         obj.select_set(True)
                     if valid_objs:
@@ -508,7 +541,9 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     temp_manager.prepare_export_operation(valid_objs)
                     export_result = temp_manager.execute_export(proc_settings, valid_objs)
 
-                    bpy.ops.object.select_all(action='DESELECT')
+                    # Restore selection
+                    for ob in bpy.data.objects:
+                        ob.select_set(False)
                     for name in old_sel_names:
                         if name in bpy.data.objects:
                             bpy.data.objects[name].select_set(True)
@@ -530,7 +565,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'INFO'}, f"Export completed: final model saved to {proc_settings.filepath}")
                     return {'FINISHED'}
                 finally:
-                    # Restore vertex snap modifiers and PS1 render
                     restore_vertex_snap_modifiers(snap_states)
                     restore_ps1_render(context, ps1_was_active)
 
@@ -578,7 +612,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'ERROR'}, error_msg)
                     return {'CANCELLED'}
 
-                # --- TEMPORARILY DISABLE RENDER AND VERTEX SNAP ---
+                # Temporarily disable render and vertex snap
                 ps1_was_active = temporary_disable_ps1_render(context)
                 snap_mods = get_vertex_snap_modifiers(valid_objects)
                 snap_states = disable_vertex_snap_modifiers(snap_mods)
@@ -621,7 +655,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                         self.report({'INFO'}, stats_obj.get_report_message())
                         return {'FINISHED'}
                 finally:
-                    # Restore vertex snap modifiers and PS1 render
                     restore_vertex_snap_modifiers(snap_states)
                     restore_ps1_render(context, ps1_was_active)
 
