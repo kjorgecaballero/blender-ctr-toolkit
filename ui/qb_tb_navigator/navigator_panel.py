@@ -31,39 +31,25 @@ def draw_navigator(context, layout):
 
         if scene.navigator_show_group_selection:
             inner_box = group_box.box()
-            if "quad_group_members" in obj:
-                quad_group_members = obj["quad_group_members"]
-                inner_box.label(text="Quadblocks Groups", icon='GROUP_VERTEX')
-                row = inner_box.row(align=True)
-                sorted_groups = []
-                for group_str in quad_group_members.keys():
-                    try:
-                        group_num = int(group_str)
-                        sorted_groups.append(group_num)
-                    except ValueError:
-                        continue
-                sorted_groups.sort()
-                for group_num in sorted_groups:
-                    if group_num <= 12:
-                        op = row.operator("navigator.select_quadblock_group", text=str(group_num))
-                        op.group_number = group_num
 
-            if "tri_group_members" in obj:
-                tri_group_members = obj["tri_group_members"]
-                inner_box.label(text="Triblocks Groups", icon='MENU_PANEL')
-                row = inner_box.row(align=True)
-                sorted_groups = []
-                for group_str in tri_group_members.keys():
-                    try:
-                        group_num = int(group_str)
-                        sorted_groups.append(group_num)
-                    except ValueError:
-                        continue
-                sorted_groups.sort()
-                for group_num in sorted_groups:
-                    if group_num <= 12:
-                        op = row.operator("navigator.select_triblock_group", text=str(group_num))
-                        op.group_number = group_num
+            # Quadblocks: dropdown + select button
+            if "quad_group_members" in obj and obj["quad_group_members"]:
+                quad_box = inner_box.box()
+                quad_box.label(text="Quadblocks Groups", icon='GROUP_VERTEX')
+                row = quad_box.row(align=True)
+                row.prop(scene, "navigator_selected_quad_group", text="")
+                op = row.operator("navigator.select_quadblock_group", text="Select")
+                # Convert dropdown string to int (dropdown returns key as string)
+                op.group_number = int(scene.navigator_selected_quad_group) if scene.navigator_selected_quad_group != "0" else 0
+
+            # Triblocks: dropdown + select button
+            if "tri_group_members" in obj and obj["tri_group_members"]:
+                tri_box = inner_box.box()
+                tri_box.label(text="Triblocks Groups", icon='MENU_PANEL')
+                row = tri_box.row(align=True)
+                row.prop(scene, "navigator_selected_tri_group", text="")
+                op = row.operator("navigator.select_triblock_group", text="Select")
+                op.group_number = int(scene.navigator_selected_tri_group) if scene.navigator_selected_tri_group != "0" else 0
 
     if not is_edit_mode:
         layout.label(text="Enter Edit Mode to use tools", icon='ERROR')

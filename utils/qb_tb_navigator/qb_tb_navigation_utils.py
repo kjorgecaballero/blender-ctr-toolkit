@@ -1,7 +1,7 @@
 """
 QB/TB Navigation Utilities
 Core algorithms for quadblock and triblock detection and analysis
-Now with optional group calculation for performance optimization
+Optional group calculation for performance 
 Added functions for detecting block centers from complete face selection
 """
 
@@ -345,7 +345,7 @@ def build_adjacency_graph_tris(triblock_centers):
 
 
 def greedy_coloring_with_adjacency(centers, adjacency, max_colors=8):
-    """Greedy coloring algorithm optimized for 3D grid structure"""
+    """Greedy coloring algorithm that always picks the smallest positive integer not used by neighbors."""
     sorted_centers = sorted(centers,
                            key=lambda c: len(adjacency[c]),
                            reverse=True)
@@ -359,12 +359,20 @@ def greedy_coloring_with_adjacency(centers, adjacency, max_colors=8):
             if neighbor in colors:
                 used_colors.add(colors[neighbor])
 
+        assigned = False
+        # Try colors from 1 to max_colors
         for color in available_colors:
             if color not in used_colors:
                 colors[center] = color
+                assigned = True
                 break
-        else:
-            colors[center] = max(available_colors) + 1
+
+        if not assigned:
+            # No color in 1..max_colors available -> pick smallest positive integer not used by neighbors
+            color = 1
+            while color in used_colors:
+                color += 1
+            colors[center] = color
 
     return colors
 
