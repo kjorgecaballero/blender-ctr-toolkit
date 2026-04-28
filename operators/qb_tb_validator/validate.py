@@ -1,69 +1,12 @@
 import bpy
-import time
 import bmesh
 from bpy.types import Operator
-from bpy.props import BoolProperty, EnumProperty
+from bpy.props import BoolProperty
 from mathutils import Vector
-
 from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
-from ...utils.qb_tb_validator.qb_tb_naming import build_object_name, clean_object_name
 from ...utils.range_box.range_utils import get_range_dimensions
 
 
-class QB_TB_OT_ObjectQbTbSuffix(Operator):
-    bl_idname = "qb_tb.object_qb_tb_suffix"
-    bl_label = "Add Suffix"
-    bl_description = "Add suffix to objects based on their type (uses current validator option)"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        option = context.scene.validator_option
-
-        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=0)
-        start_time = time.time()
-
-        all_objects = bpy.data.objects
-        count = 0
-
-        for obj in all_objects:
-            mesh_type = get_mesh_type(obj) if obj.type == 'MESH' else None
-            issues = get_object_issues(obj)
-
-            base_name = clean_object_name(obj.name)
-
-            match = False
-            if option == 'QUADBLOCK':
-                match = (mesh_type == 'QUADBLOCK')
-            elif option == 'TRIBLOCK':
-                match = (mesh_type == 'TRIBLOCK')
-            elif option == 'INVALID_GEOMETRY':
-                match = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
-            elif option == 'INVALID_UVS':
-                match = "invalid_uvs" in issues
-            elif option == 'INVALID_TRIBLOCK_UVS':
-                match = "invalid_triblock_uvs" in issues
-            elif option == 'DEGENERATED_UVS':
-                match = "degenerated_uvs" in issues
-            elif option == 'NGONS':
-                match = "ngon" in issues
-            elif option == 'NON_MESH':
-                match = "non_mesh" in issues
-            elif option == 'OUT_OF_RANGE':
-                match = "out_of_range" in issues
-            elif option == 'ALL_INVALID':
-                match = bool(issues)
-
-            if match:
-                new_name = build_object_name(base_name, mesh_type, issues)
-                obj.name = new_name
-                count += 1
-
-        elapsed_time = time.time() - start_time
-        self.report({'INFO'}, f"Found {count} objects matching '{option}' in {elapsed_time:.2f} seconds.")
-        return {'FINISHED'}
-
-
-# Unified Validate Operator (Objects or Vertex Groups)
 class QB_TB_OT_Validate(Operator):
     bl_idname = "qb_tb.validate"
     bl_label = "Remove"
@@ -99,7 +42,6 @@ class QB_TB_OT_Validate(Operator):
         box = layout.box()
         box.label(text="Options", icon='OPTIONS')
         col = box.column(align=True)
-
         col.prop(self, "remove_invalid_geometry")
         col.prop(self, "remove_invalid_uvs")
         col.prop(self, "remove_degenerated_uvs")
@@ -176,20 +118,16 @@ class QB_TB_OT_Validate(Operator):
         objects_to_remove = set()
 
         if self.remove_invalid_geometry:
-            objects_to_remove.update(obj for obj in invalid_geometry_objects
-                                   if obj and obj.name in bpy.data.objects)
+            objects_to_remove.update(obj for obj in invalid_geometry_objects if obj and obj.name in bpy.data.objects)
 
         if self.remove_invalid_uvs:
-            objects_to_remove.update(obj for obj in invalid_uvs_objects
-                                   if obj and obj.name in bpy.data.objects)
+            objects_to_remove.update(obj for obj in invalid_uvs_objects if obj and obj.name in bpy.data.objects)
 
         if self.remove_degenerated_uvs:
-            objects_to_remove.update(obj for obj in degenerated_uvs_objects
-                                   if obj and obj.name in bpy.data.objects)
+            objects_to_remove.update(obj for obj in degenerated_uvs_objects if obj and obj.name in bpy.data.objects)
 
         if self.remove_out_of_range:
-            objects_to_remove.update(obj for obj in out_of_range_objects
-                                   if obj and obj.name in bpy.data.objects)
+            objects_to_remove.update(obj for obj in out_of_range_objects if obj and obj.name in bpy.data.objects)
 
         removed_count = 0
         removed_geometry = 0
@@ -377,227 +315,3 @@ class QB_TB_OT_Validate(Operator):
         self.report({'INFO'}, report)
 
         return {'FINISHED'}
-
-
-class QB_TB_OT_FilterSelectObjects(Operator):
-    bl_idname = "qb_tb.filter_select_objects"
-    bl_label = "Select Object Types"
-    bl_description = "Select objects based on their type (uses current validator option)"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        option = context.scene.validator_option
-
-        for obj in context.selected_objects:
-            obj.select_set(False)
-
-        count = 0
-        selected_objects = []
-
-        for obj in list(bpy.data.objects):
-            select_this = False
-            mesh_type = get_mesh_type(obj) if obj.type == 'MESH' else None
-            issues = get_object_issues(obj)
-
-            if option == 'ALL_INVALID':
-                select_this = bool(issues)
-            elif option == 'INVALID_GEOMETRY':
-                select_this = any(issue in issues for issue in ["ngon", "invalid_geometry", "non_mesh"])
-            elif option == 'INVALID_UVS':
-                select_this = "invalid_uvs" in issues
-            elif option == 'INVALID_TRIBLOCK_UVS':
-                select_this = "invalid_triblock_uvs" in issues
-            elif option == 'DEGENERATED_UVS':
-                select_this = "degenerated_uvs" in issues
-            elif option == 'TRIBLOCK':
-                select_this = mesh_type == 'TRIBLOCK'
-            elif option == 'QUADBLOCK':
-                select_this = mesh_type == 'QUADBLOCK'
-            elif option == 'NON_MESH':
-                select_this = "non_mesh" in issues
-            elif option == 'NGONS':
-                select_this = "ngon" in issues
-            elif option == 'OUT_OF_RANGE':
-                select_this = "out_of_range" in issues
-
-            if select_this:
-                try:
-                    if obj and obj.name in bpy.data.objects:
-                        obj.select_set(True)
-                        selected_objects.append(obj)
-                        count += 1
-                except Exception as e:
-                    print(f"Selection failed for {obj.name if hasattr(obj, 'name') else 'Unknown object'}: {e}")
-
-        if selected_objects and context.view_layer.objects.active is None:
-            try:
-                context.view_layer.objects.active = selected_objects[0]
-            except Exception as e:
-                print(f"Failed to set active object: {e}")
-
-        self.report({'INFO'}, f"Selected {count} objects.")
-        return {'FINISHED'}
-
-
-class QB_TB_OT_CleanObjectSuffixes(Operator):
-    bl_idname = "qb_tb.clean_object_suffixes"
-    bl_label = "Clear Suffix"
-    bl_description = "Clear all suffixes from object names"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        count = 0
-        for obj in list(bpy.data.objects):
-            if not obj or obj.name not in bpy.data.objects:
-                continue
-
-            original_name = obj.name
-            obj.name = clean_object_name(obj.name)
-            if original_name != obj.name:
-                count += 1
-
-        self.report({'INFO'}, f"Reset {count} object names.")
-        return {'FINISHED'}
-
-
-class QB_TB_OT_ClearVertexGroupIssues(Operator):
-    """Clear vertex group issues (warnings) from the active mesh object"""
-    bl_idname = "qb_tb.clear_vertex_group_issues"
-    bl_label = "Clear Vertex Group Issues"
-    bl_description = "Remove all stored vertex group issues from the active mesh object"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        obj = context.active_object
-        return obj and obj.type == 'MESH' and "vertex_group_issues" in obj
-
-    def execute(self, context):
-        obj = context.active_object
-        if "vertex_group_issues" in obj:
-            del obj["vertex_group_issues"]
-            self.report({'INFO'}, "Vertex group issues cleared.")
-        else:
-            self.report({'INFO'}, "No vertex group issues to clear.")
-        return {'FINISHED'}
-
-
-class QB_TB_OT_SelectVertexGroupsByType(Operator):
-    """Select vertex groups in the checklist based on the current filter option (including OUT_OF_RANGE)"""
-    bl_idname = "qb_tb.select_vertex_groups_by_type"
-    bl_label = "Select Vertex Groups by Type"
-    bl_description = "Mark vertex groups in the navigation list and select them in 3D view according to the selected validator option"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        obj = context.active_object
-        return obj and obj.type == 'MESH'
-
-    def execute(self, context):
-        obj = context.active_object
-        option = context.scene.validator_option
-        scene = context.scene
-
-        # Options not applicable to vertex groups
-        if option in {'NGONS', 'NON_MESH'}:
-            self.report({'INFO'}, f"Option '{option}' is not available for vertex groups.")
-            return {'CANCELLED'}
-
-        if "vertex_group_issues" not in obj:
-            try:
-                bpy.ops.list.validate_vertex_groups()
-            except Exception as e:
-                self.report({'ERROR'}, f"Could not validate vertex groups: {e}")
-                return {'CANCELLED'}
-
-        issues_dict = dict(obj.get("vertex_group_issues", {}))
-
-        matched_groups = []
-        for vg in obj.vertex_groups:
-            name = vg.name
-            if not (name.startswith("QB_") or name.startswith("TB_")):
-                continue
-
-            issues = issues_dict.get(name, [])
-            is_valid_qb = 'quadblock' in issues and 'invalid_geometry' not in issues
-            is_valid_tb = 'triblock' in issues and 'invalid_geometry' not in issues
-
-            if option == 'QUADBLOCK':
-                match = is_valid_qb
-            elif option == 'TRIBLOCK':
-                match = is_valid_tb
-            elif option == 'INVALID_GEOMETRY':
-                match = 'invalid_geometry' in issues
-            elif option == 'INVALID_UVS':
-                match = 'invalid_uvs' in issues
-            elif option == 'INVALID_TRIBLOCK_UVS':
-                match = 'invalid_triblock_uvs' in issues
-            elif option == 'DEGENERATED_UVS':
-                match = 'degenerated_uvs' in issues
-            elif option == 'OUT_OF_RANGE':
-                match = 'out_of_range' in issues
-            elif option == 'ALL_INVALID':
-                other_issues = [iss for iss in issues if iss not in ('quadblock', 'triblock')]
-                match = bool(other_issues)
-            else:
-                match = False
-
-            if match:
-                matched_groups.append(name)
-
-        if not matched_groups:
-            self.report({'INFO'}, f"No vertex groups match the filter '{option}'.")
-            return {'FINISHED'}
-
-        if "multi_selected_items" in obj:
-            obj["multi_selected_items"].clear()
-        else:
-            obj["multi_selected_items"] = {}
-
-        multi = obj["multi_selected_items"]
-        for name in matched_groups:
-            multi[name] = True
-        obj["multi_selected_items"] = multi
-
-        scene.list_display_type = 'VERTEX_GROUPS'
-
-        original_mode = context.mode
-        if original_mode != 'EDIT_MESH':
-            try:
-                bpy.ops.object.mode_set(mode='EDIT')
-            except Exception as e:
-                self.report({'WARNING'}, f"Could not enter edit mode: {e}")
-                self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups in the checklist.")
-                return {'FINISHED'}
-
-        try:
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.list.select_multi_checked(select_all=False, clear_existing=True)
-            self.report({'INFO'}, f"Marked and selected {len(matched_groups)} vertex groups. List switched to Vertex Groups mode.")
-        except Exception as e:
-            self.report({'WARNING'}, f"Could not select geometry: {e}")
-            self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups in the checklist.")
-        finally:
-            if original_mode != 'EDIT_MESH':
-                bpy.ops.object.mode_set(mode=original_mode)
-
-        return {'FINISHED'}
-
-
-def register():
-    bpy.utils.register_class(QB_TB_OT_ObjectQbTbSuffix)
-    bpy.utils.register_class(QB_TB_OT_Validate)
-    bpy.utils.register_class(QB_TB_OT_FilterSelectObjects)
-    bpy.utils.register_class(QB_TB_OT_CleanObjectSuffixes)
-    bpy.utils.register_class(QB_TB_OT_ClearVertexGroupIssues)
-    bpy.utils.register_class(QB_TB_OT_SelectVertexGroupsByType)
-
-
-def unregister():
-    bpy.utils.unregister_class(QB_TB_OT_SelectVertexGroupsByType)
-    bpy.utils.unregister_class(QB_TB_OT_ClearVertexGroupIssues)
-    bpy.utils.unregister_class(QB_TB_OT_CleanObjectSuffixes)
-    bpy.utils.unregister_class(QB_TB_OT_FilterSelectObjects)
-    bpy.utils.unregister_class(QB_TB_OT_Validate)
-    bpy.utils.unregister_class(QB_TB_OT_ObjectQbTbSuffix)
