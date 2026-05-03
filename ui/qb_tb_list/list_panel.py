@@ -286,6 +286,8 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
+            # SEAM TOGGLE BUTTON 
+            action_row.operator("list.toggle_block_seams", text="", icon='UV_EDGESEL')
 
         else:  # CONSTANT_MATERIALS
             action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
