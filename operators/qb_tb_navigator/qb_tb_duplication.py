@@ -34,6 +34,13 @@ def strip_blender_suffix(name):
     return re.sub(r'\.\d+$', '', name)
 
 
+def move_object_to_collection_manual(obj, target_collection):
+    """Manually unlink from all collections and link to target_collection."""
+    for col in list(obj.users_collection):
+        col.objects.unlink(obj)
+    target_collection.objects.link(obj)
+
+
 def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_dir, settings):
     """
     Export the list of objects to obj_filepath, copying textures to texture_dir if enabled.
@@ -195,23 +202,8 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Quad_Group_{group_num}"
 
-                # Robust moving to collection (no select_all)
-                if target_collection.name not in context.scene.collection.children:
-                    context.scene.collection.children.link(target_collection)
-
-                # Deselect all using direct iteration
-                for ob in bpy.data.objects:
-                    ob.select_set(False)
-                new_obj.select_set(True)
-                context.view_layer.objects.active = new_obj
-
-                try:
-                    bpy.ops.object.move_to_collection(collection_index=target_collection.id_data.collections.find(target_collection.name))
-                except Exception as e:
-                    print(f"move_to_collection failed: {e}, using fallback")
-                    for col in new_obj.users_collection:
-                        col.objects.unlink(new_obj)
-                    target_collection.objects.link(new_obj)
+                # Use manual linking instead of move_to_collection operator
+                move_object_to_collection_manual(new_obj, target_collection)
 
                 duplicated_objects.append(new_obj)
                 _temp_duplicated_objects.append(new_obj.name)
@@ -335,22 +327,8 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Tri_Group_{group_num}"
 
-                # Robust moving to collection (no select_all)
-                if target_collection.name not in context.scene.collection.children:
-                    context.scene.collection.children.link(target_collection)
-
-                for ob in bpy.data.objects:
-                    ob.select_set(False)
-                new_obj.select_set(True)
-                context.view_layer.objects.active = new_obj
-
-                try:
-                    bpy.ops.object.move_to_collection(collection_index=target_collection.id_data.collections.find(target_collection.name))
-                except Exception as e:
-                    print(f"move_to_collection failed: {e}, using fallback")
-                    for col in new_obj.users_collection:
-                        col.objects.unlink(new_obj)
-                    target_collection.objects.link(new_obj)
+                # Use manual linking instead of move_to_collection operator
+                move_object_to_collection_manual(new_obj, target_collection)
 
                 duplicated_objects.append(new_obj)
                 _temp_duplicated_objects.append(new_obj.name)
@@ -463,8 +441,21 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             original_mode = context.mode
             original_obj = context.object
 
-            # Ensure source object is in the root collection
+            # Get the source object (the mesh we are editing)
             source_obj = context.edit_object
+            if source_obj is None:
+                self.report({'ERROR'}, "No active mesh object in edit mode")
+                return {'CANCELLED'}
+
+            # Ensure the source object is active and selected
+            context.view_layer.objects.active = source_obj
+            source_obj.select_set(True)
+
+            # Ensure we are in OBJECT mode to safely move collections
+            if context.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Ensure source object is in the root collection
             root_collection = context.scene.collection
             original_collections = list(source_obj.users_collection)
             if root_collection not in original_collections:
@@ -473,28 +464,42 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     ob.select_set(False)
                 source_obj.select_set(True)
                 context.view_layer.objects.active = source_obj
-                bpy.ops.object.move_to_collection(collection_index=0)
+                move_object_to_collection_manual(source_obj, root_collection)
                 context.view_layer.update()
 
-            # --- Temporarily disable PS1 render and vertex snap modifiers ---
+            # Temporarily disable PS1 render and vertex snap modifiers
             ps1_was_active = temporary_disable_ps1_render(context)
             snap_mods = get_vertex_snap_modifiers([source_obj])
             snap_states = disable_vertex_snap_modifiers(snap_mods)
 
             try:
-                # --- Sanitize material names on the source object before any duplication ---
+                # Sanitize material names on the source object before any duplication
                 self._sanitize_material_suffixes(source_obj)
 
-                if "quad_group_members" in context.object and context.object["quad_group_members"]:
+                # Ensure we are in EDIT mode with the correct active object
+                # First, make sure the source object is active (it already is, but double-check)
+                context.view_layer.objects.active = source_obj
+                source_obj.select_set(True)
+                # Now switch to EDIT mode if not already
+                if context.mode != 'EDIT_MESH':
+                    bpy.ops.object.mode_set(mode='EDIT')
+                # Verify that we are now in edit mode and the edit_object is correct
+                if context.edit_object != source_obj:
+                    self.report({'ERROR'}, "Failed to enter edit mode on the correct object")
+                    return {'CANCELLED'}
+
+                # Now call the sub-operators (they require edit mode)
+                if "quad_group_members" in source_obj and source_obj["quad_group_members"]:
                     bpy.ops.navigator.duplicate_quadblocks_by_group()
-                    quad_group_members = context.object["quad_group_members"]
+                    quad_group_members = source_obj["quad_group_members"]
                     quadblock_count = sum(len(members) for members in quad_group_members.values())
 
-                if "tri_group_members" in context.object and context.object["tri_group_members"]:
+                if "tri_group_members" in source_obj and source_obj["tri_group_members"]:
                     bpy.ops.navigator.duplicate_triblocks_by_group()
-                    tri_group_members = context.object["tri_group_members"]
+                    tri_group_members = source_obj["tri_group_members"]
                     triblock_count = sum(len(members) for members in tri_group_members.values())
 
+                # Switch to Object Mode for the export phase
                 if context.mode != 'OBJECT':
                     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -569,7 +574,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
                 self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
 
-                # Material processing
+                # Material processing 
                 base_materials_cache = {}
                 for ob in bpy.data.objects:
                     ob.select_set(False)
@@ -580,6 +585,8 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     if obj.type != 'MESH' or not obj.data.polygons:
                         continue
                     mesh = obj.data
+                    if len(mesh.polygons) == 0:
+                        continue
                     first_poly = mesh.polygons[0]
                     if first_poly.material_index >= len(mesh.materials):
                         continue
