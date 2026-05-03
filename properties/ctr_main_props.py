@@ -23,6 +23,20 @@ def register():
         default='OBJECTS'
     )
 
+    # Material filter for the custom Material Manager
+    bpy.types.Scene.ctr_material_filter = EnumProperty(
+        name="Material Filter",
+        description="Filter materials shown in the CTR Material Manager",
+        items=[
+            ('ALL', "All", "Show all materials"),
+            ('NORMAL', "Normal", "Show only normal materials (not constant)"),
+            ('CONSTANT', "Constant", "Show only constant materials"),
+            ('NAV_POINT', "Nav Point", "Show only navigation point materials"),
+        ],
+        default='ALL'
+    )
+
 def unregister():
+    del bpy.types.Scene.ctr_material_filter
     del bpy.types.Scene.validator_scope
     del bpy.types.Scene.ctr_tool_mode
