@@ -4,14 +4,17 @@ from .render import register as register_render_ui, unregister as unregister_ren
 from . import qb_tb_navigator
 from . import qb_tb_validator
 from . import material_manager
+from . import mesh_menus
 
 def register():
     register_main_panel()
     register_qb_tb_list_ui()
     register_render_ui()
     material_manager.register()
+    mesh_menus.register()
 
 def unregister():
+    mesh_menus.unregister()
     material_manager.unregister()
     unregister_render_ui()
     unregister_qb_tb_list_ui()

@@ -205,8 +205,8 @@ class LIST_PT_BlockListPanel(Panel):
                         has_vertex_groups=False, has_constant_materials=False,
                         has_detected_blocks=False, nav_point_count=0):
         """Draw a custom scrollable list with search, sort, material filter, vertical scrollbar,
-        Search bar at top, filter dropdowns, action buttons in a single row,
-         list, pagination at bottom. The entire list section is collapsible.
+        Search bar, filter dropdowns, action buttons in a single row,
+         list, pagination. The entire list section is collapsible.
         Counts are displayed inside the scroll box just above the pagination.
         """
         scene = context.scene
@@ -286,8 +286,6 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
-            # SEAM TOGGLE BUTTON 
-            action_row.operator("list.toggle_block_seams", text="", icon='UV_EDGESEL')
 
         else:  # CONSTANT_MATERIALS
             action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
@@ -297,7 +295,7 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
             action_row.operator("list.update_derived_from_checked", text="", icon='FILE_REFRESH')
-            action_row.operator("list.duplicate_selection", text="", icon='DUPLICATE')
+
 
             # Navigation toggle button (dynamic icon)
             if "constant_materials" in obj:
