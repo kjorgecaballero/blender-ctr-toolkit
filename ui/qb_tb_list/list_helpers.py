@@ -1,36 +1,30 @@
 """
 Helper Functions for Quadblock/Triblock List
 Utility functions used by the block list UI
-Unused functions `get_constant_material_names`, `get_navigation_points`,
-`get_broken_navigation_points`, `count_navigation_points` removed.
 """
 
 import bpy
 
 
 def get_material_image_icon(material_name):
-    """Get the actual image icon from a material's texture if it exists"""
-    if material_name and material_name in bpy.data.materials:
-        material = bpy.data.materials[material_name]
+    """Get the actual image icon from a material's texture if it exists (Blender 3.3+ compatible)."""
+    if not material_name or material_name not in bpy.data.materials:
+        return 'MATERIAL_DATA'
 
-        if material.use_nodes:
-            for node in material.node_tree.nodes:
-                if node.type == 'TEX_IMAGE' and node.image:
-                    image = node.image
-                    if hasattr(image, 'preview') and image.preview:
-                        return image.preview.icon_id
-                    else:
-                        image.preview_ensure()
-                        if image.preview:
-                            return image.preview.icon_id
+    material = bpy.data.materials[material_name]
 
-            if material.texture_slots and material.active_texture:
-                tex = material.active_texture
-                if tex.type == 'IMAGE' and tex.image:
-                    image = tex.image
-                    if hasattr(image, 'preview') and image.preview:
-                        return image.preview.icon_id
+    # Only use node trees (texture slots are deprecated and removed in Blender 3.0+)
+    if material.use_nodes and material.node_tree:
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                image = node.image
+                # Ensure preview is generated
+                if not hasattr(image, 'preview') or not image.preview:
+                    image.preview_ensure()
+                if image.preview:
+                    return image.preview.icon_id
 
+    # Fallback to generic material icon
     return 'MATERIAL_DATA'
 
 
