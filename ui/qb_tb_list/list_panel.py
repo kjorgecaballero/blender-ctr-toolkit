@@ -206,7 +206,7 @@ class LIST_PT_BlockListPanel(Panel):
                         has_detected_blocks=False, nav_point_count=0):
         """Draw a custom scrollable list with search, sort, material filter, vertical scrollbar,
         Search bar, filter dropdowns, action buttons in a single row,
-         list, pagination. The entire list section is collapsible.
+        list, pagination. The entire list section is collapsible.
         Counts are displayed inside the scroll box just above the pagination.
         """
         scene = context.scene
@@ -294,8 +294,6 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
-            action_row.operator("list.update_derived_from_checked", text="", icon='FILE_REFRESH')
-
 
             # Navigation toggle button (dynamic icon)
             if "constant_materials" in obj:
@@ -501,6 +499,9 @@ class LIST_PT_BlockListPanel(Panel):
                     row = scroll_box.row()
                     row.alignment = 'EXPAND'
 
+                    # -------------------------------------------
+                    # MODIFIED: Checkbox without extra icon, with emboss=False
+                    # -------------------------------------------
                     left_side = row.row(align=True)
                     left_side.alignment = 'LEFT'
 
@@ -509,11 +510,12 @@ class LIST_PT_BlockListPanel(Panel):
 
                     toggle_op = left_side.operator("list.toggle_multi_selection",
                                                  text="",
-                                                 icon=checkbox_icon)
+                                                 icon=checkbox_icon,
+                                                 emboss=False)   # <-- ADDED emboss=False
                     toggle_op.item_name = item['name']
 
-                    icon = 'VERTEXSEL' if item['block_type'] == 'quadblock' else 'FACESEL'
-                    left_side.label(text="", icon=icon)
+                    # The extra icon (VERTEXSEL/FACESEL) has been REMOVED.
+                    # -------------------------------------------------------
 
                     middle = row.row()
                     middle.alignment = 'EXPAND'
