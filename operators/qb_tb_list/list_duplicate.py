@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 import time
+import re
 from mathutils import Vector
 from bpy.types import Operator
 
@@ -50,6 +51,27 @@ class LIST_OT_DuplicateSelection(Operator):
     @classmethod
     def poll(cls, context):
         return (context.edit_object is not None and context.mode == 'EDIT_MESH')
+
+    def _get_next_constant_name(self, obj, base_mat_name):
+        """
+        Return a new unique constant material name derived from base_mat_name,
+        using an incremental numeric suffix (001, 002, ...).
+        """
+        const_dict = obj.get("constant_materials", {})
+        max_num = 0
+        for const_name, info in const_dict.items():
+            if info.get("original_material") == base_mat_name:
+                # Extract trailing numeric suffix (e.g., "001", "042")
+                match = re.search(r'(\d+)$', const_name)
+                if match:
+                    try:
+                        num = int(match.group(1))
+                        if num > max_num:
+                            max_num = num
+                    except ValueError:
+                        pass
+        next_num = max_num + 1
+        return f"{base_mat_name}{next_num:03d}"
 
     def execute(self, context):
         print("--- DEBUG: Duplicate operator started ---")
@@ -193,13 +215,13 @@ class LIST_OT_DuplicateSelection(Operator):
                 bm.faces[idx].material_index = base_mat_index
             bmesh.update_edit_mesh(obj.data)
 
-            # Generate new constant name
-            base_new_name = info['const_name'] + "001"
-            final_new_name = base_new_name
+            # Generate new constant name using incremental numeric suffix
+            new_const_name = self._get_next_constant_name(obj, info['base_mat_name'])
+            final_new_name = new_const_name
             counter = 1
             while final_new_name in bpy.data.materials or (final_new_name in obj.get("constant_materials", {})):
+                final_new_name = f"{new_const_name}_{counter:03d}"
                 counter += 1
-                final_new_name = f"{info['const_name']}{counter:03d}"
 
             # Create new constant material
             new_mat = base_mat.copy()
@@ -236,7 +258,7 @@ class LIST_OT_DuplicateSelection(Operator):
             new_const_names.append(final_new_name)
             processed += 1
 
-        # NAVIGATION POINT HANDLING (with inheritance) -----
+        # NAVIGATION POINT HANDLING
         # Temporarily replace constant_materials with only the newly created ones,
         # but force them to be navigation points for the detection step.
         if new_const_names:

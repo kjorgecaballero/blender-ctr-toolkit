@@ -39,3 +39,24 @@ def update_derived_materials(obj, base_material_names, image, update_base_materi
                         break
 
     return updated_count
+
+
+def is_constant_id_unique(obj, id_value, exclude_material=None):
+    """
+    Check if the ID (suffix after '_ID') is already used by any other constant material on the object.
+    Args:
+        obj: The mesh object containing constant_materials dict.
+        id_value: The ID string to check (e.g., "xd").
+        exclude_material: Name of a constant material to ignore (used during renaming).
+    Returns:
+        True if ID is unique, False if another constant already uses the same ID.
+    """
+    const_dict = obj.get("constant_materials", {})
+    for mat_name, info in const_dict.items():
+        if exclude_material and mat_name == exclude_material:
+            continue
+        if '_ID' in mat_name:
+            existing_id = mat_name.split('_ID', 1)[1]
+            if existing_id == id_value:
+                return False
+    return True

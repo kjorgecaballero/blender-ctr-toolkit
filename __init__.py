@@ -64,7 +64,7 @@ def unregister():
         if kmi.idname == "navigator.cursor_select_block":
             km2.keymap_items.remove(kmi)
             break
-    # remove the duplicate shortcut
+
     for kmi in km2.keymap_items:
         if kmi.idname == "list.duplicate_selection":
             km2.keymap_items.remove(kmi)

@@ -11,13 +11,15 @@ import time
 
 from ...utils.qb_tb_navigator import get_faces_by_material_name
 from ...utils.qb_tb_navigator.constant_material_utils import clear_all_constant_materials
+from ...utils.material_utils import is_constant_id_unique
 
 
 class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
     """Assign a constant name to the selected block by duplicating its material.
     The base material name is fixed; you can edit only the value after 'ID'.
     The final name will be: base_name_IDvalue (e.g., Dirt_tex01_IDCustomName).
-    If the resulting name already exists, a numeric suffix (.001, .002, etc.) is added automatically.
+    If the resulting name already exists, the operation is cancelled.
+    All IDs must be unique across all constant materials on the object.
     """
     bl_idname = "list.assign_constant_material"
     bl_label = "Assign/Set Constant Name"
@@ -136,7 +138,7 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                 bm.free()
                 return {'CANCELLED'}
 
-            # REINDEX‑SAFE CHECK: does this block already have a constant material? 
+            # REINDEX‑SAFE CHECK, does this block already have a constant material? 
             const_dict = obj.get("constant_materials", {})
             for idx in face_indices:
                 poly = mesh.polygons[idx]
@@ -176,7 +178,6 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
         row.label(text="ID:")
         row.prop(self, "id_value", text="")
         layout.label(text=f"Final name will be: {self.base_name}_ID{self.id_value}")
-        layout.label(text="If the name already exists, a number will be appended automatically.")
 
     def execute(self, context):
         obj = context.edit_object
@@ -298,30 +299,27 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                 self.report({'ERROR'}, "ID value cannot be empty.")
                 return {'CANCELLED'}
 
-            final_name = f"{self.base_name}_ID{self.id_value.strip()}"
+            id_value = self.id_value.strip()
+            final_name = f"{self.base_name}_ID{id_value}"
 
-            # Check if the name is already used as a constant material in this object
+            # Check ID uniqueness across all constant materials
+            if not is_constant_id_unique(obj, id_value):
+                self.report({'ERROR'}, f"ID '{id_value}' is already used by another constant material. Please choose a unique ID.")
+                return {'CANCELLED'}
+
+            # Check if the full name already exists (global materials or constant materials)
+            if final_name in bpy.data.materials:
+                self.report({'ERROR'}, f"Material name '{final_name}' already exists. Choose a different base or ID.")
+                return {'CANCELLED'}
+
             if "constant_materials" in obj and final_name in obj["constant_materials"]:
                 existing_block_info = obj["constant_materials"][final_name]
                 existing_block_type = existing_block_info.get("block_type", "")
                 existing_block_id = existing_block_info.get("block_id", 0)
-                self.report({'WARNING'}, f"Name '{final_name}' is already used by {existing_block_type} {existing_block_id}.")
+                self.report({'ERROR'}, f"Name '{final_name}' is already assigned to {existing_block_type} {existing_block_id}. Cannot reuse.")
                 return {'CANCELLED'}
 
-            # Ensure unique name across global materials and constant materials
-            base_name_for_uniqueness = final_name
-            counter = 1
-            while True:
-                material_exists = final_name in bpy.data.materials
-                constant_exists = ("constant_materials" in obj and final_name in obj["constant_materials"])
-                if not material_exists and not constant_exists:
-                    break
-                final_name = f"{base_name_for_uniqueness}.{counter:03d}"
-                counter += 1
-
-            if final_name != base_name_for_uniqueness:
-                self.report({'INFO'}, f"Name '{base_name_for_uniqueness}' already in use. Using '{final_name}' instead.")
-
+            # Create new material
             new_material = current_material.copy()
             new_material.name = final_name
 
@@ -458,8 +456,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
         try:
 
-            # 1) Clear only invalid navigation points (unchanged, not refactored)
-
+            # 1) Clear only invalid navigation points (unchanged)
             if self.clear_invalid_only:
                 if "constant_materials" not in obj:
                     self.report({'WARNING'}, "No constant materials found.")
@@ -560,9 +557,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 self.report({'INFO'} if not failed_materials else {'WARNING'}, msg)
                 return {'FINISHED'}
 
-
-            # 2) Clear all constant materials (refactored to use utility)
-
+            # 2) Clear all constant materials (unchanged)
             elif self.clear_all:
                 cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, self.fallback_duplicate)
                 msg = f"Cleared all constant materials. Restored {cleared_orig} with original, {restored_fb} with fallback."
@@ -573,11 +568,8 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                     self.report({'INFO'}, msg)
                 return {'FINISHED'}
 
-
             # 3) Clear only from the selected block (unchanged)
-
             else:
-                # Already in OBJECT mode, use mesh polygons directly
                 selected_polys = [p for p in obj.data.polygons if p.select]
                 if not selected_polys:
                     self.report({'WARNING'}, "No faces selected. Select a block to clear its constant material.")
@@ -588,7 +580,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                     self.report({'WARNING'}, "No constant materials on this object.")
                     return {'CANCELLED'}
 
-                # Collect unique constant material names from selected faces
                 mats_to_clear = set()
                 for poly in selected_polys:
                     mat_idx = poly.material_index
@@ -611,7 +602,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                     original_mat_name = block_info.get("original_material", "")
                     original_mat = bpy.data.materials.get(original_mat_name)
 
-                    # Get all faces of the object that use this constant material
                     face_indices = get_faces_by_material_name(obj, mat_name)
                     if not face_indices:
                         failed_materials.append(mat_name)
@@ -641,11 +631,9 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 failed_materials.append(mat_name)
                                 continue
                         else:
-                            # No fallback and original missing -> cannot restore
                             self.report({'ERROR'}, f"Original material '{original_mat_name}' missing and fallback disabled for '{mat_name}'.")
                             return {'CANCELLED'}
                     else:
-                        # Restore original material
                         if original_mat_name not in obj.data.materials:
                             obj.data.materials.append(original_mat)
                         orig_idx = obj.data.materials.find(original_mat_name)
@@ -653,7 +641,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             obj.data.polygons[idx].material_index = orig_idx
                         cleared += 1
 
-                    # Remove constant material from dictionaries
                     if mat_name in const_dict:
                         del const_dict[mat_name]
 
