@@ -3,19 +3,21 @@ from .qb_tb_list import register as register_qb_tb_list_ui, unregister as unregi
 from .render import register as register_render_ui, unregister as unregister_render_ui
 from . import qb_tb_navigator
 from . import qb_tb_validator
-from . import material_manager
 from . import mesh_menus
+from .material_manager import register as register_mat_mgr_ui, unregister as unregister_mat_mgr_ui
+
 
 def register():
     register_main_panel()
     register_qb_tb_list_ui()
     register_render_ui()
-    material_manager.register()
     mesh_menus.register()
+    register_mat_mgr_ui()
+
 
 def unregister():
+    unregister_mat_mgr_ui()
     mesh_menus.unregister()
-    material_manager.unregister()
     unregister_render_ui()
     unregister_qb_tb_list_ui()
     unregister_main_panel()

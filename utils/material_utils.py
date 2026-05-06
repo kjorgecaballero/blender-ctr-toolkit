@@ -60,3 +60,55 @@ def is_constant_id_unique(obj, id_value, exclude_material=None):
             if existing_id == id_value:
                 return False
     return True
+
+
+# MATERIAL MANAGER HELPERS
+
+def get_material_categories():
+    """Return three sets: normal, constant, nav_point (global)."""
+    const_names = set()
+    nav_names = set()
+    for obj in bpy.data.objects:
+        if "constant_materials" in obj:
+            for mat_name, info in obj["constant_materials"].items():
+                const_names.add(mat_name)
+                if info.get("is_navigation_point", False):
+                    nav_names.add(mat_name)
+
+    normal = set()
+    constant = set()
+    nav_point = set()
+    for mat in bpy.data.materials:
+        if mat.name in const_names:
+            if mat.name in nav_names:
+                nav_point.add(mat.name)
+            else:
+                constant.add(mat.name)
+        else:
+            normal.add(mat.name)
+    return normal, constant, nav_point
+
+
+def is_base_name_in_use(const_dict, name, exclude_material=None):
+    """Check if 'name' is used as original_material in any constant material."""
+    for cname, cinfo in const_dict.items():
+        if exclude_material and cname == exclude_material:
+            continue
+        if cinfo.get("original_material") == name:
+            return True
+    return False
+
+
+def rename_material_if_unique(mat, new_name, const_dict=None, exclude_material=None):
+    """Rename material if new_name is unique and not a used base name."""
+    if not mat:
+        return False, "Material not found"
+    if new_name == mat.name:
+        return True, ""
+    if new_name in bpy.data.materials:
+        return False, f"Name '{new_name}' already exists. Choose a different name."
+    if const_dict is not None:
+        if is_base_name_in_use(const_dict, new_name, exclude_material):
+            return False, f"Name '{new_name}' is already used as a base name for constant materials. Cannot rename."
+    mat.name = new_name
+    return True, ""

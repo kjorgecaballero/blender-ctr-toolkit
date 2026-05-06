@@ -4,6 +4,8 @@ from .range_box import register_range_box, unregister_range_box
 from .qb_tb_navigator import register as register_qb_tb_navigator, unregister as unregister_qb_tb_navigator
 from .qb_tb_list import register as register_qb_tb_list, unregister as unregister_qb_tb_list
 from .render import register as register_render_ops, unregister as unregister_render_ops
+from .material_manager import register as register_mat_mgr_ops, unregister as unregister_mat_mgr_ops
+
 
 def register():
     register_qb_tb()
@@ -12,8 +14,11 @@ def register():
     register_qb_tb_navigator()
     register_qb_tb_list()
     register_render_ops()
+    register_mat_mgr_ops()
+
 
 def unregister():
+    unregister_mat_mgr_ops()
     unregister_render_ops()
     unregister_qb_tb_list()
     unregister_qb_tb_navigator()
