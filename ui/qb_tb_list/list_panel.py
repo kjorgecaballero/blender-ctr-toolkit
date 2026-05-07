@@ -1,10 +1,6 @@
 """
 Quadblock/Triblock List Panel - Main UI
 Main panel class and custom list drawing for the block list system.
-
-Provides the main UI panel with scrollable list, search, sorting,
-material filtering, issue filtering (vertex groups), navigation point
-filtering (constant materials), pagination, and multi-selection.
 """
 
 import bpy
@@ -207,7 +203,6 @@ class LIST_PT_BlockListPanel(Panel):
         """Draw a custom scrollable list with search, sort, material filter, vertical scrollbar,
         Search bar, filter dropdowns, action buttons in a single row,
         list, pagination. The entire list section is collapsible.
-        Counts are displayed inside the scroll box just above the pagination.
         """
         scene = context.scene
 
@@ -250,6 +245,7 @@ class LIST_PT_BlockListPanel(Panel):
                 'INVALID_TRIBLOCK_UVS': "Invalid Triblock UVs",
                 'DEGENERATED_UVS': "Degenerated UVs",
                 'OUT_OF_RANGE': "Out of Range",
+                'MULTIPLE_MATERIALS': "Multiple Mats",
             }.get(scene.list_issue_filter, "All")
 
             right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
@@ -387,11 +383,12 @@ class LIST_PT_BlockListPanel(Panel):
                     show = 'degenerated_uvs' in item_issues
                 elif issue_filter == 'OUT_OF_RANGE':
                     show = 'out_of_range' in item_issues
+                elif issue_filter == 'MULTIPLE_MATERIALS':
+                    show = 'multiple_materials' in item_issues
                 else:
                     show = True
                 if not show:
                     continue
-            # For 'ALL' we keep all items (no filtering)
 
             # Apply navigation point filter (only for constant materials)
             if scene.list_display_type == 'CONSTANT_MATERIALS':
@@ -499,9 +496,6 @@ class LIST_PT_BlockListPanel(Panel):
                     row = scroll_box.row()
                     row.alignment = 'EXPAND'
 
-                    # -------------------------------------------
-                    # MODIFIED: Checkbox without extra icon, with emboss=False
-                    # -------------------------------------------
                     left_side = row.row(align=True)
                     left_side.alignment = 'LEFT'
 
@@ -511,11 +505,8 @@ class LIST_PT_BlockListPanel(Panel):
                     toggle_op = left_side.operator("list.toggle_multi_selection",
                                                  text="",
                                                  icon=checkbox_icon,
-                                                 emboss=False)   # <-- ADDED emboss=False
+                                                 emboss=False)
                     toggle_op.item_name = item['name']
-
-                    # The extra icon (VERTEXSEL/FACESEL) has been REMOVED.
-                    # -------------------------------------------------------
 
                     middle = row.row()
                     middle.alignment = 'EXPAND'

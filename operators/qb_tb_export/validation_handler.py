@@ -58,16 +58,20 @@ class ValidationHandler:
             if mesh_type == 'TRIBLOCK' and not settings.export_triblocks:
                 continue
             
-            # Check for UV issues
+            # Check for issues
             issues = get_object_issues(obj)
             has_uv_issues = any('uv' in issue for issue in issues)
             
-            # Apply UV issue filters with separate handling
+            # Apply UV issue filters
             if 'invalid_uvs' in issues and not settings.export_invalid_uvs:
                 continue
             if 'invalid_triblock_uvs' in issues and not settings.export_invalid_triblock_uvs:
                 continue
             if 'degenerated_uvs' in issues and not settings.export_degenerated_uvs:
+                continue
+            
+            # Apply multiple materials filter
+            if 'multiple_materials' in issues and not settings.export_multiple_materials:
                 continue
             
             # Object passed all filters

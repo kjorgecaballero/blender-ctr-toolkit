@@ -6,7 +6,6 @@ from mathutils import Vector
 from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 from ...utils.range_box.range_utils import get_range_dimensions
 
-
 class QB_TB_OT_Validate(Operator):
     bl_idname = "qb_tb.validate"
     bl_label = "Remove"
@@ -33,6 +32,11 @@ class QB_TB_OT_Validate(Operator):
         description="For objects: remove objects outside range box. For groups: remove faces of groups whose vertices lie outside the range box",
         default=False
     )
+    remove_multiple_materials: BoolProperty(
+        name="Remove Multiple Materials",
+        description="For objects: remove objects with more than one material. For groups: remove faces of groups with multiple materials",
+        default=False
+    )
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=450)
@@ -46,6 +50,7 @@ class QB_TB_OT_Validate(Operator):
         col.prop(self, "remove_invalid_uvs")
         col.prop(self, "remove_degenerated_uvs")
         col.prop(self, "remove_out_of_range")
+        col.prop(self, "remove_multiple_materials")
 
     def execute(self, context):
         scope = context.scene.validator_scope
@@ -63,11 +68,13 @@ class QB_TB_OT_Validate(Operator):
         uvs_invalid_count = 0
         degenerated_uvs_count = 0
         out_of_range_count = 0
+        multiple_materials_count = 0
 
         invalid_geometry_objects = []
         invalid_uvs_objects = []
         degenerated_uvs_objects = []
         out_of_range_objects = []
+        multiple_materials_objects = []
         all_invalid_objects = set()
 
         for obj in list(bpy.data.objects):
@@ -115,25 +122,30 @@ class QB_TB_OT_Validate(Operator):
                 out_of_range_objects.append(obj)
                 all_invalid_objects.add(obj)
 
+            if "multiple_materials" in issues:
+                multiple_materials_count += 1
+                multiple_materials_objects.append(obj)
+                all_invalid_objects.add(obj)
+
         objects_to_remove = set()
 
         if self.remove_invalid_geometry:
             objects_to_remove.update(obj for obj in invalid_geometry_objects if obj and obj.name in bpy.data.objects)
-
         if self.remove_invalid_uvs:
             objects_to_remove.update(obj for obj in invalid_uvs_objects if obj and obj.name in bpy.data.objects)
-
         if self.remove_degenerated_uvs:
             objects_to_remove.update(obj for obj in degenerated_uvs_objects if obj and obj.name in bpy.data.objects)
-
         if self.remove_out_of_range:
             objects_to_remove.update(obj for obj in out_of_range_objects if obj and obj.name in bpy.data.objects)
+        if self.remove_multiple_materials:
+            objects_to_remove.update(obj for obj in multiple_materials_objects if obj and obj.name in bpy.data.objects)
 
         removed_count = 0
         removed_geometry = 0
         removed_uvs = 0
         removed_degenerated = 0
         removed_out_of_range = 0
+        removed_multiple_materials = 0
 
         for obj in objects_to_remove:
             if obj and obj.name in bpy.data.objects:
@@ -147,6 +159,8 @@ class QB_TB_OT_Validate(Operator):
                         removed_degenerated += 1
                     if "out_of_range" in issues:
                         removed_out_of_range += 1
+                    if "multiple_materials" in issues:
+                        removed_multiple_materials += 1
 
                     bpy.data.objects.remove(obj, do_unlink=True)
                     removed_count += 1
@@ -168,6 +182,8 @@ class QB_TB_OT_Validate(Operator):
                 message_parts.append(f"- {removed_degenerated} degenerated UVs")
             if removed_out_of_range > 0:
                 message_parts.append(f"- {removed_out_of_range} out of range")
+            if removed_multiple_materials > 0:
+                message_parts.append(f"- {removed_multiple_materials} multiple materials")
         else:
             total_invalid = non_mesh_count + ngon_count + geometry_invalid_count
             message_parts.append(f"Found {total_invalid} invalid objects:")
@@ -177,6 +193,7 @@ class QB_TB_OT_Validate(Operator):
             message_parts.append(f"- {uvs_invalid_count} invalid UVs")
             message_parts.append(f"- {degenerated_uvs_count} degenerated UVs")
             message_parts.append(f"- {out_of_range_count} out of range")
+            message_parts.append(f"- {multiple_materials_count} multiple materials")
 
         self.report({'INFO'}, " ".join(message_parts))
         return {'FINISHED'}
@@ -258,6 +275,11 @@ class QB_TB_OT_Validate(Operator):
             )
         if self.remove_out_of_range:
             groups_to_remove_faces.update(out_of_range_groups)
+        if self.remove_multiple_materials:
+            groups_to_remove_faces.update(
+                vg_name_to_index[name] for name, iss in issues_dict.items()
+                if 'multiple_materials' in iss and name in vg_name_to_index
+            )
 
         removed_face_count = 0
         if groups_to_remove_faces:

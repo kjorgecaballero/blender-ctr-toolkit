@@ -56,6 +56,8 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
                 match = 'degenerated_uvs' in issues
             elif option == 'OUT_OF_RANGE':
                 match = 'out_of_range' in issues
+            elif option == 'MULTIPLE_MATERIALS':
+                match = 'multiple_materials' in issues
             elif option == 'ALL_INVALID':
                 other_issues = [iss for iss in issues if iss not in ('quadblock', 'triblock')]
                 match = bool(other_issues)
@@ -87,16 +89,16 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
                 bpy.ops.object.mode_set(mode='EDIT')
             except Exception as e:
                 self.report({'WARNING'}, f"Could not enter edit mode: {e}")
-                self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups in the checklist.")
+                self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups matching filter '{option}' in the checklist.")
                 return {'FINISHED'}
 
         try:
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.list.select_multi_checked(select_all=False, clear_existing=True)
-            self.report({'INFO'}, f"Marked and selected {len(matched_groups)} vertex groups. List switched to Vertex Groups mode.")
+            self.report({'INFO'}, f"Marked and selected {len(matched_groups)} vertex groups matching filter '{option}'. List switched to Vertex Groups mode.")
         except Exception as e:
             self.report({'WARNING'}, f"Could not select geometry: {e}")
-            self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups in the checklist.")
+            self.report({'INFO'}, f"Marked {len(matched_groups)} vertex groups matching filter '{option}' in the checklist.")
         finally:
             if original_mode != 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode=original_mode)

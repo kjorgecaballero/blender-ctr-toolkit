@@ -113,6 +113,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
+    export_multiple_materials: BoolProperty(
+        name="Multiple Materials",
+        description="Export objects with more than one material on the block",
+        default=False,
+    )
+
     path_mode: EnumProperty(
         name="Path Mode",
         description="Texture path handling",
@@ -186,6 +192,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         box.prop(self, "export_invalid_uvs", text="Invalid UVs")
         box.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs")
         box.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
+        box.prop(self, "export_multiple_materials", text="Multiple Materials")
 
         # Duplicates
         box = layout.box()
@@ -230,6 +237,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         self.export_duplicates = context.scene.export_duplicates
         self.export_processed_duplicates = context.scene.export_processed_duplicates
         self.export_details = context.scene.export_details
+        self.export_multiple_materials = context.scene.export_multiple_materials
         return super().invoke(context, event)
 
     def _save_export_settings(self, context):
@@ -247,6 +255,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.export_invalid_uvs = self.export_invalid_uvs
         context.scene.export_invalid_triblock_uvs = self.export_invalid_triblock_uvs
         context.scene.export_degenerated_uvs = self.export_degenerated_uvs
+        context.scene.export_multiple_materials = self.export_multiple_materials
         context.scene.path_mode = self.path_mode
         context.scene.export_details = self.export_details
         context.scene.allow_out_of_range = self.allow_out_of_range
@@ -268,6 +277,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         proc_settings.export_to_folder = False
         proc_settings.include_textures = self.include_textures
         proc_settings.remap_textures = self.remap_textures
+        proc_settings.export_multiple_materials = self.export_multiple_materials
         proc_settings.filepath = os.path.join(output_dir, final_filename)
 
         if main_texture_dir:
@@ -306,7 +316,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
         old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
 
-        # Deselect all using direct iteration
         for ob in bpy.data.objects:
             ob.select_set(False)
         for obj in valid_objs:
@@ -317,7 +326,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         temp_manager.prepare_export_operation(valid_objs)
         result = temp_manager.execute_export(proc_settings, valid_objs)
 
-        # Restore selection
         for ob in bpy.data.objects:
             ob.select_set(False)
         for name in old_sel_names:
@@ -366,7 +374,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
             return None, None
 
-        # Ensure source object is in the root collection
         root_collection = context.scene.collection
         original_collections = list(block_obj.users_collection)
         moved_to_root = False
@@ -376,7 +383,11 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                 ob.select_set(False)
             block_obj.select_set(True)
             context.view_layer.objects.active = block_obj
-            bpy.ops.object.move_to_collection(collection_index=0)
+            # Use direct API to move to root collection (avoids operator context issues)
+            for coll in original_collections:
+                if coll != root_collection:
+                    coll.objects.unlink(block_obj)
+            root_collection.objects.link(block_obj)
             context.view_layer.update()
             moved_to_root = True
 
@@ -438,17 +449,23 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             except:
                 pass
 
-        # Restore original collection if we moved the object
+        # Restore original collections using direct API (no operator)
         if moved_to_root:
             for ob in bpy.data.objects:
                 ob.select_set(False)
             block_obj.select_set(True)
             context.view_layer.objects.active = block_obj
-            for coll in original_collections:
-                if coll != root_collection:
-                    bpy.ops.object.move_to_collection(collection_index=coll.id_data.collections.find(coll.name))
+
+            # Remove from root collection
             if block_obj.name in root_collection.objects:
                 root_collection.objects.unlink(block_obj)
+
+            # Re-link to original collections
+            for coll in original_collections:
+                if coll != root_collection:
+                    if coll.name in bpy.data.collections:
+                        if block_obj.name not in coll.objects:
+                            coll.objects.link(block_obj)
             context.view_layer.update()
             self.report({'INFO'}, f"Restored '{block_obj.name}' to its original collections")
 
@@ -485,6 +502,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                 proc_settings.export_to_folder = False
                 proc_settings.include_textures = self.include_textures
                 proc_settings.remap_textures = self.remap_textures
+                proc_settings.export_multiple_materials = self.export_multiple_materials
                 proc_settings.filepath = final_obj_path
 
                 processed_collection = bpy.data.collections.get("Processed_Blocks")
@@ -496,7 +514,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'WARNING'}, "No mesh objects in Processed_Blocks.")
                     return {'CANCELLED'}
 
-                # Temporarily disable render and vertex snap
                 ps1_was_active = temporary_disable_ps1_render(context)
                 snap_mods = get_vertex_snap_modifiers(processed_objs)
                 snap_states = disable_vertex_snap_modifiers(snap_mods)
@@ -541,7 +558,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     temp_manager.prepare_export_operation(valid_objs)
                     export_result = temp_manager.execute_export(proc_settings, valid_objs)
 
-                    # Restore selection
                     for ob in bpy.data.objects:
                         ob.select_set(False)
                     for name in old_sel_names:
@@ -612,7 +628,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                     self.report({'ERROR'}, error_msg)
                     return {'CANCELLED'}
 
-                # Temporarily disable render and vertex snap
                 ps1_was_active = temporary_disable_ps1_render(context)
                 snap_mods = get_vertex_snap_modifiers(valid_objects)
                 snap_states = disable_vertex_snap_modifiers(snap_mods)

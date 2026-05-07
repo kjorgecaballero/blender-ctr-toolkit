@@ -1,19 +1,12 @@
 """
 Material Selection Menus for Quadblock/Triblock List
-Menus for selecting materials and constant materials
-Vertex Group selection menu
-Material filters for each display mode
-Issue Filter menu for vertex groups
 """
 
 import bpy
 from bpy.props import StringProperty
-
 from .list_helpers import get_block_material_name
 
-
 class LIST_MT_MaterialFilterMenu(bpy.types.Menu):
-    """Menu for selecting materials from current list only with material image icons"""
     bl_label = "Select Material"
     
     def draw(self, layout):
@@ -106,7 +99,6 @@ class LIST_MT_MaterialFilterMenu(bpy.types.Menu):
                     op = layout.operator("list.set_material_filter", text=mat, icon_value=icon_id)
                     op.material_name = mat
 
-
 class LIST_MT_VertexGroupMenu(bpy.types.Menu):
     bl_label = "Select Vertex Group"
     
@@ -138,7 +130,6 @@ class LIST_MT_VertexGroupMenu(bpy.types.Menu):
             op = layout.operator("list.select_block_by_vertex_group", text=vg_name)
             op.vertex_group_name = vg_name
 
-
 class LIST_MT_IssueFilterMenu(bpy.types.Menu):
     bl_label = "Filter by Issue"
     
@@ -156,13 +147,13 @@ class LIST_MT_IssueFilterMenu(bpy.types.Menu):
             ('INVALID_TRIBLOCK_UVS', "Invalid Triblock UVs", 'MESH_CONE'),
             ('DEGENERATED_UVS', "Degenerated UVs", 'GROUP_UVS'),
             ('OUT_OF_RANGE', "Out of Range", 'BOUNDS'),
+            ('MULTIPLE_MATERIALS', "Multiple Materials", 'MATERIAL'),
         ]
 
         for filter_type, label, icon in items:
             icon_disp = 'CHECKBOX_HLT' if current == filter_type else 'CHECKBOX_DEHLT'
             op = layout.operator("list.set_issue_filter", text=label, icon=icon_disp)
             op.filter_type = filter_type
-
 
 classes = [
     LIST_MT_MaterialFilterMenu,

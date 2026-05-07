@@ -54,7 +54,7 @@ def _get_filtered_display_items(context, obj, scene):
                     'block_id': info.get("block_id", 0)
                 })
 
-    # Filter by active group (constant materials)
+    # Group filter for constant materials
     if display_type == 'CONSTANT_MATERIALS' and scene.list_active_group:
         if "constant_material_groups" in scene:
             try:
@@ -66,12 +66,12 @@ def _get_filtered_display_items(context, obj, scene):
             except:
                 pass
 
-    # Filter by material
+    # Material filter
     mat_filter = scene.list_material_filter_vg if display_type == 'VERTEX_GROUPS' else scene.list_material_filter_cm
     if mat_filter:
         items = [it for it in items if it['material'] == mat_filter]
 
-    # Filter by search text
+    # Search filter
     search = scene.list_search_text.lower()
     if search:
         items = [it for it in items if
@@ -79,7 +79,7 @@ def _get_filtered_display_items(context, obj, scene):
                  search in str(it['block_id']) or
                  search in it['block_type'].lower()]
 
-    # Apply issue filter (only for vertex groups) 
+    # Issue filter for vertex groups
     if display_type == 'VERTEX_GROUPS':
         issues_dict = {}
         if "vertex_group_issues" in obj:
@@ -114,6 +114,9 @@ def _get_filtered_display_items(context, obj, scene):
                     filtered.append(it)
             elif issue_filter == 'OUT_OF_RANGE':
                 if 'out_of_range' in item_issues:
+                    filtered.append(it)
+            elif issue_filter == 'MULTIPLE_MATERIALS':
+                if 'multiple_materials' in item_issues:
                     filtered.append(it)
         items = filtered
 
@@ -562,6 +565,7 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
             'invalid_triblock_uvs': ("Invalid Triblock UV arrangement", 'ERROR'),
             'degenerated_uvs': ("Degenerated UVs (all UVs identical)", 'GROUP_UVS'),
             'out_of_range': ("Vertices outside range box (500 units)", 'BOUNDS'),
+            'multiple_materials': ("Multiple materials on block faces", 'MATERIAL'),
         }
 
         for issue in issues:

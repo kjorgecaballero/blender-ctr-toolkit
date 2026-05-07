@@ -4,7 +4,6 @@ from bpy.types import Operator
 from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 from ...utils.qb_tb_validator.qb_tb_naming import build_object_name, clean_object_name
 
-
 class QB_TB_OT_ObjectQbTbSuffix(Operator):
     bl_idname = "qb_tb.object_qb_tb_suffix"
     bl_label = "Add Suffix"
@@ -45,6 +44,8 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
                 match = "non_mesh" in issues
             elif option == 'OUT_OF_RANGE':
                 match = "out_of_range" in issues
+            elif option == 'MULTIPLE_MATERIALS':
+                match = "multiple_materials" in issues
             elif option == 'ALL_INVALID':
                 match = bool(issues)
 

@@ -1,7 +1,6 @@
 import bpy
 
 def get_validator_items(self, context):
-    """Return the list of validator options based on current scope."""
     scene = context.scene
     if scene.validator_scope == 'OBJECTS':
         items = [
@@ -14,6 +13,7 @@ def get_validator_items(self, context):
             ('NGONS', "NGons", "Objects with NGons"),
             ('NON_MESH', "Non-Mesh", "Non-mesh objects"),
             ('OUT_OF_RANGE', "Out of Range", "Objects outside the range box"),
+            ('MULTIPLE_MATERIALS', "Multiple Materials", "Objects with more than one material"),
             ('ALL_INVALID', "All Invalid", "All invalid objects"),
         ]
     else:  # VERTEX_GROUPS
@@ -25,6 +25,7 @@ def get_validator_items(self, context):
             ('INVALID_TRIBLOCK_UVS', "Invalid Triblock UVs", "Triblocks with incorrect UV arrangement"),
             ('DEGENERATED_UVS', "Degenerated UVs", "Groups with all UVs identical"),
             ('OUT_OF_RANGE', "Out of Range", "Groups with vertices outside the range box"),
+            ('MULTIPLE_MATERIALS', "Multiple Materials", "Groups with more than one material on their faces"),
             ('ALL_INVALID', "All Invalid", "All groups with any issue"),
         ]
     return items

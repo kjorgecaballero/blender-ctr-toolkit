@@ -22,15 +22,16 @@ def build_object_name(base_name, mesh_type, issues):
         name_parts.append("invalid_triblock_uvs")
     if "out_of_range" in issues:
         name_parts.append("out_of_range")
+    if "multiple_materials" in issues:
+        name_parts.append("multi_mat")
     
     return "_".join(name_parts)
 
 def clean_object_name(name):
     suffixes = ["_quadblock", "_triblock", "_nonmesh", "_ngon", "_invalid_geo", 
-                "_invalid_uvs", "_degenerated_uvs", "_invalid_triblock_uvs", "_out_of_range"]
-    
+                "_invalid_uvs", "_degenerated_uvs", "_invalid_triblock_uvs", "_out_of_range",
+                "_multi_mat"]
     clean_name = name
     for suffix in suffixes:
         clean_name = clean_name.replace(suffix, "")
-    
     return clean_name

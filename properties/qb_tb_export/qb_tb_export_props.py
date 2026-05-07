@@ -98,6 +98,12 @@ def register():
         default=False
     )
     
+    bpy.types.Scene.export_multiple_materials = bpy.props.BoolProperty(
+        name="Multiple Materials",
+        description="Export objects with more than one material on the block",
+        default=False
+    )
+    
     bpy.types.Scene.path_mode = bpy.props.EnumProperty(
         name="Path Mode",
         description="Texture path handling",
@@ -129,14 +135,12 @@ def register():
         default=False
     )
     
-    # Duplicate export properties
     bpy.types.Scene.export_duplicates = bpy.props.BoolProperty(
         name="Export Duplicates",
         description="Export duplicates of detected blocks to a 'Duplicates' subfolder (ignores UV/range filters)",
         default=False
     )
     
-    # Export processed duplicates with user settings
     bpy.types.Scene.export_processed_duplicates = bpy.props.BoolProperty(
         name="Export Processed Duplicates",
         description="After duplication, export the processed objects using current export settings (filters, folder, etc.)",
@@ -159,6 +163,7 @@ def unregister():
     del bpy.types.Scene.export_invalid_uvs
     del bpy.types.Scene.export_invalid_triblock_uvs
     del bpy.types.Scene.export_degenerated_uvs
+    del bpy.types.Scene.export_multiple_materials
     del bpy.types.Scene.path_mode
     del bpy.types.Scene.export_details
     del bpy.types.Scene.allow_out_of_range

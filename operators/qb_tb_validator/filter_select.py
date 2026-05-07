@@ -2,7 +2,6 @@ import bpy
 from bpy.types import Operator
 from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 
-
 class QB_TB_OT_FilterSelectObjects(Operator):
     bl_idname = "qb_tb.filter_select_objects"
     bl_label = "Select Object Types"
@@ -43,6 +42,8 @@ class QB_TB_OT_FilterSelectObjects(Operator):
                 select_this = "ngon" in issues
             elif option == 'OUT_OF_RANGE':
                 select_this = "out_of_range" in issues
+            elif option == 'MULTIPLE_MATERIALS':
+                select_this = "multiple_materials" in issues
 
             if select_this:
                 try:
