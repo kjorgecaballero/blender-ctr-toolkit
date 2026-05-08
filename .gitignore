@@ -20,3 +20,6 @@ Thumbs.db
 /temp/
 debug/
 *.tmp
+
+# Runtime files
+blender-ctr-toolkit_updater/
