@@ -180,10 +180,10 @@ class LIST_PT_BlockListPanel(Panel):
             # ROW 2: [Groups][Check]
             row2 = main_col.row(align=True)
 
-            # Groups menu
+            # Groups button - opens management dialog
             if has_constant_materials:
-                menu_text = scene.list_active_group if scene.list_active_group else "Groups"
-                row2.menu("LIST_MT_ConstantMaterialGroupMenu", text=menu_text, icon='DOWNARROW_HLT')
+                group_button_text = scene.list_active_group if scene.list_active_group else "Groups"
+                row2.operator("list.group_management_dialog", text=group_button_text, icon='DOWNARROW_HLT')
 
             # CHECK BUTTON
             if has_constant_materials:
@@ -322,15 +322,6 @@ class LIST_PT_BlockListPanel(Panel):
                     else:
                         nav_icon = 'PIVOT_BOUNDBOX'
                     action_row.operator("list.toggle_all_navigation_points", text="", icon=nav_icon)
-
-            # Add to group button
-            add_op = action_row.operator("list.add_to_group", text="", icon='ADD')
-            add_op.group_name = scene.list_active_group if scene.list_active_group else ""
-
-            # Remove from group button (also in same row if group is active)
-            if scene.list_active_group:
-                remove_op = action_row.operator("list.remove_from_group", text="", icon='REMOVE')
-                remove_op.group_name = scene.list_active_group
 
         # 4. SCROLL BOX (contains position text, items, and pagination)
         # Build filtered items, apply sorting, pagination, etc.
