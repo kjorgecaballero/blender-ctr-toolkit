@@ -5,25 +5,25 @@ Extend native Blender menus with CTR Toolkit operations
 import bpy
 
 def menu_duplicate_block(self, context):
-    """Add 'Duplicate Block with Constant' to Mesh menu"""
+    """Add 'Duplicate Constant' to Mesh menu"""
     if context.mode == 'EDIT_MESH' and context.edit_object:
         obj = context.edit_object
         # Only show if block data exists
         if "face_to_quadblock" in obj or "face_to_triblock" in obj:
             self.layout.operator(
                 "list.duplicate_selection",
-                text="Duplicate Block with Constant"
+                text="Duplicate Constant"
             )
 
 def menu_toggle_block_seams(self, context):
-    """Add 'Toggle Block Seams' to UV menu"""
+    """Add 'Toggle QB/TB Seams' to UV menu"""
     if context.mode == 'EDIT_MESH' and context.edit_object:
         obj = context.edit_object
         # Only show if block face maps exist
         if "quadblock_faces_map" in obj or "triblock_faces_map" in obj:
             self.layout.operator(
                 "list.toggle_block_seams",
-                text="Toggle Block Seams"
+                text="Toggle QB/TB Seams"
             )
 
 def register():
