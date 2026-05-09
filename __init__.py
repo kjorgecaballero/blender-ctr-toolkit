@@ -10,9 +10,7 @@ bl_info = {
 
 import bpy
 
-
 # Updater integration
-
 from . import addon_updater_ops
 
 
@@ -22,7 +20,7 @@ class CTRToolkitPreferences(bpy.types.AddonPreferences):
     auto_check_update: bpy.props.BoolProperty(
         name="Auto-check for Update",
         description="If enabled, auto-check for updates using an interval",
-        default=False,
+        default=True,
     )
     updater_interval_months: bpy.props.IntProperty(
         name='Months',
@@ -33,7 +31,7 @@ class CTRToolkitPreferences(bpy.types.AddonPreferences):
     updater_interval_days: bpy.props.IntProperty(
         name='Days',
         description="Number of days between checking for updates",
-        default=7,
+        default=1,      # (daily check)
         min=0,
     )
     updater_interval_hours: bpy.props.IntProperty(
@@ -54,7 +52,6 @@ class CTRToolkitPreferences(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
         addon_updater_ops.update_settings_ui(self, context, layout)
-
 
 
 # Original register / unregister functions
@@ -101,6 +98,16 @@ def register():
         alt=False
     )
     kmi3.active = True
+
+    # Force an update check right after Blender starts (without waiting for auto-check interval)
+    def delayed_update_check():
+        if not addon_updater_ops.updater.invalid_updater:
+            addon_updater_ops.updater.check_for_update(now=False)
+            # Refresh UI after the check so the button turns red immediately
+            addon_updater_ops.ui_refresh(None)
+        return None  # run only once
+
+    bpy.app.timers.register(delayed_update_check, first_interval=2.0)
 
     print(f"Blender CTR Toolkit v{bl_info['version'][0]}.{bl_info['version'][1]} loaded with Block Navigator and Group Management")
 

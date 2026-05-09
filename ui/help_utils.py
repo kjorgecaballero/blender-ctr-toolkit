@@ -16,22 +16,25 @@ class CTR_HelpUtils:
         tutorial = row.operator("wm.url_open", text="", icon='FILE_MOVIE')
         tutorial.url = cls.TUTORIAL_URL
 
-        # Update button 
+        # Update button - The row must be red, not the operator
         try:
             from ..addon_updater_ops import updater
             update_ready = False
             if updater and not getattr(updater, 'invalid_updater', True):
                 update_ready = getattr(updater, 'update_ready', False)
-            update_op = row.operator(
+            
+            # Insert the operator inside a temporary sub-layout
+            sub_row = row.row(align=True)
+            if update_ready:
+                sub_row.alert = True  # Make the entire sub-layout red
+            
+            update_op = sub_row.operator(
                 "blender_ctr_toolkit.updater_install_popup",
                 text="",
-                icon='ERROR' if update_ready else 'INFO',
+                icon='INFO',
                 emboss=True
             )
-            if update_ready:
-                update_op.alert = True
         except Exception:
-            # If the updater operator is not registered, skip this button
             pass
 
         # Report Issue button 

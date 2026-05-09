@@ -597,6 +597,9 @@ def background_update_callback(update_ready):
     if not update_ready:
         return
 
+    # Force UI refresh so the button turns red immediately
+    ui_refresh(update_ready)
+
     handlers = []
     if "scene_update_post" in dir(bpy.app.handlers):
         handlers = bpy.app.handlers.scene_update_post
@@ -1057,7 +1060,7 @@ def register(bl_info):
     updater.use_releases = True
     updater.include_branch_list = None
     updater.manual_only = False
-    updater.fake_install = False
+    updater.fake_install = False  # Set to True for testing
     updater.show_popups = True
     updater.version_min_update = (0, 0, 0)
     updater.version_max_update = None
