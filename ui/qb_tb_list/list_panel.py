@@ -7,6 +7,8 @@ import bpy
 from bpy.types import Panel
 
 from .list_helpers import get_material_image_icon, get_block_material_name
+from ...addon_updater_ops import updater
+from ..help_utils import draw_help_buttons  # Help buttons
 
 
 class LIST_PT_BlockListPanel(Panel):
@@ -208,11 +210,16 @@ class LIST_PT_BlockListPanel(Panel):
 
         # COLLAPSIBLE LIST SECTION
         list_box = layout.box()
-        row = list_box.row(align=True)
-        row.prop(scene, "list_show_items",
-                 icon="TRIA_DOWN" if scene.list_show_items else "TRIA_RIGHT",
-                 icon_only=True, emboss=False)
-        row.label(text="Block List")
+        header_row = list_box.row(align=True)
+        header_row.prop(scene, "list_show_items",
+                        icon="TRIA_DOWN" if scene.list_show_items else "TRIA_RIGHT",
+                        icon_only=True, emboss=False)
+        header_row.label(text="Item List")
+
+        # Help buttons on the right side of the header (reuse existing function)
+        help_row = header_row.row(align=True)
+        help_row.alignment = 'RIGHT'
+        draw_help_buttons(help_row)  # Uses help_utils
 
         if not scene.list_show_items:
             return  # Collapsed: nothing else to draw
@@ -272,10 +279,9 @@ class LIST_PT_BlockListPanel(Panel):
             right_col.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon='PIVOT_CURSOR')
 
         # 3. ACTION BUTTONS (single row below filters)
-        action_row = list_box.row(align=True)
-
         if scene.list_display_type == 'VERTEX_GROUPS':
-            # All VG action buttons in one row
+            action_row = list_box.row(align=True)
+            action_row.alignment = 'CENTER'   # Centers the button cluster
             action_row.prop(scene, "list_filter_show_qb", text="", icon='VERTEXSEL', toggle=True)
             action_row.prop(scene, "list_filter_show_tb", text="", icon='FACESEL', toggle=True)
             action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
@@ -284,6 +290,8 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
 
         else:  # CONSTANT_MATERIALS
+            action_row = list_box.row(align=True)
+            action_row.alignment = 'CENTER'   # Centers the button cluster
             action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
             action_row.prop(scene, "list_filter_cm_tb", text="", icon='FACESEL', toggle=True)
             action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
@@ -291,37 +299,7 @@ class LIST_PT_BlockListPanel(Panel):
             action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
 
-            # Navigation toggle button (dynamic icon)
-            if "constant_materials" in obj:
-                constant_materials_dict = dict(obj["constant_materials"])
-                all_are_nav = True
-                any_are_nav = False
-                visible_count = 0
-                for mat_name, info in constant_materials_dict.items():
-                    block_type = info.get("block_type", "")
-                    if (block_type == "quadblock" and not scene.list_filter_cm_qb) or \
-                       (block_type == "triblock" and not scene.list_filter_cm_tb):
-                        continue
-                    if scene.list_navigation_filter != 'ALL':
-                        is_nav_point = info.get("is_navigation_point", False)
-                        if scene.list_navigation_filter == 'NAVIGATION_POINTS' and not is_nav_point:
-                            continue
-                        elif scene.list_navigation_filter == 'NON_NAVIGATION' and is_nav_point:
-                            continue
-                    visible_count += 1
-                    is_nav = info.get("is_navigation_point", False)
-                    if is_nav:
-                        any_are_nav = True
-                    else:
-                        all_are_nav = False
-                if visible_count > 0:
-                    if all_are_nav:
-                        nav_icon = 'PIVOT_CURSOR'
-                    elif not any_are_nav:
-                        nav_icon = 'PIVOT_ACTIVE'
-                    else:
-                        nav_icon = 'PIVOT_BOUNDBOX'
-                    action_row.operator("list.toggle_all_navigation_points", text="", icon=nav_icon)
+            # Navigation toggle is now in the dropdown menu, not here.
 
         # 4. SCROLL BOX (contains position text, items, and pagination)
         # Build filtered items, apply sorting, pagination, etc.

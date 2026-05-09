@@ -1,6 +1,5 @@
 """
 Navigation Points Operators for Quadblock/Triblock List
-Moved from ui/qb_tb_list/navigation_points.py
 """
 
 import bpy
@@ -42,7 +41,7 @@ class LIST_OT_ToggleNavigationPoint(Operator):
 class LIST_OT_SetNavigationFilter(Operator):
     bl_idname = "list.set_navigation_filter"
     bl_label = "Set Navigation Filter"
-    bl_description = "Filter constant materials by navigation point status (All, Navigation Points only, Non-Navigation only)"
+    bl_description = "Filter constant materials by navigation point status"
     bl_options = {'REGISTER'}
 
     filter_type: EnumProperty(
@@ -60,10 +59,11 @@ class LIST_OT_SetNavigationFilter(Operator):
         return {'FINISHED'}
 
 
-class LIST_OT_ToggleAllNavigationPoints(Operator):
-    bl_idname = "list.toggle_all_navigation_points"
-    bl_label = "Toggle All Navigation Points"
-    bl_description = "Mark/unmark all visible constant materials as navigation points"
+class LIST_OT_ToggleVisibleNavigationPoints(Operator):
+    """Toggle navigation point flag only for items currently visible in the filtered list"""
+    bl_idname = "list.toggle_visible_navigation_points"
+    bl_label = "Toggle Navigation State"
+    bl_description = "Mark/unmark navigation points for all items shown in the current filtered list (respects search, material, group, QB/TB toggles, and navigation filter)"
     bl_options = {'REGISTER'}
 
     mark_as_nav: BoolProperty(default=True)
@@ -76,73 +76,48 @@ class LIST_OT_ToggleAllNavigationPoints(Operator):
                 context.scene.list_display_type == 'CONSTANT_MATERIALS')
 
     def execute(self, context):
-        scene = context.scene
         obj = context.edit_object
-        const_dict = dict(obj["constant_materials"])
+        scene = context.scene
+        from ..qb_tb_list.list_multi_selection import _get_filtered_display_items
+        visible_items = _get_filtered_display_items(context, obj, scene)
 
-        # Filter visible items
-        filtered = []
-        for mat_name, info in const_dict.items():
-            bt = info.get("block_type", "")
-            if (bt == "quadblock" and not scene.list_filter_cm_qb) or \
-               (bt == "triblock" and not scene.list_filter_cm_tb):
-                continue
-            if scene.list_navigation_filter != 'ALL':
-                is_nav = info.get("is_navigation_point", False)
-                if scene.list_navigation_filter == 'NAVIGATION_POINTS' and not is_nav:
-                    continue
-                if scene.list_navigation_filter == 'NON_NAVIGATION' and is_nav:
-                    continue
-            filtered.append((mat_name, info))
-
-        if not filtered:
-            self.report({'WARNING'}, "No items match current filters")
+        if not visible_items:
+            self.report({'WARNING'}, "No items visible in the current filtered list")
             return {'CANCELLED'}
 
+        const_dict = dict(obj["constant_materials"])
         changed = 0
-        for mat_name, info in filtered:
-            if info.get("is_navigation_point", False) != self.mark_as_nav:
-                info["is_navigation_point"] = self.mark_as_nav
-                changed += 1
+        for item in visible_items:
+            mat_name = item['name']
+            if mat_name in const_dict:
+                current_state = const_dict[mat_name].get("is_navigation_point", False)
+                if current_state != self.mark_as_nav:
+                    const_dict[mat_name]["is_navigation_point"] = self.mark_as_nav
+                    changed += 1
 
-        obj["constant_materials"] = const_dict
+        if changed > 0:
+            obj["constant_materials"] = const_dict
+
         action = "Marked" if self.mark_as_nav else "Unmarked"
-        self.report({'INFO'}, f"{action} {changed} navigation points")
+        self.report({'INFO'}, f"{action} {changed} navigation points in the visible list")
         return {'FINISHED'}
 
     def invoke(self, context, event):
         obj = context.edit_object
-        if "constant_materials" in obj:
-            scene = context.scene
-            all_nav = True
-            any_nav = False
-            visible = 0
-            for mat_name, info in dict(obj["constant_materials"]).items():
-                bt = info.get("block_type", "")
-                if (bt == "quadblock" and not scene.list_filter_cm_qb) or \
-                   (bt == "triblock" and not scene.list_filter_cm_tb):
-                    continue
-                if scene.list_navigation_filter != 'ALL':
-                    is_nav = info.get("is_navigation_point", False)
-                    if scene.list_navigation_filter == 'NAVIGATION_POINTS' and not is_nav:
-                        continue
-                    if scene.list_navigation_filter == 'NON_NAVIGATION' and is_nav:
-                        continue
-                visible += 1
-                is_nav = info.get("is_navigation_point", False)
-                if is_nav:
-                    any_nav = True
-                else:
-                    all_nav = False
-            if visible == 0:
-                self.report({'WARNING'}, "No visible items")
-                return {'CANCELLED'}
-            self.mark_as_nav = not all_nav
+        scene = context.scene
+        from ..qb_tb_list.list_multi_selection import _get_filtered_display_items
+        visible_items = _get_filtered_display_items(context, obj, scene)
+        if not visible_items:
+            self.report({'WARNING'}, "No visible items to toggle")
+            return {'CANCELLED'}
+        const_dict = dict(obj["constant_materials"])
+        all_are_nav = all(const_dict.get(it['name'], {}).get("is_navigation_point", False) for it in visible_items)
+        self.mark_as_nav = not all_are_nav
         return self.execute(context)
 
 
 classes = [
     LIST_OT_ToggleNavigationPoint,
     LIST_OT_SetNavigationFilter,
-    LIST_OT_ToggleAllNavigationPoints,
+    LIST_OT_ToggleVisibleNavigationPoints,
 ]

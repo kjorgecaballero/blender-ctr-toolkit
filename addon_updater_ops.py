@@ -1065,7 +1065,12 @@ def register(bl_info):
     updater.select_link = select_link_function
     updater.auto_reload_post_update = False
 
+
     for cls in classes:
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass
         make_annotations(cls)
         bpy.utils.register_class(cls)
 
@@ -1074,7 +1079,10 @@ def register(bl_info):
 
 def unregister():
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass
 
     updater.clear_state()
 

@@ -1,6 +1,6 @@
 """
 Navigation Filter Menu for Constant Materials
-Menu only; operators are in operators/qb_tb_list/list_navigation.py
+
 """
 
 import bpy
@@ -26,6 +26,9 @@ class LIST_MT_NavigationFilterMenu(Menu):
         icon = 'CHECKBOX_HLT' if current == 'NON_NAVIGATION' else 'CHECKBOX_DEHLT'
         op = layout.operator("list.set_navigation_filter", text="Constant Materials", icon=icon)
         op.filter_type = 'NON_NAVIGATION'
+
+        layout.separator()
+        layout.operator("list.toggle_visible_navigation_points", text="Toggle Navigation State", icon='PIVOT_CURSOR')
 
 
 classes = [LIST_MT_NavigationFilterMenu]
