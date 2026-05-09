@@ -374,22 +374,11 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             self.report({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
             return None, None
 
-        root_collection = context.scene.collection
-        original_collections = list(block_obj.users_collection)
-        moved_to_root = False
-        if root_collection not in original_collections:
-            self.report({'INFO'}, f"Temporarily moving '{block_obj.name}' to root collection for duplication")
-            for ob in bpy.data.objects:
-                ob.select_set(False)
-            block_obj.select_set(True)
-            context.view_layer.objects.active = block_obj
-            # Use direct API to move to root collection (avoids operator context issues)
-            for coll in original_collections:
-                if coll != root_collection:
-                    coll.objects.unlink(block_obj)
-            root_collection.objects.link(block_obj)
-            context.view_layer.update()
-            moved_to_root = True
+
+        # Collection movement is handled entirely by the
+        # NAVIGATOR_OT_DuplicateAllBlocksByGroup operator.
+        # We DO NOT move the object here to avoid conflicts.
+
 
         original_mode = context.mode
         original_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
@@ -448,26 +437,6 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                 bpy.ops.object.mode_set(mode=original_mode)
             except:
                 pass
-
-        # Restore original collections using direct API (no operator)
-        if moved_to_root:
-            for ob in bpy.data.objects:
-                ob.select_set(False)
-            block_obj.select_set(True)
-            context.view_layer.objects.active = block_obj
-
-            # Remove from root collection
-            if block_obj.name in root_collection.objects:
-                root_collection.objects.unlink(block_obj)
-
-            # Re-link to original collections
-            for coll in original_collections:
-                if coll != root_collection:
-                    if coll.name in bpy.data.collections:
-                        if block_obj.name not in coll.objects:
-                            coll.objects.link(block_obj)
-            context.view_layer.update()
-            self.report({'INFO'}, f"Restored '{block_obj.name}' to its original collections")
 
         return duplicates_dir, main_texture_dir
 

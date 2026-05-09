@@ -455,10 +455,12 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             if context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Ensure source object is in the root collection
+            # Store original collection and move to root if needed
             root_collection = context.scene.collection
             original_collections = list(source_obj.users_collection)
+            moved_to_root = False
             if root_collection not in original_collections:
+                moved_to_root = True
                 self.report({'INFO'}, f"Temporarily moving '{source_obj.name}' to root collection to prevent duplication bug")
                 for ob in bpy.data.objects:
                     ob.select_set(False)
@@ -665,6 +667,20 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
             finally:
                 restore_vertex_snap_modifiers(snap_states)
                 restore_ps1_render(context, ps1_was_active)
+
+                # Restore original collection if it was moved
+                if moved_to_root and source_obj.name in bpy.data.objects:
+                    obj_to_restore = bpy.data.objects[source_obj.name]
+                    # Unlink from root collection
+                    if obj_to_restore.name in root_collection.objects:
+                        root_collection.objects.unlink(obj_to_restore)
+                    # Re-link to original collections (skip root as it's already removed)
+                    for coll in original_collections:
+                        if coll != root_collection and coll.name in bpy.data.collections:
+                            if obj_to_restore.name not in coll.objects:
+                                coll.objects.link(obj_to_restore)
+                    context.view_layer.update()
+                    self.report({'INFO'}, f"Restored '{obj_to_restore.name}' to its original collections")
 
         finally:
             _temp_duplicated_objects = []
