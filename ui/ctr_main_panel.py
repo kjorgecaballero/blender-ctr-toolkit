@@ -18,7 +18,6 @@ class CTR_PT_MainPanel(Panel):
 
         row = layout.row(align=True)
         row.prop(scene, "ctr_tool_mode", text="")
-        row.separator(factor=2.0)
         draw_help_buttons(row)
 
         if scene.ctr_tool_mode == 'NAVIGATOR':

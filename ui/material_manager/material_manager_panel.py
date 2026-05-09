@@ -2,6 +2,7 @@ import bpy
 from bpy.types import Panel
 
 from ..qb_tb_list.list_helpers import get_material_image_icon
+from ..help_utils import CTR_HelpUtils
 
 
 class CTR_PT_MaterialManager(Panel):
@@ -21,9 +22,11 @@ class CTR_PT_MaterialManager(Panel):
         props = context.scene.ctr_material_list
         obj = context.active_object
 
-        # Filter row
+        # Filter dropdown + help buttons on the same row
         row = layout.row(align=True)
-        row.prop(props, "filter_type", expand=True)
+        row.prop(props, "filter_type", text="")
+        row.separator(factor=1.0)
+        CTR_HelpUtils.draw_help_buttons_into_row(row)
 
         # Search bar
         row = layout.row(align=True)
