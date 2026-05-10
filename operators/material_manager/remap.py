@@ -28,8 +28,9 @@ class MATERIAL_OT_RemapMaterial(Operator):
     def draw(self, context):
         layout = self.layout
         layout.label(text=f"Material: {self.selected_mat_name}")
-        layout.prop_search(self, "new_image_name", bpy.data, "images", text="New Image")
-        layout.operator("material.remap_from_file", text="", icon='FILE_FOLDER')
+        row = layout.row(align=True)
+        row.prop_search(self, "new_image_name", bpy.data, "images", text="New Image")
+        row.operator("material.remap_from_file", text="", icon='FILE_FOLDER')
 
     def execute(self, context):
         obj = context.active_object

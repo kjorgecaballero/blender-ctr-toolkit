@@ -1,7 +1,7 @@
 """
 QB/TB Detection Operators - REINDEX-SAFE NAVIGATION POINTS
 Operators for detecting blocks with navigation point support
-Now with material-based navigation points (reindex-safe)
+Material-based navigation points (reindex-safe)
 Support for complete block detection (4 faces)
 """
 
@@ -14,7 +14,7 @@ from ...utils import qb_tb_navigator
 class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
     """Find all quadblocks and triblocks using edge-based topology with quad edge restriction for triblocks.
     Supports navigation from multiple disconnected starting points marked as navigation points.
-    Now uses material-based navigation points for reindex-safe operation.
+    Material-based navigation points for reindex-safe operation.
     Supports BOTH complete qb/tb selection AND center element selection."""
     bl_idname = "navigator.find_blocks"
     bl_label = "Navigate from Selection/Points"
@@ -256,6 +256,8 @@ class NAVIGATOR_OT_FindBlocks(bpy.types.Operator):
         
         self.report({'INFO'}, f"Found {len(all_results.quadblock_centers)} quadblocks in {len(all_results.quad_group_members)} groups: {', '.join(quad_stats)}")
         self.report({'INFO'}, f"Found {len(all_results.triblock_centers)} triblocks in {len(all_results.tri_group_members)} groups: {', '.join(tri_stats)}")
+        # Concise summary for the user
+        self.report({'INFO'}, f"Found {len(all_results.quadblock_centers)} quadblocks and {len(all_results.triblock_centers)} triblocks")
         
         return {'FINISHED'}
 

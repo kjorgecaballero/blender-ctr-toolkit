@@ -9,6 +9,7 @@ from bpy.types import Panel
 from .list_helpers import get_material_image_icon, get_block_material_name
 from ...addon_updater_ops import updater
 from ..help_utils import draw_help_buttons  # Help buttons
+from ...icons import get_icon               # Custom icons 
 
 
 class LIST_PT_BlockListPanel(Panel):
@@ -477,6 +478,21 @@ class LIST_PT_BlockListPanel(Panel):
                                                  emboss=False)
                     toggle_op.item_name = item['name']
 
+                    # QB/TB Icon right after the checkbox
+                    if item['block_type'] == 'quadblock':
+                        icon_id = get_icon("quadblock_icon")
+                        if icon_id:
+                            left_side.label(text="", icon_value=icon_id)
+                        else:
+                            left_side.label(text="", icon='MESH_CUBE')
+                    else:  # triblock
+                        icon_id = get_icon("triblock_icon")
+                        if icon_id:
+                            left_side.label(text="", icon_value=icon_id)
+                        else:
+                            left_side.label(text="", icon='MESH_CONE')
+
+                    # Main content (material name, issue indicators, etc.)
                     middle = row.row()
                     middle.alignment = 'EXPAND'
 
