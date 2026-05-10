@@ -1,0 +1,44 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        blender-version: ["3.3.0", "3.6.5", "4.2.0"]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install blender-downloader
+
+      - name: Download Blender ${{ matrix.blender-version }}
+        run: |
+          blender-downloader ${{ matrix.blender-version }} --extract --print-blender-executable > blender_execs.txt
+
+      - name: Show blender_execs.txt content
+        run: cat blender_execs.txt
+
+      - name: Run tests
+        run: python run_tests.py
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.blender-version }}
+          path: test_results.csv

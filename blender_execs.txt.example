@@ -1,0 +1,16 @@
+# Example blender_execs.txt
+# Copy this file to blender_execs.txt and edit the paths below
+# Add one full path to blender.exe per line
+
+# Windows example (portable versions):
+C:\Users\YourUsername\Blender\blender-3.3.0-windows-x64\blender.exe
+C:\Users\YourUsername\Blender\blender-3.6.0-windows-x64\blender.exe
+C:\Users\YourUsername\Blender\blender-4.0.0-windows-x64\blender.exe
+C:\Users\YourUsername\Blender\blender-4.2.0-windows-x64\blender.exe
+
+# Linux example:
+# /home/username/blender-3.3.0-linux-x64/blender
+# /home/username/blender-4.0.0-linux-x64/blender
+
+# macOS example:
+# /Applications/Blender.app/Contents/MacOS/Blender

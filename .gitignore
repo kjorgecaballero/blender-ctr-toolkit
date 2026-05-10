@@ -21,5 +21,9 @@ Thumbs.db
 debug/
 *.tmp
 
+# Test files
+test_results.csv
+blender_execs.txt
+
 # Runtime files
-blender-ctr-toolkit_updater/
+blender_ctr_toolkit_updater/
