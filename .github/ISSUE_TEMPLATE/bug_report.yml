@@ -1,0 +1,101 @@
+name: "Bug Report / CTR Toolkit Issue"
+description: "Report a problem or unexpected behavior in CTR Toolkit"
+labels: ["bug", "triage"]
+body:
+  - type: "markdown"
+    attributes:
+      value: |
+        Thanks for reporting! Please fill out all sections below.
+
+  - type: "checkboxes"
+    id: "blender-restart"
+    attributes:
+      label: "Blender restart"
+      description: "Before you continue: Did you restart Blender after the error occurred? Many temporary issues are solved by a restart."
+      options:
+        - label: "Yes, the issue persists after a fresh Blender restart."
+          required: true
+
+  - type: "checkboxes"
+    id: "check-known"
+    attributes:
+      label: "Check existing issues"
+      description: "Please search existing issues to see if your problem was already reported."
+      options:
+        - label: "I have searched existing issues, and this is not a duplicate."
+          required: true
+
+  - type: "input"
+    id: "blender-version"
+    attributes:
+      label: "Blender version"
+      placeholder: "e.g., 3.3.0, 3.6.5, 4.2.0, 5.0.0"
+    validations:
+      required: true
+
+  - type: "input"
+    id: "addon-version"
+    attributes:
+      label: "CTR Toolkit version"
+      description: "You can find it in Blender Preferences → Add-ons → Blender CTR Toolkit"
+      placeholder: "v0.0.1"
+    validations:
+      required: true
+
+  - type: "dropdown"
+    id: "affected-area"
+    attributes:
+      label: "Affected area"
+      description: "Which section of the addon is causing the issue?"
+      options:
+        - "Navigator"
+        - "Validator"
+        - "Render"
+        - "Range Box"
+        - "Exporter"
+        - "Material Manager"
+        - "Item List"
+        - "Mesh menus"
+        - "Updater"
+        - "Not sure"
+        - "Other"
+
+    validations:
+      required: true
+
+  - type: "textarea"
+    id: "what-happened"
+    attributes:
+      label: "What happened?"
+      description: "Describe the error clearly. Attach screenshots if possible (drag & drop images here)."
+      placeholder: "When I click Navigate from a quadblock selection, nothing happens..."
+    validations:
+      required: true
+
+  - type: "textarea"
+    id: "steps"
+    attributes:
+      label: "Steps to reproduce"
+      description: "Provide a step-by-step guide to trigger the bug."
+      placeholder: |
+        1. Open a mesh with quadblocks.
+        2. Enter Edit Mode.
+        3. Select a center vertex.
+        4. Press "Navigate".
+        5. The error appears...
+    validations:
+      required: true
+
+  - type: "textarea"
+    id: "console-log"
+    attributes:
+      label: "Console error log (if any)"
+      description: "Paste any error messages from Blender's System Console or Info Log. On Windows go to Window → Toggle System Console. On macOS/Linux launch Blender from a terminal."
+      placeholder: |
+        Traceback (most recent call last):
+        File "...", line ...
+        ...
+
+  - type: "markdown"
+    attributes:
+      value: "Thank you for helping improve CTR Toolkit!"

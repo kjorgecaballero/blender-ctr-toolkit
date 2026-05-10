@@ -1,0 +1,67 @@
+name: "Feature Request"
+description: "Suggest an idea or improvement for CTR Toolkit"
+labels: ["enhancement"]
+body:
+  - type: "markdown"
+    attributes:
+      value: |
+        Thanks for taking the time to suggest new features for CTR Toolkit! All feature requests will be reviewed and responded to with an expectation of how likely it will be implemented after review.
+
+  - type: "checkboxes"
+    id: "check-existing"
+    attributes:
+      label: "Check against existing requests"
+      description: "Please check that your feature request is not already listed here - if it is, then please comment on one of those issues instead. Duplicate request issues will simply be closed."
+      options:
+        - label: "I have checked existing feature requests, and my idea is different"
+          required: true
+
+  - type: "input"
+    id: "blender-version"
+    attributes:
+      label: "Blender version (if relevant)"
+      placeholder: "e.g., 3.3.0, 3.6.5, 4.2.0, 5.0.0"
+
+  - type: "input"
+    id: "addon-version"
+    attributes:
+      label: "CTR Toolkit version (if relevant)"
+      placeholder: "v0.0.1"
+
+  - type: "dropdown"
+    id: "affected-area"
+    attributes:
+      label: "Affected area"
+      description: "Which section would this feature belong to?"
+      options:
+        - "Navigator"
+        - "Validator"
+        - "Render"
+        - "Range Box"
+        - "Exporter"
+        - "Material Manager"
+        - "Item List"
+        - "Mesh menus"
+        - "Updater"
+        - "Not sure"
+        - "Other"
+
+  - type: "textarea"
+    id: "problem-statement"
+    attributes:
+      label: "Describe the context"
+      description: "What problem do you want solved? What are you trying to do? A clearly defined problem can help to come up with the best solution, not just the first solution to come to mind."
+    validations:
+      required: true
+
+  - type: "textarea"
+    id: "feature-idea"
+    attributes:
+      label: "How do you imagine your feature works?"
+      description: "In context, where would this feature happen? How would it work? What inputs are needed from the user? What is the ending state, and how does it solve the problem identified above?"
+    validations:
+      required: true
+
+  - type: "markdown"
+    attributes:
+      value: "Thank you for helping make CTR Toolkit better!"
