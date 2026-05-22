@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+from ...icons import get_icon
 from ...utils.qb_tb_navigator.constant_material_utils import clear_all_constant_materials
 
 
@@ -33,7 +34,11 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
         col = layout.column(align=True)
         col.label(text="• Constant materials (restored; fallback if missing)", icon='MATERIAL')
         col.label(text="• Vertex groups starting with QB_ or TB_", icon='GROUP_VERTEX')
-        col.label(text="• Block detection cache", icon='FILE')
+        cache_icon = get_icon("quadblock_cache_icon")
+        if cache_icon:
+            col.label(text="• Block detection cache", icon_value=cache_icon)
+        else:
+            col.label(text="• Block detection cache", icon='MEMORY')   # fallback
         layout.separator()
         layout.label(text="This action cannot be undone.", icon='QUESTION')
 
@@ -41,24 +46,20 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
         obj = context.edit_object
         original_mode = context.mode
 
-        # Switch to OBJECT mode for safe deletion of materials and vertex groups
         if original_mode == 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='OBJECT')
 
         try:
-            # 1. Clear constant materials (with fallback duplication)
             cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, fallback_duplicate=True)
             if cleared_orig > 0 or restored_fb > 0:
                 self.report({'INFO'}, f"Constant materials: {cleared_orig} restored to original, {restored_fb} created via fallback")
             if failed:
                 self.report({'WARNING'}, f"Could not clear some constant materials: {', '.join(failed)}")
 
-            # 2. Delete all QB/TB vertex groups
             vg_count = delete_block_vertex_groups(obj)
             if vg_count > 0:
                 self.report({'INFO'}, f"Deleted {vg_count} vertex groups (QB_/TB_)")
 
-            # 3. Clear block cache properties
             props_to_remove = [
                 "quadblock_centers", "triblock_faces", "used_face_indices",
                 "block_type", "quadblock_groups", "quad_group_members",
@@ -72,7 +73,6 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
                     del obj[prop]
                     removed_count += 1
 
-            # Also remove any leftover constant_name_* properties (safety)
             const_props = [prop for prop in obj.keys() if prop.startswith("constant_name_")]
             for prop in const_props:
                 del obj[prop]
@@ -81,7 +81,6 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
             if removed_count > 0:
                 self.report({'INFO'}, f"Removed {removed_count} cache properties")
 
-            # 4. Clear selection in edit mode (will be restored later)
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
                 bm = bmesh.from_edit_mesh(obj.data)
@@ -101,7 +100,6 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
             return {'CANCELLED'}
 
         finally:
-            # Restore original mode if needed
             if original_mode == 'EDIT_MESH' and context.mode != 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
 

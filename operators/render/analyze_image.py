@@ -5,6 +5,8 @@ from bpy.types import Operator
 class AnalyzeImage(Operator):
     bl_idname = "psx.analyze_image"
     bl_label = "Analyze Image"
+    bl_description = "Scan the active material's texture for transparency types and recommend blend mode"
+    
     def execute(self, context):
         scene = context.scene
         obj = context.active_object

@@ -8,9 +8,12 @@ from bpy.types import Panel
 
 from .list_helpers import get_material_image_icon, get_block_material_name
 from ...addon_updater_ops import updater
-from ..help_utils import draw_help_buttons  # Help buttons
-from ...icons import get_icon               # Custom icons 
+from ..help_utils import draw_help_buttons
+from ...icons import get_icon
 
+def _icon(name, fallback):
+    ico = get_icon(name)
+    return {'icon_value': ico} if ico else {'icon': fallback}
 
 class LIST_PT_BlockListPanel(Panel):
     bl_label = "Navigation List"
@@ -35,20 +38,15 @@ class LIST_PT_BlockListPanel(Panel):
             layout.label(text="Select an object in Edit Mode", icon='ERROR')
             return
 
-        # compact column 
         main_col = layout.column(align=True)
-
-        # CALCULATE AND SHOW COUNT FIRST
 
         display_items = []
         display_counts = {"qb": 0, "tb": 0, "total": 0}
-        nav_point_count = 0  # Count of navigation points
+        nav_point_count = 0
 
         if scene.list_display_type == 'VERTEX_GROUPS':
-            # VERTEX GROUPS DISPLAY
             for vg in obj.vertex_groups:
                 vg_name = vg.name
-
                 if vg_name.startswith("QB_") and scene.list_filter_show_qb:
                     try:
                         block_id = int(vg_name[3:])
@@ -63,7 +61,6 @@ class LIST_PT_BlockListPanel(Panel):
                         display_counts["total"] += 1
                     except ValueError:
                         continue
-
                 elif vg_name.startswith("TB_") and scene.list_filter_show_tb:
                     try:
                         block_id = int(vg_name[3:])
@@ -80,18 +77,14 @@ class LIST_PT_BlockListPanel(Panel):
                         continue
 
         elif scene.list_display_type == 'CONSTANT_MATERIALS':
-            # CONSTANT MATERIALS DISPLAY
             if "constant_materials" in obj and obj["constant_materials"]:
                 constant_materials = obj["constant_materials"]
-
                 for mat_name, info in constant_materials.items():
                     block_type = info.get("block_type", "")
                     block_id = info.get("block_id", 0)
                     is_nav_point = info.get("is_navigation_point", False)
-
                     if (block_type == "quadblock" and scene.list_filter_cm_qb) or \
                        (block_type == "triblock" and scene.list_filter_cm_tb):
-
                         display_items.append({
                             'type': 'constant_material',
                             'name': mat_name,
@@ -101,100 +94,69 @@ class LIST_PT_BlockListPanel(Panel):
                             'is_nav_point': is_nav_point,
                             'data': info
                         })
-
                         if block_type == "quadblock":
                             display_counts["qb"] += 1
                         else:
                             display_counts["tb"] += 1
                         display_counts["total"] += 1
-
                         if is_nav_point:
                             nav_point_count += 1
-
-        # DISPLAY MODE SELECTION
 
         mode_row = main_col.row()
         mode_row.prop(scene, "list_display_type", expand=True)
 
-        # Display based on selected type
         if scene.list_display_type == 'VERTEX_GROUPS':
-            # VERTEX GROUPS DISPLAY
             has_block_vertex_groups = any(vg.name.startswith(("QB_", "TB_")) for vg in obj.vertex_groups)
             has_detected_blocks = ("quadblock_centers" in obj and obj["quadblock_centers"]) or \
                                  ("triblock_faces" in obj and obj["triblock_faces"])
 
-            # ACTION BUTTONS - Only show if there are vertex groups or blocks detected
             if has_detected_blocks or has_block_vertex_groups:
-                # First row: [Generate][Clear]
                 row1 = main_col.row(align=True)
-
-                # Always show Generate if blocks are detected
                 if has_detected_blocks:
                     row1.operator("list.create_block_vertex_groups",
                                text="Generate",
-                               icon='GROUP_VERTEX')
-
-                # Only show Clear if vertex groups exist
+                               **_icon("vertex_group_icon", 'GROUP_VERTEX'))
                 if has_block_vertex_groups:
                     row1.operator("list.clear_block_vertex_groups",
                                text="Clear",
-                               icon='TRASH')
+                               **_icon("clear_icon", 'TRASH'))
 
-                # Second row: [Groups][Check]
                 row2 = main_col.row(align=True)
-
-                # Direct dropdown menu for selecting vertex groups
                 if has_block_vertex_groups:
-                    row2.menu("LIST_MT_VertexGroupMenu", text="Groups", icon='DOWNARROW_HLT')
-
-                # CHECK BUTTON - Only show if vertex groups exist
+                    row2.menu("LIST_MT_VertexGroupMenu", text="Groups", icon='GROUP')
                 if has_block_vertex_groups:
                     row2.operator("list.select_list_from_block",
                                text="Check",
-                               icon='CHECKBOX_HLT')
+                               **_icon("check_icon", 'CHECKBOX_HLT'))
 
-            # ALWAYS draw the list (even if empty, so filters are visible)
             self.draw_custom_list(main_col, context, obj, display_items, display_counts,
                                  has_vertex_groups=has_block_vertex_groups,
                                  has_detected_blocks=has_detected_blocks)
 
         elif scene.list_display_type == 'CONSTANT_MATERIALS':
-            # CONSTANT MATERIALS DISPLAY
             has_constant_materials = "constant_materials" in obj and obj["constant_materials"]
             has_detected_blocks = ("quadblock_centers" in obj and obj["quadblock_centers"]) or \
                                  ("triblock_faces" in obj and obj["triblock_faces"])
 
-            # 2x2 BUTTON LAYOUT
-            # ROW 1: [Assign][Clear]
             row1 = main_col.row(align=True)
-
-            # Assign button - show if blocks are detected
             if has_detected_blocks:
                 row1.operator("list.assign_constant_material",
                             text="Assign",
-                            icon='MATERIAL')
-
-            # Clear button - show if constant materials exist
+                            **_icon("material_icon", 'MATERIAL'))
             if has_constant_materials:
                 row1.operator("list.clear_constant_material",
                             text="Clear",
-                            icon='TRASH')
+                            **_icon("clear_icon", 'TRASH'))
 
-            # ROW 2: [Groups][Check]
             row2 = main_col.row(align=True)
-
-            # Groups button - opens management dialog
             if has_constant_materials:
                 group_button_text = scene.list_active_group if scene.list_active_group else "Groups"
-                row2.operator("list.group_management_dialog", text=group_button_text, icon='DOWNARROW_HLT')
-
-            # CHECK BUTTON
+                row2.operator("list.group_management_dialog", text=group_button_text, icon='GROUP')
             if has_constant_materials:
                 row2.operator("list.select_list_from_block",
                             text="Check",
-                            icon='CHECKBOX_HLT')
+                            **_icon("check_icon", 'CHECKBOX_HLT'))
 
-            # ALWAYS draw the list (even if empty, so filters are visible)
             self.draw_custom_list(main_col, context, obj, display_items, display_counts,
                                  has_constant_materials=has_constant_materials,
                                  has_detected_blocks=has_detected_blocks,
@@ -203,13 +165,8 @@ class LIST_PT_BlockListPanel(Panel):
     def draw_custom_list(self, layout, context, obj, items, display_counts,
                         has_vertex_groups=False, has_constant_materials=False,
                         has_detected_blocks=False, nav_point_count=0):
-        """Draw a custom scrollable list with search, sort, material filter, vertical scrollbar,
-        Search bar, filter dropdowns, action buttons in a single row,
-        list, pagination. The entire list section is collapsible.
-        """
         scene = context.scene
 
-        # COLLAPSIBLE LIST SECTION
         list_box = layout.box()
         header_row = list_box.row(align=True)
         header_row.prop(scene, "list_show_items",
@@ -217,33 +174,32 @@ class LIST_PT_BlockListPanel(Panel):
                         icon_only=True, emboss=False)
         header_row.label(text="Item List")
 
-        # Help buttons on the right side of the header (reuse existing function)
         help_row = header_row.row(align=True)
         help_row.alignment = 'RIGHT'
-        draw_help_buttons(help_row)  # Uses help_utils
+        draw_help_buttons(help_row)
 
         if not scene.list_show_items:
-            return  # Collapsed: nothing else to draw
+            return
 
-        # 1. SEARCH BAR
         search_row = list_box.row(align=True)
         search_row.prop(scene, "list_search_text", text="", icon='VIEWZOOM')
 
-        # 2. FILTER DROPDOWNS
         if scene.list_display_type == 'VERTEX_GROUPS':
             filter_row = list_box.row()
             filter_row.alignment = 'EXPAND'
-
             split = filter_row.split(factor=0.5)
 
             left_col = split.row()
             left_col.alignment = 'EXPAND'
             material_text = scene.list_material_filter_vg if scene.list_material_filter_vg else "All"
-            left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
+            vg_icon = get_icon("vertex_group_icon")
+            if vg_icon:
+                left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon_value=vg_icon)
+            else:
+                left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
 
             right_col = split.row()
             right_col.alignment = 'EXPAND'
-
             issue_text = {
                 'ALL': "All",
                 'VALID': "Valid",
@@ -255,19 +211,21 @@ class LIST_PT_BlockListPanel(Panel):
                 'OUT_OF_RANGE': "Out of Range",
                 'MULTIPLE_MATERIALS': "Multiple Mats",
             }.get(scene.list_issue_filter, "All")
-
             right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
 
         elif scene.list_display_type == 'CONSTANT_MATERIALS':
             menus_row = list_box.row()
             menus_row.alignment = 'EXPAND'
-
             split = menus_row.split(factor=0.5)
 
             left_col = split.row()
             left_col.alignment = 'EXPAND'
             material_text = scene.list_material_filter_cm if scene.list_material_filter_cm else "All"
-            left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
+            const_icon = get_icon("constant_mat_icon")
+            if const_icon:
+                left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon_value=const_icon)
+            else:
+                left_col.menu("LIST_MT_MaterialFilterMenu", text=material_text, icon='MATERIAL')
 
             right_col = split.row()
             right_col.alignment = 'EXPAND'
@@ -276,55 +234,111 @@ class LIST_PT_BlockListPanel(Panel):
                 nav_text = "Navigation"
             elif scene.list_navigation_filter == 'NON_NAVIGATION':
                 nav_text = "Constant"
+            nav_icon = get_icon("nav_point_icon")
+            if nav_icon:
+                right_col.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon_value=nav_icon)
+            else:
+                right_col.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon='PIVOT_CURSOR')
 
-            right_col.menu("LIST_MT_NavigationFilterMenu", text=nav_text, icon='PIVOT_CURSOR')
-
-        # 3. ACTION BUTTONS (single row below filters)
         if scene.list_display_type == 'VERTEX_GROUPS':
             action_row = list_box.row(align=True)
-            action_row.alignment = 'CENTER'   # Centers the button cluster
-            action_row.prop(scene, "list_filter_show_qb", text="", icon='VERTEXSEL', toggle=True)
-            action_row.prop(scene, "list_filter_show_tb", text="", icon='FACESEL', toggle=True)
-            action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
-            action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
-            action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
+            action_row.alignment = 'CENTER'
+
+            qb_icon = get_icon("quadblock_icon")
+            tb_icon = get_icon("triblock_icon")
+            check_all_icon = get_icon("check_all_icon")
+            uncheck_all_icon = get_icon("uncheck_all_icon")
+
+            if qb_icon:
+                action_row.prop(scene, "list_filter_show_qb", text="", icon_value=qb_icon, toggle=True)
+            else:
+                action_row.prop(scene, "list_filter_show_qb", text="", icon='VERTEXSEL', toggle=True)
+
+            if tb_icon:
+                action_row.prop(scene, "list_filter_show_tb", text="", icon_value=tb_icon, toggle=True)
+            else:
+                action_row.prop(scene, "list_filter_show_tb", text="", icon='FACESEL', toggle=True)
+
+            if check_all_icon:
+                action_row.operator("list.check_all", text="", icon_value=check_all_icon)
+            else:
+                action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
+
+            if uncheck_all_icon:
+                action_row.operator("list.clear_checks_in_current_list", text="", icon_value=uncheck_all_icon)
+            else:
+                action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
+
+            typeqb_icon = get_icon("typeqb_icon")
+            typetb_icon = get_icon("typetb_icon")
+            if scene.list_sort_type_direction == 'ASC' and typeqb_icon:
+                action_row.operator("list.toggle_sort_type", text="", icon_value=typeqb_icon)
+            elif scene.list_sort_type_direction == 'DESC' and typetb_icon:
+                action_row.operator("list.toggle_sort_type", text="", icon_value=typetb_icon)
+            else:
+                fallback_icon = 'VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL'
+                action_row.operator("list.toggle_sort_type", text="", icon=fallback_icon)
+
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
 
         else:  # CONSTANT_MATERIALS
             action_row = list_box.row(align=True)
-            action_row.alignment = 'CENTER'   # Centers the button cluster
-            action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
-            action_row.prop(scene, "list_filter_cm_tb", text="", icon='FACESEL', toggle=True)
-            action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
-            action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
-            action_row.operator("list.toggle_sort_type", text="", icon='VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL')
+            action_row.alignment = 'CENTER'
+
+            qb_icon = get_icon("quadblock_icon")
+            tb_icon = get_icon("triblock_icon")
+            check_all_icon = get_icon("check_all_icon")
+            uncheck_all_icon = get_icon("uncheck_all_icon")
+
+            if qb_icon:
+                action_row.prop(scene, "list_filter_cm_qb", text="", icon_value=qb_icon, toggle=True)
+            else:
+                action_row.prop(scene, "list_filter_cm_qb", text="", icon='VERTEXSEL', toggle=True)
+
+            if tb_icon:
+                action_row.prop(scene, "list_filter_cm_tb", text="", icon_value=tb_icon, toggle=True)
+            else:
+                action_row.prop(scene, "list_filter_cm_tb", text="", icon='FACESEL', toggle=True)
+
+            if check_all_icon:
+                action_row.operator("list.check_all", text="", icon_value=check_all_icon)
+            else:
+                action_row.operator("list.check_all", text="", icon='CHECKBOX_HLT')
+
+            if uncheck_all_icon:
+                action_row.operator("list.clear_checks_in_current_list", text="", icon_value=uncheck_all_icon)
+            else:
+                action_row.operator("list.clear_checks_in_current_list", text="", icon='CHECKBOX_DEHLT')
+
+            typeqb_icon = get_icon("typeqb_icon")
+            typetb_icon = get_icon("typetb_icon")
+            if scene.list_sort_type_direction == 'ASC' and typeqb_icon:
+                action_row.operator("list.toggle_sort_type", text="", icon_value=typeqb_icon)
+            elif scene.list_sort_type_direction == 'DESC' and typetb_icon:
+                action_row.operator("list.toggle_sort_type", text="", icon_value=typetb_icon)
+            else:
+                fallback_icon = 'VERTEXSEL' if scene.list_sort_type_direction == 'ASC' else 'FACESEL'
+                action_row.operator("list.toggle_sort_type", text="", icon=fallback_icon)
+
             action_row.operator("list.toggle_sort_name", text="", icon='SORTALPHA')
 
-            # Navigation toggle is now in the dropdown menu, not here.
-
-        # 4. SCROLL BOX (contains position text, items, and pagination)
-        # Build filtered items, apply sorting, pagination, etc.
         search_text = scene.list_search_text.lower()
 
-        # Use the correct material filter based on display mode
         if scene.list_display_type == 'VERTEX_GROUPS':
             material_filter = scene.list_material_filter_vg
             issue_filter = scene.list_issue_filter
-        else:  # CONSTANT_MATERIALS
+        else:
             material_filter = scene.list_material_filter_cm
             issue_filter = None
 
         navigation_filter = scene.list_navigation_filter if scene.list_display_type == 'CONSTANT_MATERIALS' else 'ALL'
 
-        # Get stored issues for vertex groups (if any)
         issues_dict = {}
         if scene.list_display_type == 'VERTEX_GROUPS' and "vertex_group_issues" in obj:
             issues_dict = dict(obj["vertex_group_issues"])
 
-        # Apply search and filters
         filtered_items = []
         for item in items:
-            # Skip items based on material filter
             if material_filter:
                 if scene.list_display_type == 'VERTEX_GROUPS':
                     block_material = get_block_material_name(obj, item['block_type'], item['block_id'])
@@ -334,7 +348,6 @@ class LIST_PT_BlockListPanel(Panel):
                     if item['name'] != material_filter:
                         continue
 
-            # Apply issue filter (only for vertex groups) 
             if scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
                 item_issues = issues_dict.get(item['name'], [])
                 real_issues = [i for i in item_issues if i not in ('quadblock', 'triblock')]
@@ -360,7 +373,6 @@ class LIST_PT_BlockListPanel(Panel):
                 if not show:
                     continue
 
-            # Apply navigation point filter (only for constant materials)
             if scene.list_display_type == 'CONSTANT_MATERIALS':
                 is_nav_point = item.get('is_nav_point', False)
                 if navigation_filter == 'NAVIGATION_POINTS' and not is_nav_point:
@@ -368,7 +380,6 @@ class LIST_PT_BlockListPanel(Panel):
                 elif navigation_filter == 'NON_NAVIGATION' and is_nav_point:
                     continue
 
-            # Apply text search filter
             if search_text:
                 if search_text in item['name'].lower():
                     filtered_items.append(item)
@@ -386,7 +397,6 @@ class LIST_PT_BlockListPanel(Panel):
             else:
                 filtered_items.append(item)
 
-        # Apply group filter (only for constant materials)
         active_group = scene.list_active_group
         if scene.list_display_type == 'CONSTANT_MATERIALS' and active_group:
             if "constant_material_groups" in scene:
@@ -403,7 +413,6 @@ class LIST_PT_BlockListPanel(Panel):
                 except:
                     pass
 
-        # Apply compound sorting (first by type, then by name)
         reverse_type = (scene.list_sort_type_direction == 'DESC')
         reverse_name = (scene.list_sort_name_direction == 'DESC')
 
@@ -432,14 +441,11 @@ class LIST_PT_BlockListPanel(Panel):
         end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
         visible_items = filtered_items[start_idx:end_idx]
 
-        # Create the scroll box
         if visible_items or total_items > 0:
             scroll_box = list_box.box()
 
-            # COUNTER AND PAGINATION 
             info_col = scroll_box.column(align=True)
 
-            # Counter row (always visible)
             count_row = info_col.row()
             count_row.alignment = 'CENTER'
             if scene.list_display_type == 'CONSTANT_MATERIALS':
@@ -448,14 +454,12 @@ class LIST_PT_BlockListPanel(Panel):
                 count_text = f"QB: {display_counts['qb']} | TB: {display_counts['tb']}"
             count_row.label(text=count_text)
 
-            # Pagination row (only if items exist)
             if total_items > 0:
                 pos_row = info_col.row()
                 pos_row.alignment = 'CENTER'
                 pos_text = f"items {start_idx+1}-{end_idx} of {total_items}"
                 pos_row.label(text=pos_text)
 
-            # Items list
             if visible_items:
                 multi_selected = {}
                 if "multi_selected_items" in obj:
@@ -478,21 +482,19 @@ class LIST_PT_BlockListPanel(Panel):
                                                  emboss=False)
                     toggle_op.item_name = item['name']
 
-                    # QB/TB Icon right after the checkbox
                     if item['block_type'] == 'quadblock':
                         icon_id = get_icon("quadblock_icon")
                         if icon_id:
                             left_side.label(text="", icon_value=icon_id)
                         else:
                             left_side.label(text="", icon='MESH_CUBE')
-                    else:  # triblock
+                    else:
                         icon_id = get_icon("triblock_icon")
                         if icon_id:
                             left_side.label(text="", icon_value=icon_id)
                         else:
                             left_side.label(text="", icon='MESH_CONE')
 
-                    # Main content (material name, issue indicators, etc.)
                     middle = row.row()
                     middle.alignment = 'EXPAND'
 
@@ -519,7 +521,7 @@ class LIST_PT_BlockListPanel(Panel):
                                     right_icon.alignment = 'RIGHT'
                                     op = right_icon.operator("list.show_vertex_group_issues",
                                                              text="",
-                                                             icon='ERROR',
+                                                             **_icon("warning_icon", 'ERROR'),
                                                              emboss=False)
                                     op.group_name = item['name']
 
@@ -530,19 +532,32 @@ class LIST_PT_BlockListPanel(Panel):
                         if isinstance(material_icon, int) and material_icon != 0:
                             middle.label(text=display_text, icon_value=material_icon)
                         else:
-                            middle.label(text=display_text, icon='MATERIAL')
+                            const_icon = get_icon("constant_mat_icon")
+                            if const_icon:
+                                middle.label(text=display_text, icon_value=const_icon)
+                            else:
+                                middle.label(text=display_text, icon='MATERIAL')
 
+                    # TOGGLE BUTTON SECTION
                     if item['type'] == 'constant_material':
                         right_side = row.row(align=True)
                         right_side.alignment = 'RIGHT'
-                        nav_icon = 'PIVOT_ACTIVE' if item.get('is_nav_point', False) else 'PIVOT_CURSOR'
-                        nav_op = right_side.operator("list.toggle_navigation_point",
-                                                   text="",
-                                                   icon=nav_icon,
-                                                   emboss=False)
+                        is_nav = item.get('is_nav_point', False)
+                        # Use custom icons if available, otherwise fallback to native Blender icons
+                        nav_icon_val = get_icon("nav_point_icon") if is_nav else get_icon("constant_mat_icon")
+                        if nav_icon_val:
+                            nav_op = right_side.operator("list.toggle_navigation_point",
+                                                       text="",
+                                                       icon_value=nav_icon_val,
+                                                       emboss=False)
+                        else:
+                            fallback_icon = 'PIVOT_ACTIVE' if is_nav else 'PIVOT_CURSOR'
+                            nav_op = right_side.operator("list.toggle_navigation_point",
+                                                       text="",
+                                                       icon=fallback_icon,
+                                                       emboss=False)
                         nav_op.material_name = item['name']
 
-            # Pagination controls inside the scroll box
             if total_items > 0:
                 nav_row = scroll_box.row(align=True)
                 nav_row.alignment = 'CENTER'
@@ -581,7 +596,6 @@ class LIST_PT_BlockListPanel(Panel):
 
                 nav_row.enabled = True
         else:
-            # Show message when no items found
             message_row = list_box.row()
             message_row.alignment = 'CENTER'
 
@@ -596,7 +610,7 @@ class LIST_PT_BlockListPanel(Panel):
                             message = "Both QB and TB filters are off"
                         else:
                             message = "No vertex groups found with current filters."
-                else:  # CONSTANT_MATERIALS
+                else:
                     if not has_constant_materials and not has_detected_blocks:
                         message = "No blocks detected. Run 'Navigate' first."
                     elif not has_constant_materials and has_detected_blocks:

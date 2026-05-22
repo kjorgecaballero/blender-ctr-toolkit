@@ -7,6 +7,7 @@ class SetBackfaceVisibility(Operator):
     """Unified operator to set backface visibility on materials"""
     bl_idname = "psx.set_backface"
     bl_label = "Set Backface Visibility"
+    bl_description = "Show or hide backfaces on selected materials (global or per selected faces)"
     bl_options = {'REGISTER', 'UNDO'}
 
     show: BoolProperty(

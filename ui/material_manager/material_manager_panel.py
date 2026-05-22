@@ -6,7 +6,7 @@ from ..help_utils import CTR_HelpUtils
 
 
 class CTR_PT_MaterialManager(Panel):
-    bl_label = "CTR Material Manager"
+    bl_label = "Constant Material Manager"
     bl_idname = "CTR_PT_material_manager"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -57,7 +57,7 @@ class CTR_PT_MaterialManager(Panel):
 
         remap_row = row2.row(align=True)
         remap_row.enabled = (props.selected_index >= 0 and props.selected_index < len(props.items))
-        remap_row.operator("material.remap_material", text="Remap", icon='FILE_REFRESH')
+        remap_row.operator("material.remap_material", text="Remap", icon='IMAGE_DATA')
 
         row2.operator("material.refresh_list", text="Refresh", icon='FILE_REFRESH')
 

@@ -220,7 +220,11 @@ def execute_obj_import(filepath):
         return bpy.ops.import_scene.obj(filepath=filepath)
 
 
-# HELPERS FOR RENDER MODULE
+# VERSION HELPERS FOR RENDER MODULE 
+
+def is_blender_ge_3_5():
+    """Return True if Blender version is 3.5.0 or higher."""
+    return bpy.app.version >= (3, 5, 0)
 
 
 def is_blender_ge_4_0():

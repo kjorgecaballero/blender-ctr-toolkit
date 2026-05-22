@@ -9,12 +9,12 @@ import json
 import bpy
 from bpy.types import Operator, PropertyGroup
 from bpy.props import StringProperty, CollectionProperty
+from ...icons import get_icon
 
 # Global variable to keep a reference to the active management dialog
 _active_management_dialog = None
 
 
-# get checked constant materials from the object
 def _get_checked_materials(context):
     obj = context.edit_object
     if not obj or "multi_selected_items" not in obj:
@@ -24,15 +24,12 @@ def _get_checked_materials(context):
     return [m for m in multi.keys() if m in const_dict]
 
 
-# Property group for collection items (used in dropdown)
 class GroupItem(PropertyGroup):
     name: StringProperty()
 
 
-# Refresh the groups collection from scene data, including a "None" option
 def _refresh_groups_collection(collection, scene):
     collection.clear()
-    # Add "None" option (special item to disable group filter)
     none_item = collection.add()
     none_item.name = "None"
     groups_dict = {}
@@ -47,9 +44,6 @@ def _refresh_groups_collection(collection, scene):
         item = collection.add()
         item.name = name
 
-
-
-# Main dialog: group dropdown + action buttons
 
 class LIST_OT_GroupManagementDialog(Operator):
     bl_idname = "list.group_management_dialog"
@@ -113,15 +107,22 @@ class LIST_OT_GroupManagementDialog(Operator):
         col.separator()
 
         row = col.row(align=True)
-        row.operator("list.new_group_simple", text="New Group", icon='ADD')
+        row.operator("list.new_group_simple", text="New Group", icon='COLLECTION_NEW')
 
         if self.selected_group_name and self.selected_group_name != "None":
-            op = row.operator("list.delete_group_simple", text="Delete Group", icon='TRASH')
+            remove_icon_id = get_icon("remove_group_icon")
+            if remove_icon_id:
+                op = row.operator("list.delete_group_simple", text="Delete Group", icon_value=remove_icon_id)
+            else:
+                op = row.operator("list.delete_group_simple", text="Delete Group", icon='TRASH')
             op.group_name = self.selected_group_name
         else:
             sub = row.row(align=True)
             sub.enabled = False
-            sub.operator("list.delete_group_simple", text="Delete Group", icon='TRASH')
+            if get_icon("remove_group_icon"):
+                sub.operator("list.delete_group_simple", text="Delete Group", icon_value=get_icon("remove_group_icon"))
+            else:
+                sub.operator("list.delete_group_simple", text="Delete Group", icon='TRASH')
 
         col.separator()
 
@@ -149,8 +150,6 @@ class LIST_OT_GroupManagementDialog(Operator):
         return {'FINISHED'}
 
 
-# New Group (empty field each time)
-
 class LIST_OT_NewGroupSimple(Operator):
     bl_idname = "list.new_group_simple"
     bl_label = "New Group"
@@ -160,7 +159,7 @@ class LIST_OT_NewGroupSimple(Operator):
     group_name: StringProperty(name="Group Name", default="")
 
     def invoke(self, context, event):
-        self.group_name = ""   # Reset to empty field
+        self.group_name = ""
         return context.window_manager.invoke_props_dialog(self)
 
     def draw(self, context):
@@ -197,9 +196,6 @@ class LIST_OT_NewGroupSimple(Operator):
         return {'FINISHED'}
 
 
-
-# Delete Group
-
 class LIST_OT_DeleteGroupSimple(Operator):
     bl_idname = "list.delete_group_simple"
     bl_label = "Delete Group"
@@ -230,9 +226,6 @@ class LIST_OT_DeleteGroupSimple(Operator):
         self.report({'INFO'}, f"Deleted group '{name}'. The dropdown will refresh automatically.")
         return {'FINISHED'}
 
-
-
-# Add checked materials to a single group (with verification)
 
 class LIST_OT_AddToSingleGroup(Operator):
     bl_idname = "list.add_to_single_group"
@@ -274,11 +267,9 @@ class LIST_OT_AddToSingleGroup(Operator):
         already_present = selected_set & existing
 
         if not to_add:
-            # All selected items are already in the group
             self.report({'WARNING'}, f"All selected items are already in group '{group_name}'.")
             return {'CANCELLED'}
 
-        # Add only the new ones
         groups[group_name] = list(existing | to_add)
         scene["constant_material_groups"] = json.dumps(groups)
 
@@ -289,9 +280,6 @@ class LIST_OT_AddToSingleGroup(Operator):
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
-
-
-# Remove checked materials from a single group
 
 class LIST_OT_RemoveFromSingleGroup(Operator):
     bl_idname = "list.remove_from_single_group"
@@ -341,7 +329,6 @@ class LIST_OT_RemoveFromSingleGroup(Operator):
         return {'FINISHED'}
 
 
-# Registration list
 group_operator_classes = [
     GroupItem,
     LIST_OT_GroupManagementDialog,

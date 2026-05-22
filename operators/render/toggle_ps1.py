@@ -155,6 +155,8 @@ def set_all_image_textures_interpolation(interpolation='Closest'):
 class TogglePS1Resolution(Operator):
     bl_idname = "psx.toggle_ps1_resolution"
     bl_label = "Toggle PS1 Resolution"
+    bl_description = "Enable/disable low-resolution compositing (512x216) with pixelation effect"
+    
     def execute(self, context):
         scene = context.scene
         new_state = not scene.ps1_resolution
@@ -170,6 +172,8 @@ class TogglePS1Resolution(Operator):
 class ToggleCTRRender(Operator):
     bl_idname = "psx.toggle_ctr_render"
     bl_label = "Toggle CTR Render"
+    bl_description = "Activate/deactivate full PS1-style material override, vertex color attributes, and compositing"
+    
     def execute(self, context):
         scene = context.scene
         if scene.ps1_render_active:
