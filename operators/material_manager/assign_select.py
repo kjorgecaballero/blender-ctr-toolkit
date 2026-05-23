@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 from bpy.types import Operator
+from bpy.props import EnumProperty
 
 
 class MATERIAL_OT_AssignSelected(Operator):
@@ -90,15 +91,32 @@ class MATERIAL_OT_AssignSelected(Operator):
 
 
 class MATERIAL_OT_SelectByMaterial(Operator):
-    """Select all faces using the selected material"""
+    """Select faces using the selected material family (popup to choose scope)"""
     bl_idname = "material.select_by_material"
-    bl_label = "Select"
+    bl_label = "Select Materials"
     bl_options = {'REGISTER', 'UNDO'}
+
+    scope: EnumProperty(
+        name="Selection Scope",
+        description="Which materials to select",
+        items=[
+            ('FULL', "Full Family", "Base + all constants (including nav points)"),
+            ('CONSTANTS', "Constants Only", "All constant materials (excluding base and nav points)"),
+            ('NAV', "Nav Points Only", "Only navigation point constants"),
+        ],
+        default='FULL'
+    )
 
     @classmethod
     def poll(cls, context):
         obj = context.active_object
         return obj and obj.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=300)
+
+    def draw(self, context):
+        self.layout.prop(self, "scope", expand=True)
 
     def execute(self, context):
         props = context.scene.ctr_material_list
@@ -108,33 +126,97 @@ class MATERIAL_OT_SelectByMaterial(Operator):
 
         mat_name = props.items[props.selected_index].name
         obj = context.active_object
-        mat = bpy.data.materials.get(mat_name)
-        if not mat or mat.name not in obj.data.materials:
-            self.report({'WARNING'}, f"Material '{mat_name}' not used by object")
+        const_dict = obj.get("constant_materials", {})
+
+        # Build the set of material names to select based on scope
+        material_names = set()
+        if mat_name in const_dict:
+            # Selected is a constant
+            base_name = const_dict[mat_name].get("original_material")
+            if base_name:
+                if self.scope == 'FULL':
+                    material_names.add(base_name)
+                # Always include constants matching the scope
+                for cname, cinfo in const_dict.items():
+                    if cinfo.get("original_material") == base_name:
+                        is_nav = cinfo.get("is_navigation_point", False)
+                        if self.scope == 'FULL':
+                            material_names.add(cname)
+                        elif self.scope == 'CONSTANTS' and not is_nav:
+                            material_names.add(cname)
+                        elif self.scope == 'NAV' and is_nav:
+                            material_names.add(cname)
+        else:
+            # Selected is a normal material (possibly a base)
+            base_name = mat_name
+            has_constants = any(cinfo.get("original_material") == base_name for cinfo in const_dict.values())
+            if has_constants:
+                if self.scope == 'FULL':
+                    material_names.add(base_name)
+                for cname, cinfo in const_dict.items():
+                    if cinfo.get("original_material") == base_name:
+                        is_nav = cinfo.get("is_navigation_point", False)
+                        if self.scope == 'FULL':
+                            material_names.add(cname)
+                        elif self.scope == 'CONSTANTS' and not is_nav:
+                            material_names.add(cname)
+                        elif self.scope == 'NAV' and is_nav:
+                            material_names.add(cname)
+            else:
+                # No constants, just the material itself (scope irrelevant)
+                material_names.add(mat_name)
+
+        # Get material indices in the object
+        mat_indices = set()
+        for mname in material_names:
+            mat = bpy.data.materials.get(mname)
+            if mat and mat.name in obj.data.materials:
+                mat_indices.add(obj.data.materials.find(mat.name))
+
+        if not mat_indices:
+            self.report({'WARNING'}, f"None of the materials in the family are used by this object")
             return {'CANCELLED'}
 
-        mat_index = obj.data.materials.find(mat.name)
         bm = bmesh.from_edit_mesh(obj.data)
         for face in bm.faces:
             face.select = False
         for face in bm.faces:
-            if face.material_index == mat_index:
+            if face.material_index in mat_indices:
                 face.select = True
         bmesh.update_edit_mesh(obj.data)
-        self.report({'INFO'}, f"Selected faces with {mat.name}")
+
+        scope_name = {'FULL': 'full family', 'CONSTANTS': 'constants only', 'NAV': 'nav points only'}[self.scope]
+        self.report({'INFO'}, f"Selected {scope_name} for '{mat_name}'")
         return {'FINISHED'}
 
 
 class MATERIAL_OT_DeselectByMaterial(Operator):
-    """Deselect all faces using the selected material"""
+    """Deselect faces using the selected material family (popup to choose scope)"""
     bl_idname = "material.deselect_by_material"
-    bl_label = "Deselect"
+    bl_label = "Deselect Materials"
     bl_options = {'REGISTER', 'UNDO'}
+
+    scope: EnumProperty(
+        name="Deselection Scope",
+        description="Which materials to deselect",
+        items=[
+            ('FULL', "Full Family", "Base + all constants (including nav points)"),
+            ('CONSTANTS', "Constants Only", "All constant materials (excluding base and nav points)"),
+            ('NAV', "Nav Points Only", "Only navigation point constants"),
+        ],
+        default='FULL'
+    )
 
     @classmethod
     def poll(cls, context):
         obj = context.active_object
         return obj and obj.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=300)
+
+    def draw(self, context):
+        self.layout.prop(self, "scope", expand=True)
 
     def execute(self, context):
         props = context.scene.ctr_material_list
@@ -144,17 +226,59 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
 
         mat_name = props.items[props.selected_index].name
         obj = context.active_object
-        mat = bpy.data.materials.get(mat_name)
-        if not mat or mat.name not in obj.data.materials:
+        const_dict = obj.get("constant_materials", {})
+
+        # Same logic as Select
+        material_names = set()
+        if mat_name in const_dict:
+            base_name = const_dict[mat_name].get("original_material")
+            if base_name:
+                if self.scope == 'FULL':
+                    material_names.add(base_name)
+                for cname, cinfo in const_dict.items():
+                    if cinfo.get("original_material") == base_name:
+                        is_nav = cinfo.get("is_navigation_point", False)
+                        if self.scope == 'FULL':
+                            material_names.add(cname)
+                        elif self.scope == 'CONSTANTS' and not is_nav:
+                            material_names.add(cname)
+                        elif self.scope == 'NAV' and is_nav:
+                            material_names.add(cname)
+        else:
+            base_name = mat_name
+            has_constants = any(cinfo.get("original_material") == base_name for cinfo in const_dict.values())
+            if has_constants:
+                if self.scope == 'FULL':
+                    material_names.add(base_name)
+                for cname, cinfo in const_dict.items():
+                    if cinfo.get("original_material") == base_name:
+                        is_nav = cinfo.get("is_navigation_point", False)
+                        if self.scope == 'FULL':
+                            material_names.add(cname)
+                        elif self.scope == 'CONSTANTS' and not is_nav:
+                            material_names.add(cname)
+                        elif self.scope == 'NAV' and is_nav:
+                            material_names.add(cname)
+            else:
+                material_names.add(mat_name)
+
+        mat_indices = set()
+        for mname in material_names:
+            mat = bpy.data.materials.get(mname)
+            if mat and mat.name in obj.data.materials:
+                mat_indices.add(obj.data.materials.find(mat.name))
+
+        if not mat_indices:
             return {'CANCELLED'}
 
-        mat_index = obj.data.materials.find(mat.name)
         bm = bmesh.from_edit_mesh(obj.data)
         for face in bm.faces:
-            if face.material_index == mat_index:
+            if face.material_index in mat_indices:
                 face.select = False
         bmesh.update_edit_mesh(obj.data)
-        self.report({'INFO'}, f"Deselected faces with {mat.name}")
+
+        scope_name = {'FULL': 'full family', 'CONSTANTS': 'constants only', 'NAV': 'nav points only'}[self.scope]
+        self.report({'INFO'}, f"Deselected {scope_name} for '{mat_name}'")
         return {'FINISHED'}
 
 
