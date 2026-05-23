@@ -9,7 +9,8 @@ class QB_TB_OT_FilterSelectObjects(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        option = context.scene.validator_option
+        scene = context.scene
+        option = scene.validator_object_option
 
         for obj in context.selected_objects:
             obj.select_set(False)

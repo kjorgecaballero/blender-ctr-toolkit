@@ -3,7 +3,6 @@ from bpy.types import Operator
 
 
 class QB_TB_OT_SelectVertexGroupsByType(Operator):
-    """Select vertex groups in the checklist based on the current filter option"""
     bl_idname = "qb_tb.select_vertex_groups_by_type"
     bl_label = "Select Vertex Groups by Type"
     bl_description = "Mark vertex groups in the navigation list and select them in 3D view according to the selected validator option"
@@ -16,8 +15,8 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
 
     def execute(self, context):
         obj = context.active_object
-        option = context.scene.validator_option
         scene = context.scene
+        option = scene.validator_vertex_group_option
 
         if option in {'NGONS', 'NON_MESH'}:
             self.report({'INFO'}, f"Option '{option}' is not available for vertex groups.")

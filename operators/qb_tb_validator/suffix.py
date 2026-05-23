@@ -11,7 +11,8 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        option = context.scene.validator_option
+        scene = context.scene
+        option = scene.validator_object_option
 
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=0)
         start_time = time.time()
