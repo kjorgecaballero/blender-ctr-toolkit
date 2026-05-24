@@ -769,134 +769,85 @@ def update_settings_ui(self, context, element=None):
     if element is None:
         element = self.layout
     box = element.box()
-
+    
     if updater.invalid_updater:
-        box.label(text="Error initializing updater code:")
+        box.label(text="Error initializing updater:", icon='ERROR')
         box.label(text=updater.error_msg)
         return
+    
     settings = get_user_preferences(context)
     if not settings:
         box.label(text="Error getting updater preferences", icon='ERROR')
         return
-
-    box.label(text="Updater Settings")
-    row = box.row()
-
-    if not updater.auto_reload_post_update:
-        saved_state = updater.json
-        if "just_updated" in saved_state and saved_state["just_updated"]:
-            row.alert = True
-            row.operator("wm.quit_blender", text="Restart blender to complete update", icon="ERROR")
-            return
-
-    split = layout_split(row, factor=0.4)
-    sub_col = split.column()
-    sub_col.prop(settings, "auto_check_update")
-    sub_col = split.column()
-
-    if not settings.auto_check_update:
-        sub_col.enabled = False
-    sub_row = sub_col.row()
-    sub_row.label(text="Interval between checks")
-    sub_row = sub_col.row(align=True)
-    check_col = sub_row.column(align=True)
-    check_col.prop(settings, "updater_interval_months")
-    check_col = sub_row.column(align=True)
-    check_col.prop(settings, "updater_interval_days")
-    check_col = sub_row.column(align=True)
-
-    row = box.row()
-    col = row.column()
+    
+    # Header
+    row = box.row(align=True)
+    row.label(text="Update Settings", icon='SETTINGS')
+    
+    # Two-column layout for settings and status
+    split = box.split(factor=0.5)
+    
+    # Left column: Auto-check interval
+    col_left = split.column(align=True)
+    col_left.prop(settings, "auto_check_update")
+    sub = col_left.column(align=True)
+    sub.enabled = settings.auto_check_update
+    sub.prop(settings, "updater_interval_months", text="Months")
+    sub.prop(settings, "updater_interval_days", text="Days")
+    sub.prop(settings, "updater_interval_hours", text="Hours")
+    sub.prop(settings, "updater_interval_minutes", text="Minutes")
+    
+    # Right column: Status and last check info
+    col_right = split.column(align=True)
     if updater.error is not None:
-        sub_col = col.row(align=True)
-        sub_col.scale_y = 1
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        if "ssl" in updater.error_msg.lower():
-            split.enabled = True
-            split.operator(AddonUpdaterInstallManually.bl_idname, text=updater.error)
-        else:
-            split.enabled = False
-            split.operator(AddonUpdaterCheckNow.bl_idname, text=updater.error)
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="", icon="FILE_REFRESH")
-    elif updater.update_ready is None and not updater.async_checking:
-        col.scale_y = 2
-        col.operator(AddonUpdaterCheckNow.bl_idname)
-    elif updater.update_ready is None:
-        sub_col = col.row(align=True)
-        sub_col.scale_y = 1
-        split = sub_col.split(align=True)
-        split.enabled = False
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="Checking...")
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterEndBackground.bl_idname, text="", icon="X")
-    elif updater.include_branches and len(updater.tags) == len(updater.include_branch_list) and not updater.manual_only:
-        sub_col = col.row(align=True)
-        sub_col.scale_y = 1
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        update_now_txt = "Update directly to {}".format(updater.include_branch_list[0])
-        split.operator(AddonUpdaterUpdateNow.bl_idname, text=update_now_txt)
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="", icon="FILE_REFRESH")
-    elif updater.update_ready and not updater.manual_only:
-        sub_col = col.row(align=True)
-        sub_col.scale_y = 1
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterUpdateNow.bl_idname, text="Update now to " + str(updater.update_version))
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="", icon="FILE_REFRESH")
-    elif updater.update_ready and updater.manual_only:
-        col.scale_y = 2
-        dl_now_txt = "Download " + str(updater.update_version)
-        col.operator("wm.url_open", text=dl_now_txt).url = updater.website
+        col_right.label(text="Status: Error", icon='ERROR')
+        col_right.label(text=updater.error_msg[:80])
+    elif updater.update_ready:
+        col_right.label(text=f"Status: Update available → {updater.update_version}", icon='LOOP_FORWARDS')
+    elif updater.async_checking:
+        col_right.label(text="Status: Checking for updates...", icon='INFO')
     else:
-        sub_col = col.row(align=True)
-        sub_col.scale_y = 1
-        split = sub_col.split(align=True)
-        split.enabled = False
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="Addon is up to date")
-        split = sub_col.split(align=True)
-        split.scale_y = 2
-        split.operator(AddonUpdaterCheckNow.bl_idname, text="", icon="FILE_REFRESH")
-
-    if not updater.manual_only:
-        col = row.column(align=True)
-        if updater.include_branches and len(updater.include_branch_list) > 0:
-            branch = updater.include_branch_list[0]
-            col.operator(AddonUpdaterUpdateTarget.bl_idname, text="Install {} / old version".format(branch))
-        else:
-            col.operator(AddonUpdaterUpdateTarget.bl_idname, text="(Re)install addon version")
-        last_date = "none found"
-        backup_path = os.path.join(updater.stage_path, "backup")
-        if "backup_date" in updater.json and os.path.isdir(backup_path):
-            if updater.json["backup_date"] == "":
-                last_date = "Date not found"
-            else:
-                last_date = updater.json["backup_date"]
-        backup_text = "Restore addon backup ({})".format(last_date)
-        col.operator(AddonUpdaterRestoreBackup.bl_idname, text=backup_text)
-
-    row = box.row()
-    row.scale_y = 0.7
-    last_check = updater.json["last_check"]
-    if updater.error is not None and updater.error_msg is not None:
-        row.label(text=updater.error_msg)
-    elif last_check:
-        last_check = last_check[0: last_check.index(".")]
-        row.label(text="Last update check: " + last_check)
+        col_right.label(text="Status: Up to date", icon='CHECKMARK')
+    
+    last_check = updater.json.get("last_check", "")
+    if last_check:
+        last_check = last_check[:19]  
+        col_right.label(text=f"Last check: {last_check}")
     else:
-        row.label(text="Last update check: Never")
+        col_right.label(text="Last check: Never")
+    
+    box.separator(factor=0.5)
+    
+    # PRIMARY ACTION BUTTONS (horizontal row, left-aligned)
+    row_primary = box.row(align=True)
+    row_primary.alignment = 'LEFT'
+    
+    if updater.error is not None:
+        row_primary.operator(AddonUpdaterInstallManually.bl_idname, text="Manual Install", icon='ERROR')
+        row_primary.operator(AddonUpdaterCheckNow.bl_idname, text="Retry", icon='FILE_REFRESH')
+    elif updater.async_checking:
+        row_primary.enabled = False
+        row_primary.operator(AddonUpdaterCheckNow.bl_idname, text="Checking...", icon='INFO')
+        row_primary.operator(AddonUpdaterEndBackground.bl_idname, text="Stop", icon='X')
+    elif updater.update_ready:
+        row_primary.operator(AddonUpdaterUpdateNow.bl_idname, text=f"Install {updater.update_version}", icon='LOOP_FORWARDS')
+        row_primary.operator(AddonUpdaterIgnore.bl_idname, text="Ignore", icon='CANCEL')
+        if updater.manual_only:
+            row_primary.operator("wm.url_open", text="Download", icon='URL').url = updater.website
+    else:
+        row_primary.operator(AddonUpdaterCheckNow.bl_idname, text="Check for Updates", icon='IMPORT')
+    
+    box.separator(factor=0.3)
+    
+    # ADVANCED (second horizontal row, left-aligned)
+    row_adv = box.row(align=True)
+    row_adv.alignment = 'LEFT'
+    row_adv.operator(AddonUpdaterUpdateTarget.bl_idname, text="Install Specific Version", icon='DOWNARROW_HLT')
+    if os.path.isdir(os.path.join(updater.stage_path, "backup")):
+        row_adv.operator(AddonUpdaterRestoreBackup.bl_idname, text="Restore Backup", icon='RECOVER_LAST')
 
 
+# Keep the condensed version for other uses if needed
 def update_settings_ui_condensed(self, context, element=None):
     if element is None:
         element = self.layout
@@ -1060,7 +1011,7 @@ def register(bl_info):
     updater.use_releases = True
     updater.include_branch_list = None
     updater.manual_only = False
-    updater.fake_install = False # Set to True for testing
+    updater.fake_install = True # Set to True for testing
     updater.show_popups = True
     updater.version_min_update = (0, 0, 0)
     updater.version_max_update = None
