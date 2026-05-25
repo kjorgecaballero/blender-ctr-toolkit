@@ -100,11 +100,12 @@ class MATERIAL_OT_SelectByMaterial(Operator):
         name="Selection Scope",
         description="Which materials to select",
         items=[
-            ('FULL', "Full Family", "Base + all constants (including nav points)"),
-            ('CONSTANTS', "Constants Only", "All constant materials (excluding base and nav points)"),
-            ('NAV', "Nav Points Only", "Only navigation point constants"),
+            ('CHECKED', "Checked", "Only the exact selected material"),
+            ('FULL', "Full", "Base + all constants (including nav points)"),
+            ('CONSTANTS', "Constants", "Only constant materials (excludes base and nav points)"),
+            ('NAV', "Nav Points", "Only navigation point constants"),
         ],
-        default='FULL'
+        default='CHECKED'
     )
 
     @classmethod
@@ -130,13 +131,16 @@ class MATERIAL_OT_SelectByMaterial(Operator):
 
         # Build the set of material names to select based on scope
         material_names = set()
-        if mat_name in const_dict:
+
+        # CHECKED: only the exact material
+        if self.scope == 'CHECKED':
+            material_names.add(mat_name)
+        elif mat_name in const_dict:
             # Selected is a constant
             base_name = const_dict[mat_name].get("original_material")
             if base_name:
                 if self.scope == 'FULL':
                     material_names.add(base_name)
-                # Always include constants matching the scope
                 for cname, cinfo in const_dict.items():
                     if cinfo.get("original_material") == base_name:
                         is_nav = cinfo.get("is_navigation_point", False)
@@ -163,7 +167,7 @@ class MATERIAL_OT_SelectByMaterial(Operator):
                         elif self.scope == 'NAV' and is_nav:
                             material_names.add(cname)
             else:
-                # No constants, just the material itself (scope irrelevant)
+                # No constants, just the material itself
                 material_names.add(mat_name)
 
         # Get material indices in the object
@@ -185,7 +189,12 @@ class MATERIAL_OT_SelectByMaterial(Operator):
                 face.select = True
         bmesh.update_edit_mesh(obj.data)
 
-        scope_name = {'FULL': 'full family', 'CONSTANTS': 'constants only', 'NAV': 'nav points only'}[self.scope]
+        scope_name = {
+            'CHECKED': 'checked material only',
+            'FULL': 'full family',
+            'CONSTANTS': 'constants only',
+            'NAV': 'nav points only'
+        }[self.scope]
         self.report({'INFO'}, f"Selected {scope_name} for '{mat_name}'")
         return {'FINISHED'}
 
@@ -200,11 +209,12 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
         name="Deselection Scope",
         description="Which materials to deselect",
         items=[
-            ('FULL', "Full Family", "Base + all constants (including nav points)"),
-            ('CONSTANTS', "Constants Only", "All constant materials (excluding base and nav points)"),
-            ('NAV', "Nav Points Only", "Only navigation point constants"),
+            ('CHECKED', "Checked", "Only the exact selected material"),
+            ('FULL', "Full", "Base + all constants (including nav points)"),
+            ('CONSTANTS', "Constants", "Only constant materials (excludes base and nav points)"),
+            ('NAV', "Nav Points", "Only navigation point constants"),
         ],
-        default='FULL'
+        default='CHECKED'
     )
 
     @classmethod
@@ -228,9 +238,11 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
         obj = context.active_object
         const_dict = obj.get("constant_materials", {})
 
-        # Same logic as Select
         material_names = set()
-        if mat_name in const_dict:
+
+        if self.scope == 'CHECKED':
+            material_names.add(mat_name)
+        elif mat_name in const_dict:
             base_name = const_dict[mat_name].get("original_material")
             if base_name:
                 if self.scope == 'FULL':
@@ -277,7 +289,12 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
                 face.select = False
         bmesh.update_edit_mesh(obj.data)
 
-        scope_name = {'FULL': 'full family', 'CONSTANTS': 'constants only', 'NAV': 'nav points only'}[self.scope]
+        scope_name = {
+            'CHECKED': 'checked material only',
+            'FULL': 'full family',
+            'CONSTANTS': 'constants only',
+            'NAV': 'nav points only'
+        }[self.scope]
         self.report({'INFO'}, f"Deselected {scope_name} for '{mat_name}'")
         return {'FINISHED'}
 

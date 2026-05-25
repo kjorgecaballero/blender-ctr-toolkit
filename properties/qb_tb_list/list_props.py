@@ -6,12 +6,24 @@ Property definitions for the block list system.
 import bpy
 from bpy.props import BoolProperty, IntProperty, EnumProperty, StringProperty
 
-def update_filter_vertex_groups(self, context):
+# Update functions for VERTEX GROUPS mode 
+def update_qb_vertex_groups(self, context):
+    # If user unchecks QB and TB is already unchecked, activate TB
     if not self.list_filter_show_qb and not self.list_filter_show_tb:
+        self.list_filter_show_tb = True
+
+def update_tb_vertex_groups(self, context):
+    # If user unchecks TB and QB is already unchecked, activate QB
+    if not self.list_filter_show_tb and not self.list_filter_show_qb:
         self.list_filter_show_qb = True
 
-def update_filter_constant_materials(self, context):
+# Update functions for CONSTANT MATERIALS mode
+def update_qb_constant_materials(self, context):
     if not self.list_filter_cm_qb and not self.list_filter_cm_tb:
+        self.list_filter_cm_tb = True
+
+def update_tb_constant_materials(self, context):
+    if not self.list_filter_cm_tb and not self.list_filter_cm_qb:
         self.list_filter_cm_qb = True
 
 def register():
@@ -25,28 +37,30 @@ def register():
         default='VERTEX_GROUPS'
     )
     
+    # Vertex Groups filters
     bpy.types.Scene.list_filter_show_qb = BoolProperty(
         name="Show Quadblocks",
         default=True,
-        update=update_filter_vertex_groups
+        update=update_qb_vertex_groups
     )
     
     bpy.types.Scene.list_filter_show_tb = BoolProperty(
         name="Show Triblocks",
         default=True,
-        update=update_filter_vertex_groups
+        update=update_tb_vertex_groups
     )
     
+    # Constant Materials filters
     bpy.types.Scene.list_filter_cm_qb = BoolProperty(
         name="Show Quadblocks",
         default=True,
-        update=update_filter_constant_materials
+        update=update_qb_constant_materials
     )
     
     bpy.types.Scene.list_filter_cm_tb = BoolProperty(
         name="Show Triblocks",
         default=True,
-        update=update_filter_constant_materials
+        update=update_tb_constant_materials
     )
     
     bpy.types.Scene.list_navigation_filter = EnumProperty(
@@ -69,7 +83,6 @@ def register():
         default=""
     )
     
-    # Updated issue filter with MULTIPLE_MATERIALS
     bpy.types.Scene.list_issue_filter = EnumProperty(
         name="Issue Filter",
         items=[

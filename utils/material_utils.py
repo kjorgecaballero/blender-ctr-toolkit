@@ -5,10 +5,20 @@ Material utilities for updating derived (constant) materials.
 import bpy
 
 
-def update_derived_materials(obj, base_material_names, image, update_base_material):
+def update_derived_materials(obj, base_material_names, image, update_base_material, ensure_node_callback=None):
     """
     Synchronize the image texture across all materials linked to the specified base materials
     defined in the object's custom properties.
+    
+    Args:
+        obj: The mesh object
+        base_material_names: List of base material names
+        image: The new image to assign
+        update_base_material: Whether to update the base material itself
+        ensure_node_callback: Optional function to ensure texture node exists (takes material, image)
+    
+    Returns:
+        Number of materials updated
     """
     if not image:
         return 0
@@ -21,22 +31,33 @@ def update_derived_materials(obj, base_material_names, image, update_base_materi
         for const_name, info in const_dict.items():
             if info.get("original_material") == base_mat_name:
                 mat = bpy.data.materials.get(const_name)
-                if mat and mat.use_nodes:
-                    for node in mat.node_tree.nodes:
-                        if node.type == 'TEX_IMAGE' and node.image is not None:
-                            node.image = image
-                            updated_count += 1
-                            break
+                if mat:
+                    if ensure_node_callback:
+                        ensure_node_callback(mat, image)
+                    else:
+                        # Fallback to old method: just replace existing image node
+                        if mat.use_nodes:
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image is not None:
+                                    node.image = image
+                                    updated_count += 1
+                                    break
+                    updated_count += 1
 
         # Update the base material itself if requested
         if update_base_material:
             base_mat = bpy.data.materials.get(base_mat_name)
-            if base_mat and base_mat.use_nodes:
-                for node in base_mat.node_tree.nodes:
-                    if node.type == 'TEX_IMAGE' and node.image is not None:
-                        node.image = image
-                        updated_count += 1
-                        break
+            if base_mat:
+                if ensure_node_callback:
+                    ensure_node_callback(base_mat, image)
+                else:
+                    if base_mat.use_nodes:
+                        for node in base_mat.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE' and node.image is not None:
+                                node.image = image
+                                updated_count += 1
+                                break
+                updated_count += 1
 
     return updated_count
 
