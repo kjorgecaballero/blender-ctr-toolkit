@@ -1011,7 +1011,7 @@ def register(bl_info):
     updater.use_releases = True
     updater.include_branch_list = None
     updater.manual_only = False
-    updater.fake_install = True # Set to True for testing
+    updater.fake_install = False # Set to True for testing
     updater.show_popups = True
     updater.version_min_update = (0, 0, 0)
     updater.version_max_update = None
