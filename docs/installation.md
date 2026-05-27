@@ -81,4 +81,4 @@ After installing via any method, **restart Blender** to complete the update.
 
 ## Next Steps
 
-- Read the [User Guide](./user-guide/index.md) for detailed module documentation.
+- Read the [Main Documentation](./index.md) for detailed module documentation.

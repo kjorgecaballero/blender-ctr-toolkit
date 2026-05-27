@@ -42,7 +42,7 @@ See [Installation Guide](docs/installation.md) for details.
 
 ## Documentation
 
-- [User Guides](docs/user-guide/index.md) – Detailed module documentation.
+- [Main Documentation](docs/index.md) – Complete documentation index.
 - [Contribution Guidelines](docs/contributing/guidelines.md) – How to report issues, submit code.
 - [Testing](docs/contributing/testing.md) – Run the test suite locally.
 
@@ -84,6 +84,4 @@ Contributions are welcome! Read [Contribution Guidelines](docs/contributing/guid
 
 ## License
 
-GNU General Public License v2.0. See [LICENSE](LICENSE).
-
----
+GNU General Public License v2.0.
