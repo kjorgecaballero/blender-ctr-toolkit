@@ -16,7 +16,7 @@ NODE_SETUPS = {
             ('ShaderNodeMixShader', 'Solid Mix Shader', (-200, -65), 140.0, {}),
             ('ShaderNodeMixRGB', 'Transp Mix', (-575, 95), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
             ('ShaderNodeMixRGB', 'Transp Multiply 4x', (-470, 125), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
-            ('ShaderNodeInvert', 'Transp Invert', (-470, 20), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeInvert', 'Transp Invert', (-470, 20), 140.0, {'inputs[0].default_value': 0.5}),
             ('ShaderNodeMixShader', 'Transp Mix Shader', (-205, 60), 140.0, {}),
             ('ShaderNodeBsdfTransparent', 'Transp Transparent 2', (-200, -20), 140.0, {}),
             ('ShaderNodeAddShader', 'Transp Add Shader', (-85, 65), 140.0, {}),
