@@ -27,7 +27,6 @@ Welcome to the official documentation for the **Blender CTR Toolkit**.
 ## Other
 
 - [Installation Guide](installation.md)
-- [Troubleshooting](troubleshooting.md) (module‑specific issues are covered inside each user guide)
 
 ---
 
