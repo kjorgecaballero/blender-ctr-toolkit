@@ -1,0 +1,2649 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CTR Toolkit – Visual Documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        display: flex;
+        line-height: 1.5;
+        font-size: 1rem;
+      }
+
+      /* Sidebar */
+      #sidebar {
+        width: 280px;
+        background-color: #1f1f1f;
+        padding: 24px 16px;
+        overflow-y: auto;
+        border-right: 1px solid #333;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        font-size: 0.9rem;
+      }
+
+      #sidebar h2 {
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+        color: #fff;
+      }
+
+      #search {
+        width: 100%;
+        padding: 8px 10px;
+        margin-bottom: 20px;
+        border-radius: 6px;
+        border: 1px solid #333;
+        background-color: #2a2a2a;
+        color: #e0e0e0;
+        font-size: 0.9rem;
+      }
+
+      #sidebar ul {
+        list-style: none;
+        padding-left: 0;
+      }
+
+      #sidebar li {
+        margin: 8px 0;
+      }
+
+      #sidebar a {
+        color: #7cc7ff;
+        text-decoration: none;
+        display: block;
+        padding: 6px 0;
+      }
+
+      #sidebar a:hover,
+      #sidebar a.active {
+        color: #ffcc00;
+        font-weight: bold;
+      }
+
+      .collapsible {
+        cursor: pointer;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #7cc7ff;
+        padding: 6px 0;
+      }
+
+      .collapsible:hover {
+        color: #ffcc00;
+      }
+
+      .submenu {
+        display: none;
+        padding-left: 20px;
+      }
+
+      .submenu-show {
+        display: block;
+      }
+
+      /* Main content */
+      main {
+        margin-left: 280px;
+        padding: 32px 40px;
+        flex: 1;
+        min-height: 100vh;
+        max-width: 1200px;
+      }
+
+      main a {
+        color: #7cc7ff;
+        text-decoration: none;
+      }
+
+      main a:hover {
+        color: #ffcc00;
+        text-decoration: underline;
+      }
+
+      .page {
+        display: none;
+      }
+
+      .page.active {
+        display: block;
+      }
+
+      .card {
+        background-color: #1a1a1a;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 32px;
+        border: 1px solid #2c2c2c;
+        transition: all 0.2s ease;
+      }
+
+      .card:hover {
+        border-color: #3f74ad;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .card h3 {
+        font-size: 1.5rem;
+        margin-bottom: 12px;
+        color: #7cc7ff;
+      }
+
+      .card p {
+        margin-bottom: 12px;
+      }
+
+      .card img {
+        margin: 16px 0 8px;
+        border-radius: 8px;
+        border: 1px solid #333;
+        max-width: 100%;
+      }
+
+      .image-caption {
+        text-align: center;
+        font-size: 0.85rem;
+        color: #aaa;
+        margin-bottom: 16px;
+      }
+
+      section h2 {
+        font-size: 2rem;
+        border-bottom: 2px solid #7cc7ff;
+        padding-bottom: 12px;
+        margin-bottom: 28px;
+        margin-top: 0;
+      }
+
+      section h3 {
+        font-size: 1.5rem;
+        margin-top: 32px;
+        margin-bottom: 16px;
+        color: #ddd;
+      }
+
+      ul,
+      ol {
+        margin: 16px 0;
+        padding-left: 24px;
+      }
+
+      li {
+        margin-bottom: 8px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 24px 0;
+        background-color: #1a1a1a;
+      }
+
+      th,
+      td {
+        border: 1px solid #444;
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background-color: #2a2a2a;
+      }
+
+      code {
+        background-color: #2a2a2a;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.9em;
+      }
+
+      .warning {
+        background-color: #2c1a0a;
+        border-left: 5px solid #ff8800;
+        padding: 16px 20px;
+        margin: 24px 0;
+        border-radius: 8px;
+      }
+
+      iframe {
+        max-width: 100%;
+        margin: 20px 0;
+        border-radius: 8px;
+        border: 1px solid #333;
+      }
+
+      kbd {
+        background-color: #2a2a2a;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-family: monospace;
+        font-size: 0.85rem;
+        box-shadow: inset 0 1px 0 #444;
+        color: #7cc7ff;
+      }
+
+      #pagination {
+        text-align: center;
+        margin-top: 40px;
+        margin-bottom: 20px;
+      }
+
+      #pagination button {
+        padding: 8px 16px;
+        margin: 0 6px;
+        border-radius: 6px;
+        border: 1px solid #444;
+        background-color: #2a2a2a;
+        color: #e0e0e0;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+
+      #pagination button:hover:not(:disabled) {
+        background-color: #3a3a3a;
+        border-color: #7cc7ff;
+      }
+
+      #pagination button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      footer {
+        background-color: #1a1a1a;
+        text-align: center;
+        padding: 20px;
+        font-size: 0.85rem;
+        color: #aaa;
+        margin-top: 40px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav id="sidebar">
+      <h2>CTR Toolkit</h2>
+      <input type="text" id="search" placeholder="Search..." />
+      <ul id="sidebar-list">
+        <li><a href="#getting-started" data-page="0">Help & Setup</a></li>
+
+        <!-- Toolkit (Core Tools + Export & Management) -->
+        <li>
+          <div class="collapsible">Toolkit <span class="icon">▼</span></div>
+          <ul class="submenu">
+            <li><a href="#navigator" data-page="1">Navigator</a></li>
+            <li><a href="#item-list" data-page="2">Item List</a></li>
+            <li><a href="#validator" data-page="3">Validator</a></li>
+            <li><a href="#render" data-page="4">Render</a></li>
+            <li><a href="#exporter" data-page="5">Exporter</a></li>
+            <li>
+              <a href="#material-manager" data-page="6">Material Manager</a>
+            </li>
+            <li><a href="#range-box" data-page="7">Range Box</a></li>
+          </ul>
+        </li>
+
+        <!-- Advanced -->
+        <li>
+          <div class="collapsible">Advanced <span class="icon">▼</span></div>
+          <ul class="submenu">
+            <li><a href="#keymaps" data-page="8">Keymaps</a></li>
+            <li><a href="#updater" data-page="9">Addon Updater</a></li>
+          </ul>
+        </li>
+
+        <!-- Video Tutorials -->
+        <li>
+          <div class="collapsible">
+            Video Tutorials <span class="icon">▼</span>
+          </div>
+          <ul class="submenu">
+            <li><a href="#videos" data-page="10">Playlist</a></li>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+
+    <main>
+      <div id="pages">
+        <!-- PAGE 0 – Getting Started -->
+        <div class="page">
+          <section id="getting-started">
+            <h2>Getting Started</h2>
+
+            <div class="card">
+              <h3>Installation</h3>
+              <ol>
+                <li>
+                  Download the latest <code>.zip</code> from the
+                  <a
+                    href="https://github.com/kjorgecaballero/blender-ctr-toolkit/releases"
+                    target="_blank"
+                    >Releases page</a
+                  >.
+                </li>
+                <li>
+                  Open Blender → <strong>Edit → Preferences → Add-ons</strong>.
+                </li>
+                <li>
+                  Click <strong>Install…</strong> and select the ZIP file.
+                </li>
+                <li>
+                  Enable <strong>Blender CTR Toolkit</strong> by ticking the
+                  checkbox.
+                </li>
+              </ol>
+              <div class="warning">
+                Do not extract the ZIP – Blender installs it directly.
+              </div>
+              <img
+                src="assets/installation-step.png"
+                alt="Preferences after install"
+              />
+              <div class="image-caption">Addon enabled in Preferences</div>
+            </div>
+
+            <div class="card">
+              <h3>Compatibility</h3>
+              <ul>
+                <li><strong>Blender 3.3 to 5.0</strong> – Full support.</li>
+                <li>
+                  <strong>PS1 Resolution</strong> → requires Blender 3.5+.
+                </li>
+                <li>
+                  <strong>Vertex Snap Modifier</strong> → requires Blender 4.0+.
+                </li>
+                <li>Other features work on 3.3+.</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Help Utilities</h3>
+              <p>Buttons in the CTR panel header (right side):</p>
+              <ul>
+                <li>Documentation – opens online docs</li>
+                <li>Tutorials – YouTube playlist</li>
+                <li>Report Issue – GitHub issue tracker</li>
+                <li>Keymaps – popup with shortcuts</li>
+                <li>Update – checks for new versions (turns red when ready)</li>
+              </ul>
+              <img
+                src="assets/help-buttons.png"
+                alt="Help buttons in CTR panel"
+              />
+              <div class="image-caption">Quick access to help resources.</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 1 – Navigator -->
+        <div class="page">
+          <section id="navigator">
+            <h2>Navigator Module</h2>
+
+            <div class="card">
+              <h3>Navigate (Find Blocks)</h3>
+              <p>
+                Scans the active mesh in Edit Mode and detects all
+                <strong>quadblocks</strong> and <strong>triblocks</strong>. It
+                can start from:
+              </p>
+              <ul>
+                <li>
+                  <strong>Manual selection</strong> – If you select exactly the
+                  4 faces of a block, its center vertex (quadblock) or its
+                  center face (triblock), the algorithm navigates from there.
+                </li>
+                <li>
+                  <strong>Navigation points</strong> – If no selection exists,
+                  it uses constant materials marked as
+                  <em>navigation points</em> (defined in the
+                  <strong>Item List</strong> panel). Only materials assigned to
+                  exactly 4 faces forming a valid block are considered.
+                </li>
+              </ul>
+              <p>
+                Performs a BFS search avoiding face conflicts, and automatically
+                assigns <strong>groups (1..n)</strong> so that blocks in the
+                same group <strong>do not share vertices</strong> – ideal for
+                massive duplication.
+              </p>
+              <img src="assets/navigator-navigate.gif" alt="Navigate demo" />
+              <div class="image-caption">
+                Example: detecting quadblocks from a navigation point.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Reset (Clear Cache)</h3>
+              <p>
+                <strong>Deletes all addon data</strong> from the active object:
+              </p>
+              <ul>
+                <li>
+                  Constant materials (restores original materials; if missing,
+                  creates fallback copies by removing the
+                  <code>_ID</code> suffix).
+                </li>
+                <li>
+                  Vertex groups whose names start with <code>QB_</code> or
+                  <code>TB_</code>.
+                </li>
+                <li>
+                  All cache properties (<code>quadblock_centers</code>,
+                  <code>face_to_quadblock</code>,
+                  <code>quad_group_members</code>, etc.).
+                </li>
+              </ul>
+              <div class="warning">
+                This action cannot be undone. A confirmation dialog is shown
+                before execution.
+              </div>
+              <img
+                src="assets/navigator-reset.gif"
+                alt="Reset confirmation dialog"
+              />
+              <div class="image-caption">
+                Warning dialog before clearing all data.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Quadblock</h3>
+              <p>
+                Selects only the
+                <strong>center vertices of all detected quadblocks</strong>.
+                Useful for inspecting or modifying the center of each block in
+                bulk.
+              </p>
+              <img
+                src="assets/navigator-quadblock.gif"
+                alt="Quadblock centers selected"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Triblock</h3>
+              <p>
+                Selects only the
+                <strong
+                  >center faces (triangles) of all detected triblocks</strong
+                >.
+              </p>
+              <img
+                src="assets/navigator-triblock.gif"
+                alt="Triblock centers selected"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Invalid</h3>
+              <p>
+                Selects all faces that
+                <strong>do not belong to any detected block</strong> (by
+                comparing with the stored <code>used_face_indices</code>). Very
+                useful to find leftover geometry, modeling errors, or faces that
+                are not part of any quad/triblock.
+              </p>
+              <img
+                src="assets/navigator-invalid.gif"
+                alt="Invalid faces highlighted"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Group Selection</h3>
+              <p>
+                Blocks are automatically grouped during
+                <strong>Navigate</strong> (greedy coloring) so that two blocks
+                in the same group <strong>never share a vertex</strong>. This
+                allows duplicating whole groups without intersections.
+              </p>
+              <p>
+                Dropdowns show existing groups (e.g.,
+                <em>Group 1: 12 quadblocks</em>). Press
+                <strong>Select</strong> to select the centers of all blocks
+                belonging to that group.
+              </p>
+              <img
+                src="assets/navigator-groups.gif"
+                alt="Group selection dropdowns"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Duplicate All Blocks by Group</h3>
+              <p>Opens a file dialog to choose an export directory. Then:</p>
+              <ol>
+                <li>
+                  Duplicates all quadblocks and triblocks (respecting groups)
+                  inside the original mesh.
+                </li>
+                <li>
+                  Exports duplicates to an OBJ file
+                  (<code>duplicates.obj</code>) copying textures to a
+                  <code>textures/</code> subfolder.
+                </li>
+                <li>
+                  Re‑imports the OBJ and separates loose parts into individual
+                  objects.
+                </li>
+                <li>
+                  Renames each object based on the constant material ID (e.g.,
+                  <code>Grass_ID05</code> → <code>05</code>).
+                </li>
+                <li>
+                  <strong
+                    >Reassigns constant materials to their base material</strong
+                  >
+                  (strips the <code>_ID</code> suffix).
+                </li>
+                <li>
+                  Moves all resulting objects to a collection named
+                  <strong>Processed_Blocks</strong>.
+                </li>
+              </ol>
+              <p>
+                During the process, PS1 Render and Vertex Snap modifiers are
+                temporarily disabled to avoid conflicts.
+              </p>
+              <img
+                src="assets/navigator-duplicate.gif"
+                alt="Mass duplication process"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Shortcut: <kbd>Ctrl+L</kbd> – Select block under cursor</h3>
+              <p>
+                In Edit Mode, hover the mouse over a face that belongs to a
+                quadblock or triblock and press <kbd>Ctrl+L</kbd>. The
+                <strong>4 faces that form the whole block</strong> will be
+                selected. Also works if you already have several faces selected
+                (selects the corresponding blocks). Uses ray casting to detect
+                the face under the cursor.
+              </p>
+              <img
+                src="assets/navigator-ctrl-l.gif"
+                alt="Block selection with Ctrl+L"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Navigation Points (constant materials)</h3>
+              <p>
+                To use <strong>Navigate</strong> without manual selection, you
+                must mark some constant materials as
+                <em>navigation points</em> in the
+                <strong>Item List → Constant Materials</strong> panel. Each
+                navigation point must:
+              </p>
+              <ul>
+                <li>
+                  Be a constant material (name contains <code>_ID</code>).
+                </li>
+                <li>
+                  Have the <strong>Is Navigation Point</strong> checkbox
+                  enabled.
+                </li>
+                <li>
+                  Be assigned to exactly <strong>4 faces</strong> that form a
+                  valid quadblock or triblock.
+                </li>
+              </ul>
+              <img
+                src="assets/navigator-navpoints.gif"
+                alt="Setting navigation points"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Navigator in action</h3>
+              <p>
+                Watch this complete tutorial explaining every button of the
+                Navigator module, from block detection to massive duplication
+                and group usage.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_NAVIGATOR"
+                title="Navigator Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full Navigator tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 2 – Item List -->
+        <div class="page">
+          <section id="item-list">
+            <h2>Item List Module</h2>
+            <p>
+              The Item List panel gives you full control over
+              quadblocks/triblocks, vertex groups, and constant materials. It is
+              split into two display modes:
+            </p>
+
+            <div class="card">
+              <h3>Vertex Groups Mode</h3>
+              <p>
+                Displays each block as a vertex group (<code
+                  >QB_&lt;id&gt;</code
+                >
+                or <code>TB_&lt;id&gt;</code>). Use this mode to manage groups,
+                filter by issues, and quickly select geometry.
+              </p>
+            </div>
+
+            <div class="card">
+              <h3>Generate</h3>
+              <p>
+                Creates a vertex group for every detected quadblock and
+                triblock. Existing groups starting with <code>QB_</code>/<code
+                  >TB_</code
+                >
+                are removed first to avoid contamination. Groups are named after
+                the center element index (e.g., <code>QB_42</code>).
+              </p>
+              <img
+                src="assets/itemlist-generate.gif"
+                alt="Generate vertex groups from detected blocks"
+              />
+              <div class="image-caption">
+                Vertex groups created for all blocks.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Clear</h3>
+              <p>
+                Removes vertex groups. By default only clears groups belonging
+                to <strong>selected blocks</strong> (faces or centers). If you
+                check <strong>Clear All</strong> in the confirmation dialog, all
+                <code>QB_*</code> and <code>TB_*</code> groups are deleted.
+              </p>
+              <img
+                src="assets/itemlist-clear-vg.gif"
+                alt="Clear vertex groups dialog"
+              />
+              <div class="image-caption">
+                Choose to clear all groups or only those of selected blocks.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Groups (Menu)</h3>
+              <p>
+                Opens a dropdown list of all existing block vertex groups.
+                Selecting one will
+                <strong>immediately select the corresponding block</strong> in
+                the 3D view (faces and vertices). A quick way to focus on a
+                specific block.
+              </p>
+              <img
+                src="assets/itemlist-groups-menu.gif"
+                alt="Groups menu selecting a block"
+              />
+              <div class="image-caption">
+                Pick any vertex group from the list to select the block.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Check</h3>
+              <p>
+                Adds the currently selected block(s) in the 3D view to the
+                <strong>checklist</strong> (multi‑selection) of the Item List.
+                The checkboxes in the list will be ticked accordingly. Use this
+                to batch-process blocks later (e.g., clear, assign materials,
+                export).
+              </p>
+              <img
+                src="assets/itemlist-check.gif"
+                alt="Add selected block to checklist"
+              />
+              <div class="image-caption">
+                Selected block appears checked in the list.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Filters (QB/TB, Material, Issue)</h3>
+              <p>Refine the list to show only specific blocks:</p>
+              <ul>
+                <li>
+                  <strong>QB / TB toggles</strong> – show only quadblocks or
+                  only triblocks.
+                </li>
+                <li>
+                  <strong>Material filter</strong> – show blocks that use a
+                  specific material (picked from a menu).
+                </li>
+                <li>
+                  <strong>Issue filter</strong> – show only valid blocks,
+                  invalid geometry, out of range, invalid UVs, degenerated UVs,
+                  multiple materials, etc. (requires running
+                  <strong>Validate Groups</strong> first).
+                </li>
+                <li>
+                  <strong>Search box</strong> – filter by name, ID, or block
+                  type.
+                </li>
+              </ul>
+              <img
+                src="assets/itemlist-filters.gif"
+                alt="Filtering by issue and material"
+              />
+              <div class="image-caption">
+                Issue filter shows only blocks with invalid UVs.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Checkboxes & Multi‑selection</h3>
+              <p>
+                Each item in the list has a checkbox. You can tick multiple
+                blocks. Then use the <strong>Select in 3D</strong> button (the
+                check icon next to the search) to physically select all checked
+                blocks in the viewport. The selection is updated in real time.
+              </p>
+              <img
+                src="assets/itemlist-multi-select.gif"
+                alt="Multi-select and 3D selection"
+              />
+              <div class="image-caption">
+                Tick several blocks, then click the check button to select them
+                in 3D.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Pagination & Sorting</h3>
+              <p>
+                The list shows 10 items per page. Use the arrow buttons to
+                scroll, or jump to first/last page. Sort by name (A‑Z / Z‑A) or
+                by block type (QB first / TB first).
+              </p>
+              <img
+                src="assets/itemlist-pagination.gif"
+                alt="Pagination and sort controls"
+              />
+              <div class="image-caption">
+                Navigate through many blocks easily.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Constant Materials Mode</h3>
+              <p>
+                Switch the display mode to
+                <strong>Constant Materials</strong> using the top toggle. Here
+                each block is represented by its constant material name (e.g.,
+                <code>Dirt_ID05</code>).
+              </p>
+            </div>
+
+            <div class="card">
+              <h3>Assign</h3>
+              <p>
+                Assigns a <strong>unique constant material</strong> to the
+                selected block. A dialog appears showing the base material
+                (fixed) and lets you edit the <code>ID</code> suffix. The final
+                name becomes <code>BaseName_ID&lt;value&gt;</code>. IDs must be
+                unique across all constant materials on the object. The constant
+                material is a duplicate of the base material, so you can later
+                replace its texture without affecting others.
+              </p>
+              <img
+                src="assets/itemlist-assign.gif"
+                alt="Assign constant material dialog"
+              />
+              <div class="image-caption">Set a custom ID for the block.</div>
+            </div>
+
+            <div class="card">
+              <h3>Clear</h3>
+              <p>Clears constant materials. Options:</p>
+              <ul>
+                <li>
+                  <strong>Clear from selected block</strong> (default) –
+                  restores the original base material.
+                </li>
+                <li>
+                  <strong>Clear All</strong> – removes every constant material
+                  on the object.
+                </li>
+                <li>
+                  <strong>Clear Invalid Only</strong> – removes only navigation
+                  points that are broken (do not form a valid 4‑face block).
+                </li>
+                <li>
+                  <strong>Duplicate if missing</strong> – if the original base
+                  material is gone, the constant material is duplicated and
+                  stripped of <code>_ID</code> to become the new base.
+                </li>
+              </ul>
+              <img
+                src="assets/itemlist-clear-const.gif"
+                alt="Clear constant materials dialog"
+              />
+              <div class="image-caption">Flexible clearing options.</div>
+            </div>
+
+            <div class="card">
+              <h3>Groups (Management Dialog)</h3>
+              <p>
+                Opens a dialog to organise constant materials into
+                <strong>named groups</strong>. You can:
+              </p>
+              <ul>
+                <li>Create a new group (enter a name).</li>
+                <li>Delete an existing group.</li>
+                <li>Add checked materials to the selected group.</li>
+                <li>Remove checked materials from the group.</li>
+              </ul>
+              <p>
+                Once groups are defined, you can filter the list by group using
+                the <strong>Groups</strong> button (the active group name
+                appears on the button).
+              </p>
+              <img
+                src="assets/itemlist-group-dialog.gif"
+                alt="Group management dialog"
+              />
+              <div class="image-caption">
+                Create groups, add/remove materials, and filter by group.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Check (Constant Materials)</h3>
+              <p>
+                Same as in Vertex Groups mode: adds the currently selected
+                block(s) in 3D to the checklist, but this time based on the
+                constant material name. Checked materials appear ticked in the
+                list.
+              </p>
+              <img
+                src="assets/itemlist-check-const.gif"
+                alt="Add constant material to checklist"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Navigation Point Toggle</h3>
+              <p>
+                Each constant material can be marked as a
+                <strong>navigation point</strong>. These serve as starting seeds
+                for the <strong>Navigator</strong> module when no manual
+                selection exists. The button in the list (star or dot icon)
+                toggles this flag. You can also mass‑toggle navigation points
+                for all visible items using the filter menu’s
+                <strong>Toggle Navigation State</strong> button.
+              </p>
+              <img
+                src="assets/itemlist-navpoint.gif"
+                alt="Toggle navigation point"
+              />
+              <div class="image-caption">
+                Mark a constant material as navigation point (star icon).
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Filters (QB/TB, Material, Navigation, Search)</h3>
+              <p>
+                Constant Materials mode adds a
+                <strong>Navigation Filter</strong>:
+              </p>
+              <ul>
+                <li><strong>All</strong> – show all constants.</li>
+                <li>
+                  <strong>Navigation Points</strong> – show only materials
+                  marked as navigation points.
+                </li>
+                <li>
+                  <strong>Constant Materials</strong> – show only non‑navigation
+                  constants.
+                </li>
+              </ul>
+              <p>
+                Additionally you can filter by material name (the constant
+                material itself) and use the search box. The same pagination and
+                sorting as Vertex Groups mode apply.
+              </p>
+              <img
+                src="assets/itemlist-nav-filter.gif"
+                alt="Navigation filter dropdown"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Material Icons & Preview</h3>
+              <p>
+                Each item in the list shows the actual texture image of the
+                material (if available) as an icon, making it easy to recognise
+                blocks by their texture.
+              </p>
+              <img
+                src="assets/itemlist-icons.gif"
+                alt="Material icons in the list"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Issue Validation for Vertex Groups</h3>
+              <p>
+                Before using the issue filter in Vertex Groups mode, you must
+                run <strong>Validate Groups</strong> (available in the Validator
+                module when Scope = Vertex Groups, or directly via the
+                <strong>Validate Groups</strong> button in the Item List panel).
+                This analyses every vertex group and stores issues like
+                <em>invalid geometry</em>, <em>invalid UVs</em>,
+                <em>out of range</em>, etc. The issue filter then becomes
+                active.
+              </p>
+              <img
+                src="assets/itemlist-validate.gif"
+                alt="Validating vertex groups"
+              />
+              <div class="image-caption">
+                Run validation once to enable issue filtering.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Item List in depth</h3>
+              <p>
+                Watch the complete walkthrough covering both Vertex Groups and
+                Constant Materials modes, group management, navigation points,
+                and filtering.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_ITEMLIST"
+                title="Item List Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full Item List tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 3 – Validator -->
+        <div class="page">
+          <section id="validator">
+            <h2>Validator Module</h2>
+
+            <div class="card">
+              <h3>Scope Selector</h3>
+              <p>Determines what the Validator checks:</p>
+              <ul>
+                <li>
+                  <strong>Objects</strong> – Analyses all mesh objects in the
+                  scene (or selected objects) for issues like invalid geometry,
+                  UV problems, out‑of‑range position, multiple materials, etc.
+                </li>
+                <li>
+                  <strong>Vertex Groups</strong> – Analyses vertex groups named
+                  <code>QB_*</code> or <code>TB_*</code> on the
+                  <strong>active mesh object</strong> (requires generated vertex
+                  groups from Item List).
+                </li>
+              </ul>
+              <img
+                src="assets/validator-scope.gif"
+                alt="Scope selector toggle"
+              />
+              <div class="image-caption">
+                Switch between Objects and Vertex Groups scope.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>ISSUES – Add suffix to objects</h3>
+              <p>
+                When <strong>Objects</strong> scope is active, this button
+                (<code>qb_tb.object_qb_tb_suffix</code>) adds descriptive
+                suffixes to object names based on the selected filter.
+              </p>
+              <p>Examples of suffixes added:</p>
+              <ul>
+                <li>
+                  <code>_quadblock</code> / <code>_triblock</code> – if the
+                  object is a valid block
+                </li>
+                <li><code>_invalid_geo</code> – invalid geometry</li>
+                <li><code>_invalid_uvs</code> – UVs outside 0‑1 range</li>
+                <li><code>_degenerated_uvs</code> – all UVs identical</li>
+                <li>
+                  <code>_invalid_triblock_uvs</code> – triblock with wrong UV
+                  arrangement
+                </li>
+                <li>
+                  <code>_out_of_range</code> – vertices outside -500..500 box
+                </li>
+                <li><code>_multi_mat</code> – multiple materials on faces</li>
+                <li><code>_nonmesh</code> – non‑mesh objects</li>
+                <li><code>_ngon</code> – faces with more than 4 vertices</li>
+              </ul>
+              <img
+                src="assets/validator-issues-objects.gif"
+                alt="Adding suffixes to object names"
+              />
+              <div class="image-caption">
+                After clicking ISSUES, object names get informative suffixes.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>ISSUES – Validate vertex groups</h3>
+              <p>
+                When <strong>Vertex Groups</strong> scope is active, this button
+                (<code>list.validate_vertex_groups</code>) analyses every vertex
+                group whose name starts with <code>QB_</code> or
+                <code>TB_</code>.
+              </p>
+              <p>
+                It detects the same issues as for objects (invalid geometry,
+                UVs, out‑of‑range, multiple materials) and stores the results in
+                the object property <code>vertex_group_issues</code>. These
+                issues then become available in the filter dropdown and can be
+                used by the <strong>Select</strong> and
+                <strong>Remove</strong> buttons.
+              </p>
+              <img
+                src="assets/validator-issues-vgroups.gif"
+                alt="Validating vertex groups"
+              />
+              <div class="image-caption">
+                Running validation on vertex groups stores issues for later
+                filtering.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>SELECT – Select objects by filter</h3>
+              <p>
+                In <strong>Objects</strong> scope, this button
+                (<code>qb_tb.filter_select_objects</code>) selects all objects
+                in the scene that match the current filter (e.g., "Out of
+                Range", "Invalid UVs", "Quadblocks").
+              </p>
+              <p>
+                It uses the same filter dropdown as the ISSUES button. The
+                selection is added to the current selection (does not replace
+                previous selection). The first matched object becomes the active
+                object.
+              </p>
+              <img
+                src="assets/validator-select-objects.gif"
+                alt="Selecting objects by filter"
+              />
+              <div class="image-caption">
+                Select all objects with invalid UVs in one click.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>SELECT – Select faces of vertex groups by filter</h3>
+              <p>
+                In <strong>Vertex Groups</strong> scope, this button
+                (<code>qb_tb.select_vertex_groups_by_type</code>) does two
+                things:
+              </p>
+              <ol>
+                <li>
+                  Checks the matching vertex groups in the
+                  <strong>Item List</strong> checklist (switches display mode to
+                  Vertex Groups if needed).
+                </li>
+                <li>
+                  Enters Edit Mode and selects all faces belonging to those
+                  vertex groups.
+                </li>
+              </ol>
+              <p>
+                If no validation data exists, it automatically runs
+                <strong>Validate Groups</strong> first. The filter dropdown
+                determines which groups are considered (e.g., "Invalid
+                Geometry", "Out of Range").
+              </p>
+              <img
+                src="assets/validator-select-vgroups.gif"
+                alt="Selecting faces of invalid vertex groups"
+              />
+              <div class="image-caption">
+                Automatically select faces of all groups that are out of range.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>CLEAR – Remove suffixes from object names</h3>
+              <p>
+                In <strong>Objects</strong> scope, this button
+                (<code>qb_tb.clean_object_suffixes</code>) removes all
+                validator‑added suffixes from every object in the scene,
+                restoring original base names.
+              </p>
+              <p>
+                It strips suffixes like <code>_quadblock</code>,
+                <code>_invalid_uvs</code>, <code>_out_of_range</code>, etc.
+                Useful to clean up after validation.
+              </p>
+              <img
+                src="assets/validator-clear-objects.gif"
+                alt="Cleaning object name suffixes"
+              />
+              <div class="image-caption">
+                One click to revert to original object names.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>CLEAR – Clear vertex group issues</h3>
+              <p>
+                In <strong>Vertex Groups</strong> scope, this button
+                (<code>qb_tb.clear_vertex_group_issues</code>) deletes the
+                stored <code>vertex_group_issues</code> data from the active
+                mesh object. It does <strong>not</strong> delete the vertex
+                groups themselves, only the validation cache.
+              </p>
+              <img
+                src="assets/validator-clear-vgroups.gif"
+                alt="Clearing vertex group issues cache"
+              />
+            </div>
+
+            <div class="card">
+              <h3>REMOVE – Delete invalid objects or faces</h3>
+              <p>
+                This button (<code>qb_tb.validate</code>) opens a dialog with
+                checkboxes for each issue type:
+              </p>
+              <ul>
+                <li>Remove Invalid Geometry</li>
+                <li>Remove Invalid UVs</li>
+                <li>Remove Degenerated UVs</li>
+                <li>Remove Out of Range</li>
+                <li>Remove Multiple Materials</li>
+              </ul>
+              <p>Depending on the active scope:</p>
+              <ul>
+                <li>
+                  <strong>Objects:</strong> Deletes all mesh objects that have
+                  any of the checked issues. Non‑mesh objects (empties, cameras)
+                  are also removed if "Invalid Geometry" is checked.
+                </li>
+                <li>
+                  <strong>Vertex Groups:</strong> Deletes only the faces
+                  belonging to vertex groups that have the checked issues. The
+                  vertex groups themselves remain, but their faces are removed
+                  from the mesh.
+                </li>
+              </ul>
+              <p>After removal, a detailed report is shown in the info line.</p>
+              <img
+                src="assets/validator-remove-dialog.gif"
+                alt="Remove options dialog"
+              />
+              <div class="image-caption">
+                Choose which issues trigger deletion.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Filter Dropdown</h3>
+              <p>The filter changes depending on the selected scope.</p>
+              <h4>For Objects scope:</h4>
+              <ul>
+                <li><strong>Quadblocks</strong> – valid quadblock objects</li>
+                <li><strong>Triblocks</strong> – valid triblock objects</li>
+                <li>
+                  <strong>Invalid Geometry</strong> – objects with NGons,
+                  non‑mesh, or invalid block structure
+                </li>
+                <li><strong>Invalid UVs</strong> – UVs outside 0‑1 range</li>
+                <li>
+                  <strong>Invalid Triblock UVs</strong> – triblocks with
+                  incorrect UV arrangement
+                </li>
+                <li><strong>Degenerated UVs</strong> – all UVs identical</li>
+                <li><strong>NGons</strong> – faces with >4 vertices</li>
+                <li><strong>Non‑Mesh</strong> – empties, cameras, etc.</li>
+                <li>
+                  <strong>Out of Range</strong> – bounding box extends outside
+                  -500..500
+                </li>
+                <li>
+                  <strong>Multiple Materials</strong> – more than one material
+                  on faces
+                </li>
+                <li><strong>All Invalid</strong> – any of the above issues</li>
+              </ul>
+              <h4>For Vertex Groups scope:</h4>
+              <ul>
+                <li><strong>Quadblocks</strong> – valid quadblock groups</li>
+                <li><strong>Triblocks</strong> – valid triblock groups</li>
+                <li>
+                  <strong>Invalid Geometry</strong> – groups that don’t form a
+                  valid block
+                </li>
+                <li>
+                  <strong>Invalid UVs</strong> – UVs outside 0‑1 range in the
+                  group
+                </li>
+                <li>
+                  <strong>Invalid Triblock UVs</strong> – triblock groups with
+                  wrong UV arrangement
+                </li>
+                <li>
+                  <strong>Degenerated UVs</strong> – all UVs identical in the
+                  group
+                </li>
+                <li>
+                  <strong>Out of Range</strong> – any vertex of the group
+                  outside -500..500
+                </li>
+                <li>
+                  <strong>Multiple Materials</strong> – faces in the group use
+                  more than one material
+                </li>
+                <li><strong>All Invalid</strong> – any of the above issues</li>
+              </ul>
+              <img
+                src="assets/validator-filters.gif"
+                alt="Filter dropdowns for objects and vertex groups"
+              />
+              <div class="image-caption">
+                Choose the issue category to work with.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Important: Out‑of‑Range Detection</h3>
+              <p>
+                The <strong>Out of Range</strong> check always uses a
+                <strong>fixed bounding box</strong> from (-500, -500, -500) to
+                (500, 500, 500) — a cube of 1000 units per side, centered at
+                world origin. This is hardcoded and
+                <strong>does not depend</strong> on the optional
+                <strong>Range Box</strong> object.
+              </p>
+              <p>
+                The Range Box is only a visual reference. Even if you delete it,
+                the Validator will still flag objects/groups outside the
+                1000‑unit cube.
+              </p>
+              <img
+                src="assets/validator-rangebox-note.gif"
+                alt="Range box is visual only"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Validator in action</h3>
+              <p>
+                Watch this complete tutorial explaining every feature of the
+                Validator module: from suffix tagging to selecting and removing
+                invalid blocks, plus vertex group validation.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_VALIDATOR"
+                title="Validator Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full Validator tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 4 – Render -->
+        <div class="page">
+          <section id="render">
+            <h2>Render Module</h2>
+            <p>
+              The Render module provides real‑time PS1‑style rendering effects
+              using color attributes and compositor overrides. All effects are
+              non‑destructive and can be toggled on/off.
+            </p>
+
+            <div class="card">
+              <h3>ON/OFF (Toggle CTR Render)</h3>
+              <p>
+                Enables or disables the entire CTR render effect. When ON, the
+                active viewport switches to Material Preview mode and the chosen
+                blend mode is applied. The effect uses the
+                <strong>VertexColor</strong> color attribute as the foreground
+                and the mesh’s base material as background.
+              </p>
+              <img
+                src="assets/render-toggle.gif"
+                alt="Toggle CTR Render on/off"
+              />
+              <div class="image-caption">
+                Turn the PS1 effect on and off instantly.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Blend Mode</h3>
+              <p>
+                Select how the VertexColor attribute combines with the base
+                material. Available modes:
+              </p>
+              <table>
+                <tr>
+                  <th>Mode</th>
+                  <th>Formula</th>
+                  <th>Effect</th>
+                </tr>
+                <tr>
+                  <td>Half Transparent</td>
+                  <td><code>Background/2 + Foreground/2</code></td>
+                  <td>Soft blend – both layers contribute equally.</td>
+                </tr>
+                <tr>
+                  <td>Additive</td>
+                  <td><code>Background + Foreground</code></td>
+                  <td>
+                    Bright, glowing overlay – foreground adds to background.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Subtractive</td>
+                  <td><code>Background - Foreground</code></td>
+                  <td>Darkens the background – foreground subtracts.</td>
+                </tr>
+                <tr>
+                  <td>Additive Translucent</td>
+                  <td><code>Background + Foreground/4</code></td>
+                  <td>Subtle additive – foreground has reduced intensity.</td>
+                </tr>
+              </table>
+              <img
+                src="assets/render-blend-modes.gif"
+                alt="Blend modes comparison"
+              />
+              <div class="image-caption">
+                Each blend mode produces a distinct visual result.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Apply (Refresh Shader)</h3>
+              <p>
+                Forces the shader to reload with the current settings. Use this
+                after changing the blend mode or if the effect does not update
+                automatically. Also useful after editing the
+                <strong>VertexColor</strong> attribute.
+              </p>
+              <img src="assets/render-apply.gif" alt="Apply button" />
+              <div class="image-caption">
+                Re‑apply the shader without toggling the effect.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>PS1 Resolution (Blender 3.5+)</h3>
+              <p>
+                When enabled, the 3D Viewport is rendered at a low resolution
+                (512×216) and upscaled, mimicking the low‑resolution look of
+                PlayStation 1 graphics. This override requires Blender 3.5 or
+                newer.
+              </p>
+              <div class="warning">
+                This effect overrides the viewport’s native resolution. Disable
+                it for regular editing.
+              </div>
+              <img
+                src="assets/render-ps1-res.gif"
+                alt="PS1 resolution effect"
+              />
+              <div class="image-caption">
+                Low‑pixelated viewport reminiscent of PS1.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Vertex Snap (Blender 4.0+)</h3>
+              <p>
+                Adds a Geometry Nodes modifier named
+                <code>VX_WorldSnap</code> to the active mesh object. This
+                modifier snaps vertices to a configurable grid, creating a
+                blocky, low‑poly aesthetic. The grid size is adjustable (default
+                0.1). Requires Blender 4.0 or higher.
+              </p>
+              <img
+                src="assets/render-vertex-snap.gif"
+                alt="Vertex snap modifier"
+              />
+              <div class="image-caption">
+                Snap vertices to a coarse grid for a chunky look.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Split Screen</h3>
+              <p>
+                Converts the active Properties Editor area into a second 3D
+                Viewport. Useful for comparing the original mesh and the
+                rendered effect side‑by‑side. Press again to revert (if
+                supported).
+              </p>
+              <img
+                src="assets/render-split-screen.gif"
+                alt="Split screen layout"
+              />
+              <div class="image-caption">
+                Duplicate the 3D view to compare with/without effect.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Important Requirements</h3>
+              <p>
+                The CTR Render effect relies on a
+                <strong
+                  >single Color Attribute named exactly
+                  <code>VertexColor</code></strong
+                >. Extra or renamed attributes will break the shader. Ensure
+                your mesh has this attribute with per‑face‑corner colors.
+              </p>
+              <p>If you don’t see any effect, check that:</p>
+              <ul>
+                <li>
+                  The mesh has a Color Attribute called
+                  <code>VertexColor</code>.
+                </li>
+                <li>
+                  The object is in Material Preview or Rendered viewport
+                  shading.
+                </li>
+                <li>Blend mode is not set to “None”.</li>
+                <li>
+                  You have clicked <strong>Apply</strong> after changing
+                  settings.
+                </li>
+              </ul>
+              <img
+                src="assets/render-vertexcolor-warning.gif"
+                alt="VertexColor attribute required"
+              />
+              <div class="image-caption">
+                Make sure your mesh has the VertexColor attribute.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Render effects explained</h3>
+              <p>
+                Watch the full walkthrough of the Render module – from setting
+                up VertexColor to using PS1 resolution and Vertex Snap for
+                authentic retro styling.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_RENDER"
+                title="Render Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Complete guide to the Render module.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 5 – Exporter -->
+        <div class="page">
+          <section id="exporter">
+            <h2>Exporter Module (QB/TB Export)</h2>
+            <p>
+              The Exporter module exports quadblocks and triblocks to OBJ
+              format, optimised for CrashTeamEditor and other CTR track editors.
+              It includes powerful filtering, preprocessing, texture handling,
+              and duplicate management.
+            </p>
+
+            <div class="card">
+              <h3>Export Operator (File → Export → Qb/Tb .obj)</h3>
+              <p>
+                The main export operator provides full control over all
+                settings. Access it from the top menu:
+                <strong>File → Export → Qb/Tb (.obj)</strong>. A detailed panel
+                lets you configure scope, types, preprocessing, filters, output
+                folder structure, textures, and metadata.
+              </p>
+              <img
+                src="assets/exporter-main-dialog.gif"
+                alt="Export operator dialog"
+              />
+              <div class="image-caption">Full export settings panel.</div>
+            </div>
+
+            <div class="card">
+              <h3>Quick Export (<kbd>Ctrl+Shift+E</kbd>)</h3>
+              <p>
+                Exports using the last used settings (saved in
+                <code>scene.last_export_path</code>). No dialog appears – it
+                immediately exports to the same project folder with the scene
+                name. If no export path exists, a regular export is required
+                first.
+              </p>
+              <img
+                src="assets/exporter-quick-export.gif"
+                alt="Quick Export shortcut"
+              />
+              <div class="image-caption">
+                One‑key export with previous settings.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Export Scope & Type Selection</h3>
+              <p>
+                Choose whether to export only selected objects (<strong
+                  >Selection Only</strong
+                >) or all objects in the scene. Then select which block types to
+                include: <strong>Quadblocks</strong> and/or
+                <strong>Triblocks</strong>.
+              </p>
+              <img
+                src="assets/exporter-scope.gif"
+                alt="Scope and type selection"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Preprocessing</h3>
+              <p>Two options prepare meshes before validation:</p>
+              <ul>
+                <li>
+                  <strong>Apply Modifiers</strong> – applies all modifiers on
+                  each object (non‑destructive, restores original after export).
+                </li>
+                <li>
+                  <strong>Separate by Loose Parts</strong> – splits a mesh into
+                  multiple objects based on connected components. Useful when
+                  multiple blocks are merged into one object.
+                </li>
+              </ul>
+              <img
+                src="assets/exporter-preprocessing.gif"
+                alt="Preprocessing options"
+              />
+              <div class="image-caption">
+                Apply modifiers and separate loose parts.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Issue Filtering</h3>
+              <p>
+                Filter out blocks with specific problems. Checked issues cause
+                the block to be <strong>excluded</strong> from export:
+              </p>
+              <ul>
+                <li>
+                  <strong>Out of Range</strong> – vertices outside the fixed
+                  1000‑unit cube (-500..500).
+                </li>
+                <li>
+                  <strong>Invalid UVs</strong> – UV coordinates outside the 0‑1
+                  range.
+                </li>
+                <li>
+                  <strong>Invalid Triblock UVs</strong> – triblocks where UV
+                  arrangement does not match the expected pattern (adjacent
+                  triangles share UVs).
+                </li>
+                <li>
+                  <strong>Degenerated UVs</strong> – all UVs identical
+                  (collapsed).
+                </li>
+                <li>
+                  <strong>Multiple Materials</strong> – a block uses more than
+                  one material.
+                </li>
+              </ul>
+              <p>
+                By default, issues are excluded. Tick an option to
+                <strong>allow</strong> exporting blocks with that issue.
+              </p>
+              <img
+                src="assets/exporter-filters.gif"
+                alt="Issue filtering options"
+              />
+              <div class="image-caption">
+                Control which problematic blocks are exported.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Duplicates Export</h3>
+              <p>Powerful feature for batch processing and prototyping:</p>
+              <ul>
+                <li>
+                  <strong>Export Duplicates</strong> – creates a full copy of
+                  all detected blocks (by group) inside a
+                  <code>duplicates/</code> subfolder. The duplicates are
+                  exported as separate OBJ files (one per block) without further
+                  processing. Ignores all issue filters.
+                </li>
+                <li>
+                  <strong>Export Processed</strong> – after duplication, the
+                  addon runs the main export pipeline on the newly created
+                  processed objects (inside the
+                  <code>Processed_Blocks</code> collection). This allows you to,
+                  for example, export duplicates and then export a final
+                  combined OBJ with all filters applied.
+                </li>
+              </ul>
+              <p>
+                When both are enabled, the export flow is: duplicate all blocks
+                → export duplicates → then export the processed collection using
+                your current export settings.
+              </p>
+              <img
+                src="assets/exporter-duplicates.gif"
+                alt="Duplicates export options"
+              />
+              <div class="image-caption">
+                Generate individual copies and a final processed model.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Output & Folder Structure</h3>
+              <p>
+                When <strong>Export to Folder</strong> is enabled, the exporter
+                creates a clean, organised output:
+              </p>
+              <ul>
+                <li>
+                  A <strong>project folder</strong> named after the scene (e.g.,
+                  <code>MyScene_increment/</code> or
+                  <code>MyScene_replace/</code>).
+                </li>
+                <li>
+                  Inside, a numbered subfolder (<code>001/</code>,
+                  <code>002/</code>, …) for each export to avoid overwriting.
+                </li>
+                <li>
+                  Inside that, an <code>export/</code> folder containing the
+                  final OBJ and an optional <code>textures/</code> folder.
+                </li>
+                <li>
+                  <strong>Log folder</strong> (<code>log/</code>) for JSON
+                  details files.
+                </li>
+              </ul>
+              <p>
+                <strong>Folder Behavior</strong>: <em>Replace</em> overwrites
+                the previous export; <em>Incremental</em> creates a new numbered
+                folder each time.
+              </p>
+              <img
+                src="assets/exporter-folder-structure.gif"
+                alt="Folder structure"
+              />
+              <div class="image-caption">Organised output for versioning.</div>
+            </div>
+
+            <div class="card">
+              <h3>Texture Handling</h3>
+              <p>
+                Two texture modes are available when
+                <strong>Include Textures</strong> is checked:
+              </p>
+              <ul>
+                <li>
+                  <strong>Copy Textures</strong> – copies all referenced texture
+                  images (external or packed) to a <code>textures/</code> folder
+                  next to the OBJ.
+                </li>
+                <li>
+                  <strong>Remap Textures</strong> – same copy, but also updates
+                  the material nodes inside Blender to point to the new copied
+                  texture paths. This ensures the exported OBJ/MTL uses relative
+                  paths. After export, original paths are restored.
+                </li>
+              </ul>
+              <div class="warning">
+                Remap Textures temporarily modifies materials. The operation is
+                reversible – original texture paths are restored automatically.
+              </div>
+              <img
+                src="assets/exporter-textures.gif"
+                alt="Texture copy and remap"
+              />
+              <div class="image-caption">
+                Keep textures together with the model.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Export Details (JSON)</h3>
+              <p>
+                Generates a <code>Details.json</code> file inside the
+                <code>log/</code> folder. Contains:
+              </p>
+              <ul>
+                <li>Export timestamp, Blender version, addon version.</li>
+                <li>
+                  Counts of exported quadblocks/triblocks, objects with UV
+                  issues.
+                </li>
+                <li>
+                  Per‑block issue list (only for blocks that have at least one
+                  issue).
+                </li>
+                <li>Full export settings used.</li>
+              </ul>
+              <p>Helps with debugging and tracking export history.</p>
+              <img
+                src="assets/exporter-json-details.gif"
+                alt="JSON details example"
+              />
+              <div class="image-caption">Machine‑readable export report.</div>
+            </div>
+
+            <div class="card">
+              <h3>Internal Export Flow</h3>
+              <p>Behind the scenes, the export pipeline consists of:</p>
+              <ol>
+                <li>
+                  <strong>Preprocessing</strong> – apply modifiers, separate
+                  loose parts.
+                </li>
+                <li>
+                  <strong>Validation</strong> – filter objects by type and issue
+                  settings.
+                </li>
+                <li>
+                  <strong>Texture handling</strong> – copy/remap textures.
+                </li>
+                <li>
+                  <strong>OBJ export</strong> – using Blender’s native OBJ
+                  exporter (wm.obj_export on 3.3+).
+                </li>
+                <li>
+                  <strong>Restoration</strong> – revert any temporary changes
+                  (modifiers, view layer links, PS1 render state, vertex snap
+                  modifiers).
+                </li>
+              </ol>
+              <p>
+                The system is designed to be non‑destructive and restore the
+                scene to its original state after export.
+              </p>
+              <img src="assets/exporter-flow.gif" alt="Export pipeline" />
+            </div>
+
+            <div class="card">
+              <h3>Important Notes</h3>
+              <ul>
+                <li>
+                  The exporter temporarily disables PS1 Render and Vertex Snap
+                  modifiers to avoid conflicts.
+                </li>
+                <li>
+                  Objects that are not quadblocks or triblocks are ignored.
+                </li>
+                <li>
+                  If no objects pass the filters, a detailed error message
+                  explains why (e.g., “Found 12 Quadblocks but none passed UV
+                  filters”).
+                </li>
+                <li>
+                  Quick Export uses the last export path from a regular export.
+                  If none exists, you must perform a full export first.
+                </li>
+              </ul>
+              <img src="assets/exporter-notes.gif" alt="Important notes" />
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Exporter deep dive</h3>
+              <p>
+                Complete walkthrough of the Exporter module – from basic export
+                to advanced duplicate processing and texture remapping.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_EXPORTER"
+                title="Exporter Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full Exporter tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 6 – Material Manager -->
+        <div class="page">
+          <section id="material-manager">
+            <h2>Material Manager</h2>
+            <p>
+              The Material Manager is a dedicated panel in the
+              <strong>Properties Editor → Material context</strong>. It lists
+              all materials (normal, constant, navigation points) from the
+              active object and provides operations to rename, remap textures,
+              assign to selection, and select/deselect by material families.
+            </p>
+
+            <div class="card">
+              <h3>Filter & Search</h3>
+              <p>Filter materials by type:</p>
+              <ul>
+                <li>
+                  <strong>All</strong> – all materials in the scene (global).
+                </li>
+                <li>
+                  <strong>Normal</strong> – materials of the active object that
+                  are NOT constant/nav points.
+                </li>
+                <li>
+                  <strong>Constant</strong> – constant materials of the active
+                  object (non‑navigation).
+                </li>
+                <li>
+                  <strong>Nav Point</strong> – navigation point materials of the
+                  active object.
+                </li>
+              </ul>
+              <p>Use the search box to filter by name.</p>
+              <img
+                src="assets/materialmanager-filter.gif"
+                alt="Material filter dropdown"
+              />
+              <div class="image-caption">
+                Quickly switch between material categories.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Assign (Selected Faces)</h3>
+              <p>
+                Assigns the selected material to the currently selected faces in
+                Edit Mode. If the faces belong to a detected quadblock or
+                triblock, the <strong>entire block</strong> receives the
+                material. If the material is a constant/navigation material, the
+                operator is disabled – use the “Assign” button inside the Item
+                List (Constant Materials mode) for those.
+              </p>
+              <img
+                src="assets/materialmanager-assign.gif"
+                alt="Assign material to selection"
+              />
+              <div class="image-caption">
+                Assign whole blocks or individual faces.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Select / Deselect (Popup Scope)</h3>
+              <p>
+                Selects (or deselects) faces that use the selected material. A
+                popup offers four scopes:
+              </p>
+              <ul>
+                <li>
+                  <strong>Checked</strong> – only the exact material selected.
+                </li>
+                <li>
+                  <strong>Full</strong> – the base material + all its constant
+                  materials (including nav points).
+                </li>
+                <li>
+                  <strong>Constants</strong> – only constant materials derived
+                  from the base (excludes base and nav points).
+                </li>
+                <li>
+                  <strong>Nav Points</strong> – only navigation point constants.
+                </li>
+              </ul>
+              <p>
+                This is extremely useful for selecting all variations of a
+                texture family (e.g., all “Grass_ID*” materials) in one click.
+              </p>
+              <img
+                src="assets/materialmanager-select.gif"
+                alt="Select by material family"
+              />
+              <div class="image-caption">
+                Select the whole material family or just constants.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Rename (Base + ID)</h3>
+              <p>Smart renaming that understands constant materials:</p>
+              <ul>
+                <li>
+                  For a <strong>normal material</strong> – simple rename, checks
+                  for conflicts with base names used by constants.
+                </li>
+                <li>
+                  For a <strong>constant material</strong> – separate fields for
+                  base name and ID. Renaming the base renames the entire family
+                  (all constants with that base). Renaming the ID only affects
+                  the selected constant. Uniqueness of IDs is enforced.
+                </li>
+                <li>
+                  For a <strong>base material</strong> that has constants –
+                  renaming the base automatically renames all its constant
+                  materials accordingly.
+                </li>
+              </ul>
+              <p>
+                All rename operations validate that the new name does not
+                conflict with existing materials or base‑name usage.
+              </p>
+              <img
+                src="assets/materialmanager-rename.gif"
+                alt="Rename constant family"
+              />
+              <div class="image-caption">
+                Rename base and propagate to all constants.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Remap (Texture)</h3>
+              <p>
+                Changes the texture image for a material and
+                <strong>all derived materials</strong> (base + constants that
+                share the same original material). You can select a new image
+                from the dropdown or load from file. The remap function ensures
+                the image is assigned to the first <code>TEX_IMAGE</code> node
+                (or creates one if missing).
+              </p>
+              <p>
+                If PS1 Render is active and a material lacks a texture node, the
+                effect is temporarily disabled to allow node creation, then
+                restored. This guarantees that constants without nodes can still
+                be remapped.
+              </p>
+              <img src="assets/materialmanager-remap.gif" alt="Remap texture" />
+              <div class="image-caption">
+                Batch‑update textures across an entire material family.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Refresh & Purge Unused</h3>
+              <p>
+                Rebuilds the material list after adding, renaming, or deleting
+                materials. Optionally purges all unused data blocks (materials,
+                textures, images) from the blend file, helping to keep the
+                project clean.
+              </p>
+              <img
+                src="assets/materialmanager-refresh.gif"
+                alt="Refresh and purge"
+              />
+              <div class="image-caption">
+                Keep your material list up‑to‑date.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>List Interface</h3>
+              <p>
+                The material list displays each item with its texture preview
+                icon (if available). Click the checkbox to select a material.
+                The selected material is highlighted and used by the
+                Assign/Select/Deselect/Rename/Remap buttons. Pagination (10
+                items per page) and scroll buttons help navigate long lists.
+              </p>
+              <img
+                src="assets/materialmanager-list.gif"
+                alt="Material list with icons"
+              />
+              <div class="image-caption">
+                Visual material selection with texture previews.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Important Notes</h3>
+              <ul>
+                <li>
+                  The Material Manager only affects the
+                  <strong>active mesh object</strong>.
+                </li>
+                <li>
+                  Assigning a material through this panel will
+                  <strong>not</strong> create constant materials – use the Item
+                  List’s “Assign” button for that.
+                </li>
+                <li>
+                  Remapping textures uses the first <code>TEX_IMAGE</code> node
+                  found. For materials with multiple texture nodes, only the
+                  first is updated (this is by design).
+                </li>
+                <li>
+                  Renaming a base material that has constants will also rename
+                  the constants, but the operation checks for ID collisions with
+                  other families.
+                </li>
+              </ul>
+              <img
+                src="assets/materialmanager-notes.gif"
+                alt="Important notes"
+              />
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Material Manager explained</h3>
+              <p>
+                Watch how to manage material families, remap textures in batch,
+                and use the selection scopes to speed up texturing workflows.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_MATERIALMANAGER"
+                title="Material Manager Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full Material Manager tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 7 – Range Box -->
+        <div class="page">
+          <section id="range-box">
+            <h2>Range Box Module</h2>
+            <p>
+              The Range Box is a <strong>visual reference</strong> that shows
+              the 1000‑unit cube used by the Validator for “Out of Range”
+              detection. It does <strong>not</strong> affect validation logic;
+              the Validator always uses the hardcoded box from (-500,-500,-500)
+              to (500,500,500).
+            </p>
+
+            <div class="card">
+              <h3>Add Range Box</h3>
+              <p>
+                Creates a new empty object named “Range” with a wireframe
+                display that outlines the 1000‑unit cube. The wireframe is
+                visible in the 3D viewport, making it easy to see which objects
+                or blocks lie outside the valid range.
+              </p>
+              <p>
+                You can add it via the menu:
+                <strong>Add → CTR → Range Box</strong>.
+              </p>
+              <img src="assets/rangebox-add.gif" alt="Adding a Range Box" />
+              <div class="image-caption">
+                Add the visual helper from the Add menu.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Visual Properties</h3>
+              <p>
+                The Range Box is an empty with a custom wireframe cube. You can
+                move, scale, or delete it – it will not affect any validation.
+                However, you cannot change its size; it always represents the
+                same 1000‑unit cube. If you need a different range, you must
+                modify the Validator’s internal values (not exposed in UI).
+              </p>
+              <p>
+                The addon does <strong>not</strong> provide any interface to
+                change the box’s colour or line thickness. Its appearance is the
+                default Blender empty wireframe.
+              </p>
+              <img
+                src="assets/rangebox-properties.gif"
+                alt="Range Box properties"
+              />
+              <div class="image-caption">
+                The box is purely visual – moving or scaling it does nothing to
+                validation.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Important: Validation is Independent</h3>
+              <p>
+                The Validator’s “Out of Range” check
+                <strong>ignores</strong> the Range Box object entirely. Even if
+                you delete the Range Box, or move it elsewhere, the out‑of‑range
+                detection still uses the fixed coordinates (-500,-500,-500) to
+                (500,500,500). The Range Box is only a convenience to help you
+                position your geometry inside the safe zone.
+              </p>
+              <div class="warning">
+                Do not rely on the Range Box to change validation behaviour. It
+                is a visual aid only.
+              </div>
+              <img
+                src="assets/rangebox-validation-note.gif"
+                alt="Range Box does not affect validation"
+              />
+              <div class="image-caption">
+                Out‑of‑range detection always uses the fixed cube.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Using the Range Box</h3>
+              <p>
+                Learn how to add and use the Range Box as a reference when
+                modelling blocks for CTR track development.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_RANGEBOX"
+                title="Range Box Module Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">Quick guide to the Range Box.</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 8 – Keymaps -->
+        <div class="page">
+          <section id="keymaps">
+            <h2>Keymaps (Shortcuts)</h2>
+            <div class="card">
+              <table>
+                <tr>
+                  <th>Shortcut</th>
+                  <th>Action</th>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+Shift+E</kbd></td>
+                  <td>Quick Export</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+L</kbd></td>
+                  <td>Navigate block under cursor</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+Shift+D</kbd></td>
+                  <td>Duplicate block with constant</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+Shift+S</kbd></td>
+                  <td>Toggle block seams</td>
+                </tr>
+              </table>
+              <p>
+                Customise in
+                <strong>Edit → Preferences → Keymap</strong> (search operator
+                IDs: <code>qb_tb.quick_export</code>,
+                <code>navigator.cursor_select_block</code>,
+                <code>list.duplicate_selection</code>,
+                <code>list.toggle_block_seams</code>).
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 9 – Addon Updater -->
+        <div class="page">
+          <section id="updater">
+            <h2>Addon Updater</h2>
+            <p>
+              The addon updater automatically checks for new versions of the CTR
+              Toolkit on GitHub and provides a simple one‑click installation. It
+              is based on the reliable CGCookie updater and includes
+              backup/restore capabilities.
+            </p>
+
+            <div class="card">
+              <h3>Automatic Update Checking</h3>
+              <p>
+                When enabled in preferences, the updater periodically checks
+                GitHub for new releases. The check interval is fully
+                customisable (months, days, hours, minutes). If an update is
+                found, the Blender icon in the CTR panel header turns
+                <strong>red</strong>. Click it to open the installation popup.
+              </p>
+              <img
+                src="assets/updater-auto-check.gif"
+                alt="Auto‑check and red icon"
+              />
+              <div class="image-caption">
+                Red Blender icon signals an update is ready.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Manual Check</h3>
+              <p>
+                You can manually check for updates at any time via the
+                <strong>Update Settings</strong> panel inside Blender
+                Preferences:
+                <strong>Edit → Preferences → Add-ons → CTR Toolkit</strong>. The
+                panel also shows the status (up to date, error, checking) and
+                the timestamp of the last check.
+              </p>
+              <img
+                src="assets/updater-manual-check.gif"
+                alt="Manual check in preferences"
+              />
+              <div class="image-caption">
+                Check now and view status from addon preferences.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Install Update Popup</h3>
+              <p>
+                When an update is available, clicking the red Blender icon opens
+                a dialog with three choices:
+              </p>
+              <ul>
+                <li>
+                  <strong>Update Now</strong> – downloads the new version and
+                  installs it (a backup is created automatically).
+                </li>
+                <li>
+                  <strong>Ignore</strong> – dismisses the update for this
+                  version (prevents future popups for the same version).
+                </li>
+                <li>
+                  <strong>Defer</strong> – closes the popup and reminds you
+                  again in the next Blender session.
+                </li>
+              </ul>
+              <p>
+                The installer can perform a
+                <strong>clean install</strong> (deletes the old addon folder
+                before copying the new one) or a standard merge (overwrites only
+                changed files).
+              </p>
+              <img
+                src="assets/updater-popup.gif"
+                alt="Update installation popup"
+              />
+              <div class="image-caption">
+                One‑click update from the popup dialog.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Update Settings (Preferences)</h3>
+              <p>
+                Located in the addon preferences, the update settings panel
+                gives you full control:
+              </p>
+              <ul>
+                <li>
+                  <strong>Auto‑check toggle</strong> – enable/disable automatic
+                  checks.
+                </li>
+                <li>
+                  <strong>Interval configuration</strong> – set months, days,
+                  hours, minutes between checks.
+                </li>
+                <li>
+                  <strong>Status display</strong> – shows if an update is
+                  available, or if there was an error.
+                </li>
+                <li>
+                  <strong>Primary buttons</strong> – “Check for Updates”,
+                  “Install &lt;version&gt;”, “Ignore”, etc.
+                </li>
+                <li>
+                  <strong>Advanced options</strong> – “Install Specific Version”
+                  (rollback to a previous release) and “Restore Backup” (if a
+                  backup exists).
+                </li>
+              </ul>
+              <img src="assets/updater-settings.gif" alt="Update settings UI" />
+              <div class="image-caption">
+                Full control over update behaviour.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Backup & Restore</h3>
+              <p>
+                Before installing an update, the updater creates a
+                <strong>backup</strong> of the current addon folder (excluding
+                patterns like <code>__pycache__</code>). If something goes
+                wrong, you can restore the previous version using the
+                <strong>Restore Backup</strong> button in the advanced section.
+                The backup is stored inside the
+                <code>blender_ctr_toolkit_updater/</code> folder.
+              </p>
+              <img src="assets/updater-backup.gif" alt="Backup and restore" />
+              <div class="image-caption">
+                Safe updates with automatic backup.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Install Specific Version</h3>
+              <p>
+                Sometimes you may need to revert to an older release. The
+                updater can download and install any previous tag (release) from
+                the GitHub repository. A dropdown lets you select the desired
+                version. This is perfect for troubleshooting or working with
+                legacy projects.
+              </p>
+              <img
+                src="assets/updater-specific-version.gif"
+                alt="Install specific version"
+              />
+              <div class="image-caption">
+                Roll back to any previous version.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Testing Mode (fake_install)</h3>
+              <p>
+                For development and testing, the updater includes a
+                <code>fake_install</code> flag. When enabled, it simulates an
+                update without actually downloading or modifying files. This
+                allows you to test the UI and callback logic without affecting
+                the real addon.
+              </p>
+              <img src="assets/updater-testing.gif" alt="Testing mode" />
+              <div class="image-caption">Safe testing of the update flow.</div>
+            </div>
+
+            <div class="card">
+              <h3>Important Notes</h3>
+              <ul>
+                <li>
+                  After an update, Blender <strong>must be restarted</strong> to
+                  fully reload the addon (the updater shows a restart prompt).
+                </li>
+                <li>
+                  The updater only works with GitHub releases (not branches).
+                  The repository owner and repo name are hardcoded to
+                  <code>kjorgecaballero/blender-ctr-toolkit</code>.
+                </li>
+                <li>
+                  If you have modified the addon files manually, a clean install
+                  will remove those changes. Back up your modifications before
+                  updating.
+                </li>
+                <li>
+                  The updater requires an internet connection to check for
+                  updates and download the ZIP.
+                </li>
+                <li>
+                  On some systems, SSL certificate errors may occur. The updater
+                  will fall back to a manual download link in such cases.
+                </li>
+              </ul>
+              <img src="assets/updater-notes.gif" alt="Important notes" />
+            </div>
+
+            <div class="card">
+              <h3>Video tutorial: Keeping CTR Toolkit up to date</h3>
+              <p>
+                Watch a complete walkthrough of the addon updater – from
+                enabling auto‑check to performing updates and restoring backups.
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/TU_VIDEO_ID_UPDATER"
+                title="Addon Updater Tutorial"
+                frameborder="0"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                "
+                allowfullscreen
+              ></iframe>
+              <div class="image-caption">
+                Full updater tutorial – click to watch.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAGE 10 – Video Tutorials -->
+        <div class="page">
+          <section id="videos">
+            <h2>Video Tutorials</h2>
+            <div class="card">
+              <p>
+                Full playlist covering installation, Navigator, Item List,
+                Validator, Render, Exporter, Material Manager, and
+                CrashTeamEditor integration:
+              </p>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/9SxqlWV5OxI?list=PLvqykQpD5C2LQq1c7pYH5vWBxTlQ0tVXf"
+                frameborder="0"
+                allowfullscreen
+              ></iframe>
+              <p>
+                Each tutorial includes step‑by‑step voice guidance and on‑screen
+                highlights.
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div id="pagination">
+        <button id="prevBtn">Previous</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn">Next</button>
+      </div>
+
+      <footer>
+        <p>
+          © 2026 – Blender CTR Toolkit Documentation. Licensed under GPL-2.0.
+        </p>
+      </footer>
+    </main>
+
+    <script>
+      // Collapsible sidebar sections
+      document.querySelectorAll(".collapsible").forEach((button) => {
+        button.addEventListener("click", () => {
+          const submenu = button.nextElementSibling;
+          const icon = button.querySelector(".icon");
+          submenu.classList.toggle("submenu-show");
+          if (submenu.classList.contains("submenu-show")) {
+            submenu.style.display = "block";
+            icon.textContent = "▲";
+          } else {
+            submenu.style.display = "none";
+            icon.textContent = "▼";
+          }
+        });
+        const submenu = button.nextElementSibling;
+        if (!submenu.classList.contains("submenu-show"))
+          submenu.style.display = "none";
+      });
+
+      // Pagination logic
+      const pages = document.querySelectorAll(".page");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const pageInfo = document.getElementById("pageInfo");
+      let currentPage = 0;
+
+      function highlightActiveLink() {
+        const sections = document.querySelectorAll(".page.active section[id]");
+        const links = document.querySelectorAll("#sidebar a");
+        links.forEach((link) => link.classList.remove("active"));
+        sections.forEach((section) => {
+          const link = document.querySelector(
+            `#sidebar a[href="#${section.id}"]`,
+          );
+          if (link) link.classList.add("active");
+        });
+      }
+
+      function showPage(index) {
+        pages.forEach((p, i) => p.classList.toggle("active", i === index));
+        pageInfo.textContent = `Page ${index + 1} of ${pages.length}`;
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === pages.length - 1;
+        const prevTitle =
+          index > 0
+            ? pages[index - 1].querySelector("section h2")?.textContent || ""
+            : "";
+        const nextTitle =
+          index < pages.length - 1
+            ? pages[index + 1].querySelector("section h2")?.textContent || ""
+            : "";
+        prevBtn.textContent = index > 0 ? `Previous: ${prevTitle}` : "Previous";
+        nextBtn.textContent =
+          index < pages.length - 1 ? `Next: ${nextTitle}` : "Next";
+        window.scrollTo(0, 0);
+        highlightActiveLink();
+      }
+
+      prevBtn.addEventListener("click", () => {
+        if (currentPage > 0) {
+          currentPage--;
+          showPage(currentPage);
+        }
+      });
+      nextBtn.addEventListener("click", () => {
+        if (currentPage < pages.length - 1) {
+          currentPage++;
+          showPage(currentPage);
+        }
+      });
+      showPage(currentPage);
+
+      // Sidebar navigation
+      document.querySelectorAll("#sidebar a").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const targetId = link.getAttribute("href").substring(1);
+          const page = parseInt(link.dataset.page);
+          if (!isNaN(page)) {
+            currentPage = page;
+            showPage(currentPage);
+          }
+          const section = document.getElementById(targetId);
+          if (section)
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      // Search filter
+      const searchInput = document.getElementById("search");
+      searchInput.addEventListener("input", () => {
+        const filter = searchInput.value.toLowerCase();
+        document.querySelectorAll("#sidebar li").forEach((item) => {
+          const text = item.textContent.toLowerCase();
+          item.style.display = text.includes(filter) ? "block" : "none";
+        });
+      });
+    </script>
+  </body>
+</html>
