@@ -109,36 +109,63 @@ class LIST_OT_DuplicateSelection(Operator):
                 found_blocks.add(('quadblock', vert.index))
 
         if not found_blocks:
-            self.report({'WARNING'}, "No blocks with constant material found in selection.")
+            self.report({'WARNING'}, "No blocks found in selection. Run 'Find All Blocks' first.")
             return {'CANCELLED'}
 
         # 3. Store info for each block (including center coordinate and navigation status)
+        #    *** FIX: Use actual face materials to determine constant material ***
         blocks_info = []
-        const_materials = obj.get("constant_materials", {})
+        const_dict = obj.get("constant_materials", {})
+        quad_faces_map = obj.get("quadblock_faces_map", {})
+        tri_faces_map = obj.get("triblock_faces_map", {})
+
         for block_type, block_id in found_blocks:
-            const_prop = f"constant_name_{block_type}_{block_id}"
-            if const_prop not in obj:
+            # Get the 4 faces of this block from the navigator maps
+            face_indices = []
+            if block_type == 'quadblock':
+                if str(block_id) in quad_faces_map:
+                    face_indices = quad_faces_map[str(block_id)]
+            else:  # triblock
+                if str(block_id) in tri_faces_map:
+                    face_indices = tri_faces_map[str(block_id)]
+
+            if len(face_indices) != 4:
+                continue  # invalid block, skip
+
+            # Now check if any of these faces has a constant material
+            const_material_name = None
+            for f_idx in face_indices:
+                if f_idx >= len(bm.faces):
+                    continue
+                face = bm.faces[f_idx]
+                mat_idx = face.material_index
+                if mat_idx < len(obj.material_slots):
+                    mat = obj.material_slots[mat_idx].material
+                    if mat and mat.name in const_dict:
+                        const_material_name = mat.name
+                        break
+
+            if const_material_name is None:
+                # No constant material assigned to this block
                 continue
-            const_name = obj[const_prop]
-            const_info = const_materials.get(const_name, {})
+
+            const_info = const_dict[const_material_name]
             base_mat_name = const_info.get("original_material",
-                                            const_name.split('_ID')[0] if '_ID' in const_name else const_name)
+                                            const_material_name.split('_ID')[0] if '_ID' in const_material_name else const_material_name)
             is_nav_point = const_info.get("is_navigation_point", False)
 
-            if block_type == 'quadblock':
-                center_vert = bm.verts[block_id] if block_id < len(bm.verts) else None
-                if not center_vert:
-                    continue
-                center_co = center_vert.co.copy()
-            else:  # triblock
-                center_face = bm.faces[block_id] if block_id < len(bm.faces) else None
-                if not center_face:
-                    continue
-                center_co = center_face.calc_center_bounds()
+            # Get center coordinate for later relocation of duplicated block
+            if block_type == 'quadblock' and block_id < len(bm.verts):
+                center_co = bm.verts[block_id].co.copy()
+            elif block_type == 'triblock' and block_id < len(bm.faces):
+                center_co = bm.faces[block_id].calc_center_bounds()
+            else:
+                continue
+
             blocks_info.append({
                 'type': block_type,
                 'id': block_id,
-                'const_name': const_name,
+                'const_name': const_material_name,
                 'base_mat_name': base_mat_name,
                 'center_co': center_co,
                 'is_navigation_point': is_nav_point,
