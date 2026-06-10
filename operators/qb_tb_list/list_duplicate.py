@@ -16,7 +16,6 @@ def duplicate_selected_faces_bmesh(bm):
     if not selected_faces:
         return [], 0
 
-    old_face_count = len(bm.faces)
     ret = bmesh.ops.duplicate(bm, geom=selected_faces, use_select_history=False)
     new_faces = [elem for elem in ret['geom'] if isinstance(elem, bmesh.types.BMFace)]
 
@@ -26,7 +25,7 @@ def duplicate_selected_faces_bmesh(bm):
     for f in new_faces:
         f.select = True
 
-    return new_faces, old_face_count
+    return new_faces, len(selected_faces)
 
 
 def deep_copy_idprop_group(group):
@@ -34,12 +33,12 @@ def deep_copy_idprop_group(group):
     Recursively convert Blender IDPropertyGroup (or any mapping/list)
     to plain Python dicts/lists so we can safely copy and modify them.
     """
-    if hasattr(group, 'items'):          # mapping (dict, IDPropertyGroup, etc.)
+    if hasattr(group, 'items'):
         return {k: deep_copy_idprop_group(v) for k, v in group.items()}
     elif isinstance(group, (list, tuple)):
         return [deep_copy_idprop_group(item) for item in group]
     else:
-        return group                     # primitive (str, int, float, bool)
+        return group
 
 
 class LIST_OT_DuplicateSelection(Operator):
@@ -52,35 +51,37 @@ class LIST_OT_DuplicateSelection(Operator):
     def poll(cls, context):
         return (context.edit_object is not None and context.mode == 'EDIT_MESH')
 
-    def _get_next_constant_name(self, obj, base_mat_name):
+    def _get_next_constant_name(self, obj, original_const_name):
         """
-        Return a new unique constant material name derived from base_mat_name,
-        using an incremental numeric suffix (001, 002, ...).
+        Return a new unique constant material name derived from the original constant name,
+        preserving the base and ID and adding an incremental numeric suffix.
+        Example: "window_tex_IDwindow_nav" -> "window_tex_IDwindow_nav_001"
+                 "window_tex_IDwindow_nav_001" -> "window_tex_IDwindow_nav_002"
         """
         const_dict = obj.get("constant_materials", {})
-        max_num = 0
-        for const_name, info in const_dict.items():
-            if info.get("original_material") == base_mat_name:
-                # Extract trailing numeric suffix (e.g., "001", "042")
-                match = re.search(r'(\d+)$', const_name)
-                if match:
-                    try:
-                        num = int(match.group(1))
-                        if num > max_num:
-                            max_num = num
-                    except ValueError:
-                        pass
-        next_num = max_num + 1
-        return f"{base_mat_name}{next_num:03d}"
+        # Strip any trailing numeric suffix
+        cleaned_name = re.sub(r'_\d+$', '', original_const_name)
+        if '_ID' not in cleaned_name:
+            pattern = cleaned_name
+        else:
+            base_part, id_part = cleaned_name.rsplit('_ID', 1)
+            pattern = f"{base_part}_ID{id_part}"
+        
+        max_suffix = 0
+        for const_name in const_dict.keys():
+            if const_name.startswith(pattern):
+                suffix_match = re.search(r'_(\d+)$', const_name)
+                if suffix_match:
+                    max_suffix = max(max_suffix, int(suffix_match.group(1)))
+        next_suffix = max_suffix + 1
+        return f"{pattern}_{next_suffix:03d}"
 
     def execute(self, context):
         print("--- DEBUG: Duplicate operator started ---")
         obj = context.edit_object
-
-        # Ensure face selection mode
         context.tool_settings.mesh_select_mode = (False, False, True)
 
-        # 1. Get selected faces
+        # Initial bmesh and selection
         bm = bmesh.from_edit_mesh(obj.data)
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
@@ -90,7 +91,7 @@ class LIST_OT_DuplicateSelection(Operator):
             self.report({'WARNING'}, "No faces selected.")
             return {'CANCELLED'}
 
-        # 2. Detect blocks with constant material within selection
+        # Detect blocks in selection
         face_to_quad = obj.get("face_to_quadblock", {})
         face_to_tri = obj.get("face_to_triblock", {})
         quad_centers = set(obj.get("quadblock_centers", []))
@@ -112,27 +113,22 @@ class LIST_OT_DuplicateSelection(Operator):
             self.report({'WARNING'}, "No blocks found in selection. Run 'Find All Blocks' first.")
             return {'CANCELLED'}
 
-        # 3. Store info for each block (including center coordinate and navigation status)
-        #    *** FIX: Use actual face materials to determine constant material ***
+        # Gather block info (center coordinates, constant materials, etc.)
         blocks_info = []
         const_dict = obj.get("constant_materials", {})
         quad_faces_map = obj.get("quadblock_faces_map", {})
         tri_faces_map = obj.get("triblock_faces_map", {})
 
         for block_type, block_id in found_blocks:
-            # Get the 4 faces of this block from the navigator maps
-            face_indices = []
+            # Get face indices for this block
             if block_type == 'quadblock':
-                if str(block_id) in quad_faces_map:
-                    face_indices = quad_faces_map[str(block_id)]
-            else:  # triblock
-                if str(block_id) in tri_faces_map:
-                    face_indices = tri_faces_map[str(block_id)]
-
+                face_indices = quad_faces_map.get(str(block_id), [])
+            else:
+                face_indices = tri_faces_map.get(str(block_id), [])
             if len(face_indices) != 4:
-                continue  # invalid block, skip
+                continue
 
-            # Now check if any of these faces has a constant material
+            # Find constant material on block
             const_material_name = None
             for f_idx in face_indices:
                 if f_idx >= len(bm.faces):
@@ -144,17 +140,15 @@ class LIST_OT_DuplicateSelection(Operator):
                     if mat and mat.name in const_dict:
                         const_material_name = mat.name
                         break
-
-            if const_material_name is None:
-                # No constant material assigned to this block
+            if not const_material_name:
                 continue
 
             const_info = const_dict[const_material_name]
             base_mat_name = const_info.get("original_material",
-                                            const_material_name.split('_ID')[0] if '_ID' in const_material_name else const_material_name)
-            is_nav_point = const_info.get("is_navigation_point", False)
+                                           const_material_name.split('_ID')[0] if '_ID' in const_material_name else const_material_name)
+            is_nav = const_info.get("is_navigation_point", False)
 
-            # Get center coordinate for later relocation of duplicated block
+            # Get center coordinate
             if block_type == 'quadblock' and block_id < len(bm.verts):
                 center_co = bm.verts[block_id].co.copy()
             elif block_type == 'triblock' and block_id < len(bm.faces):
@@ -168,34 +162,29 @@ class LIST_OT_DuplicateSelection(Operator):
                 'const_name': const_material_name,
                 'base_mat_name': base_mat_name,
                 'center_co': center_co,
-                'is_navigation_point': is_nav_point,
+                'is_navigation_point': is_nav,
+                'original_faces': face_indices,
             })
 
         if not blocks_info:
             self.report({'ERROR'}, "None of the selected blocks have a constant material.")
             return {'CANCELLED'}
 
-        # 4. Duplicate ALL selected faces
-        new_faces, old_face_count = duplicate_selected_faces_bmesh(bm)
+        # Duplicate ALL selected faces at once
+        new_faces, _ = duplicate_selected_faces_bmesh(bm)
+        # Store indices of all newly created faces (constant and non-constant)
+        all_new_face_indices = [f.index for f in new_faces]
         bmesh.update_edit_mesh(obj.data)
-
         if not new_faces:
-            self.report({'ERROR'}, "Duplicate operation failed. No new faces created.")
+            self.report({'ERROR'}, "Duplicate operation failed.")
             return {'CANCELLED'}
 
-        new_face_indices = [f.index for f in new_faces]
-
-        # 5. Refresh bmesh
+        # Refresh bmesh and find new centers for each block
         bm = bmesh.from_edit_mesh(obj.data)
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
 
-        new_const_names = []
-
-        # 6. Process each original block
-        processed = 0
         for info in blocks_info:
-            # Find duplicated center by coordinate
             new_center = None
             if info['type'] == 'quadblock':
                 for v in bm.verts:
@@ -203,7 +192,7 @@ class LIST_OT_DuplicateSelection(Operator):
                         if len(v.link_faces) == 4:
                             new_center = v
                             break
-            else:
+            else:  # triblock
                 for f in bm.faces:
                     if (f.calc_center_bounds() - info['center_co']).length < 0.001 and f.index != info['id']:
                         if len(f.verts) == 3:
@@ -215,21 +204,30 @@ class LIST_OT_DuplicateSelection(Operator):
                 self.report({'WARNING'}, f"Could not locate duplicated block for {info['const_name']}")
                 continue
 
-            # Get the 4 faces of this block
+            # Get the 4 faces of the duplicated block
             if info['type'] == 'quadblock':
-                face_indices = [f.index for f in new_center.link_faces]
+                new_face_indices = [f.index for f in new_center.link_faces]
             else:
                 adj = self.find_adjacent_triangular_faces(new_center)
                 if len(adj) != 3:
-                    self.report({'WARNING'}, f"Triblock at face {new_center.index} does not have 3 adjacent triangles.")
                     continue
-                face_indices = [new_center.index] + [f.index for f in adj]
+                new_face_indices = [new_center.index] + [f.index for f in adj]
 
-            if len(face_indices) != 4:
-                self.report({'WARNING'}, f"Block {info['const_name']} has {len(face_indices)} faces, expected 4.")
+            if len(new_face_indices) != 4:
                 continue
 
-            # Restore base material
+            info['new_center'] = new_center
+            info['new_face_indices'] = new_face_indices
+
+        # Prepare material assignments (base temporary + constant) for all blocks
+        assignments = []  # list of (face_indices, material_index)
+        new_const_names = []
+
+        for info in blocks_info:
+            if 'new_face_indices' not in info:
+                continue
+
+            # Restore base material (temporary)
             base_mat = bpy.data.materials.get(info['base_mat_name'])
             if not base_mat:
                 self.report({'ERROR'}, f"Base material '{info['base_mat_name']}' not found")
@@ -237,75 +235,65 @@ class LIST_OT_DuplicateSelection(Operator):
             if info['base_mat_name'] not in obj.data.materials:
                 obj.data.materials.append(base_mat)
             base_mat_index = obj.data.materials.find(info['base_mat_name'])
+            assignments.append((info['new_face_indices'], base_mat_index))
 
-            for idx in face_indices:
-                bm.faces[idx].material_index = base_mat_index
-            bmesh.update_edit_mesh(obj.data)
-
-            # Generate new constant name using incremental numeric suffix
-            new_const_name = self._get_next_constant_name(obj, info['base_mat_name'])
+            # Generate new constant name
+            new_const_name = self._get_next_constant_name(obj, info['const_name'])
             final_new_name = new_const_name
             counter = 1
             while final_new_name in bpy.data.materials or (final_new_name in obj.get("constant_materials", {})):
                 final_new_name = f"{new_const_name}_{counter:03d}"
                 counter += 1
 
-            # Create new constant material
-            new_mat = base_mat.copy()
+            # Duplicate original constant material
+            original_const_mat = bpy.data.materials.get(info['const_name'])
+            if not original_const_mat:
+                self.report({'ERROR'}, f"Original constant material '{info['const_name']}' not found")
+                continue
+            new_mat = original_const_mat.copy()
             new_mat.name = final_new_name
             if final_new_name not in obj.data.materials:
                 obj.data.materials.append(new_mat)
             new_mat_index = obj.data.materials.find(final_new_name)
 
-            for idx in face_indices:
-                bm.faces[idx].material_index = new_mat_index
-            bmesh.update_edit_mesh(obj.data)
+            assignments.append((info['new_face_indices'], new_mat_index))
+            new_const_names.append(final_new_name)
+            info['final_new_name'] = final_new_name
 
-            # Update constant_materials - INHERIT navigation point status
-            if "constant_materials" not in obj:
-                obj["constant_materials"] = {}
-            const_dict = obj["constant_materials"]
-            const_dict[final_new_name] = {
+        # Apply all material assignments at once
+        for face_indices, mat_idx in assignments:
+            for fidx in face_indices:
+                if fidx < len(bm.faces):
+                    bm.faces[fidx].material_index = mat_idx
+        bmesh.update_edit_mesh(obj.data)
+
+        # Update constant_materials dictionary and custom properties
+        if "constant_materials" not in obj:
+            obj["constant_materials"] = {}
+        const_dict = obj["constant_materials"]
+
+        for info in blocks_info:
+            if 'final_new_name' not in info:
+                continue
+            const_dict[info['final_new_name']] = {
                 "block_type": info['type'],
-                "block_id": new_center.index if info['type'] == 'quadblock' else new_center.index,
+                "block_id": info['new_center'].index if info['type'] == 'quadblock' else info['new_center'].index,
                 "original_material": info['base_mat_name'],
                 "assigned_time": time.time(),
-                "is_navigation_point": info['is_navigation_point'],   # Inherit from original
+                "is_navigation_point": info['is_navigation_point'],
             }
-            obj["constant_materials"] = const_dict
+            const_prop = f"constant_name_{info['type']}_{info['new_center'].index if info['type'] == 'quadblock' else info['new_center'].index}"
+            obj[const_prop] = info['final_new_name']
 
-            const_prop = f"constant_name_{info['type']}_{new_center.index if info['type'] == 'quadblock' else new_center.index}"
-            obj[const_prop] = final_new_name
-
-            # Delete old constant material if unused
-            old_mat = bpy.data.materials.get(info['const_name'])
-            if old_mat and old_mat.users == 0:
-                bpy.data.materials.remove(old_mat)
-
-            new_const_names.append(final_new_name)
-            processed += 1
-
-        # NAVIGATION POINT HANDLING
-        # Temporarily replace constant_materials with only the newly created ones,
-        # but force them to be navigation points for the detection step.
+        # Navigation point refresh (same as original)
         if new_const_names:
-            print(f"DEBUG: New constant materials: {new_const_names}")
-
-            # Save original constant_materials as a plain Python dict
-            original_const_materials = None
-            if "constant_materials" in obj:
-                original_const_materials = deep_copy_idprop_group(obj["constant_materials"])
-
-            # Build temporary dict containing only the new materials, marked as navigation points
+            original_const_materials = deep_copy_idprop_group(obj["constant_materials"]) if "constant_materials" in obj else None
             temp_const_materials = {}
             for mat_name in new_const_names:
                 if original_const_materials and mat_name in original_const_materials:
-                    # Copy the entry (plain dict)
                     temp_const_materials[mat_name] = original_const_materials[mat_name].copy()
-                    # Force navigation point = True for detection
                     temp_const_materials[mat_name]["is_navigation_point"] = True
                 else:
-                    # Fallback (should not happen)
                     temp_const_materials[mat_name] = {
                         "block_type": "quadblock",
                         "block_id": 0,
@@ -313,48 +301,32 @@ class LIST_OT_DuplicateSelection(Operator):
                         "assigned_time": time.time(),
                         "is_navigation_point": True,
                     }
-
-            # Replace the property temporarily
             obj["constant_materials"] = temp_const_materials
-
-            # Force a full mesh update
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.mode_set(mode='EDIT')
             bm = bmesh.from_edit_mesh(obj.data)
             bm.verts.ensure_lookup_table()
             bm.faces.ensure_lookup_table()
             bmesh.update_edit_mesh(obj.data)
-
-            # Clear selection
             bpy.ops.mesh.select_all(action='DESELECT')
-
-            # Call find_blocks – now it will only see the new blocks
-            print("DEBUG: Calling navigator.find_blocks with TEMPORARY constant materials (only new blocks)")
             bpy.ops.navigator.find_blocks()
-
-            # Restore original constant_materials (which already has the correct inherited flags)
             if original_const_materials is not None:
                 obj["constant_materials"] = original_const_materials
             else:
                 if "constant_materials" in obj:
                     del obj["constant_materials"]
 
-            # Print the number of detected blocks after the call
-            quad_count = len(obj.get("quadblock_centers", []))
-            tri_count = len(obj.get("triblock_faces", []))
-            print(f"DEBUG: After detection - quadblocks: {quad_count}, triblocks: {tri_count}")
-
-        # Select duplicated faces
+        # Select ALL duplicated faces (not just the constant ones)
         bpy.ops.object.mode_set(mode='EDIT')
         bm = bmesh.from_edit_mesh(obj.data)
         for f in bm.faces:
             f.select = False
-        for idx in new_face_indices:
-            if idx < len(bm.faces):
-                bm.faces[idx].select = True
+        for fidx in all_new_face_indices:
+            if fidx < len(bm.faces):
+                bm.faces[fidx].select = True
         bmesh.update_edit_mesh(obj.data)
 
-        self.report({'INFO'}, f"Duplication complete. Processed {processed} blocks.")
+        self.report({'INFO'}, f"Duplication complete. Processed {len([b for b in blocks_info if 'final_new_name' in b])} blocks.")
         print("--- DEBUG: Duplicate operator finished ---")
         return {'FINISHED'}
 
