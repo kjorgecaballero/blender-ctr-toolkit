@@ -365,27 +365,18 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
     """Clear constant name from the selected quadblock/triblock, all constant materials, or only invalid navigation points."""
     bl_idname = "list.clear_constant_material"
     bl_label = "Clear Constant Name"
-    bl_description = "Clear constant name from selected block, all constant materials, or only invalid navigation points"
+    bl_description = "Clear constant name from selected block, all constants, or invalid nav points"
     bl_options = {'REGISTER', 'UNDO'}
 
-    clear_all: bpy.props.BoolProperty(
-        name="Clear All",
-        description="Clear all constant materials from this object",
-        default=False,
-        update=lambda self, context: setattr(self, 'clear_invalid_only', False) if self.clear_all else None
-    )
-
-    clear_invalid_only: bpy.props.BoolProperty(
-        name="Clear Invalid Only",
-        description="Clear only invalid constant materials (navigation points that are broken)",
-        default=False,
-        update=lambda self, context: setattr(self, 'clear_all', False) if self.clear_invalid_only else None
-    )
-
-    fallback_duplicate: bpy.props.BoolProperty(
-        name="Duplicate if missing",
-        description="If original material is missing, duplicate constant material as new base (stripping '_ID' suffix)",
-        default=False
+    clear_mode: bpy.props.EnumProperty(
+        name="Clear Mode",
+        description="What to clear",
+        items=[
+            ('SELECTED', "Clear Selected", "Clear checked items AND selected blocks"),
+            ('ALL', "Clear All", "Clear all constants from this object"),
+            ('INVALID_ONLY', "Clear Invalid Only", "Clear broken navigation points only"),
+        ],
+        default='SELECTED'
     )
 
     @classmethod
@@ -410,14 +401,19 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             count = len(constant_materials_dict)
             layout.label(text=f"This object has {count} constant materials.")
 
-            row = layout.row()
-            row.prop(self, "clear_all")
-            if self.clear_all:
-                row.label(text="Will clear ALL constant materials", icon='ERROR')
+            # Radio buttons for clear mode
+            col = layout.column(align=True)
+            col.prop(self, "clear_mode", expand=True)
 
-            row = layout.row()
-            row.prop(self, "clear_invalid_only")
-            if self.clear_invalid_only:
+            # Brief info box
+            box = layout.box()
+            if self.clear_mode == 'SELECTED':
+                box.label(text="Clears checked items AND selected blocks.", icon='INFO')
+                box.label(text="Combines both selections.")
+            elif self.clear_mode == 'ALL':
+                box.label(text="Removes ALL constant materials.", icon='ERROR')
+                box.label(text="Base materials restored automatically.")
+            else:  # INVALID_ONLY
                 invalid_count = 0
                 if "constant_materials" in obj:
                     constant_materials_dict = dict(obj["constant_materials"])
@@ -426,16 +422,8 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             face_indices = get_faces_by_material_name(obj, mat_name)
                             if len(face_indices) != 4:
                                 invalid_count += 1
-                row.label(text=f"Will clear {invalid_count} invalid nav points", icon='ERROR')
-
-            row = layout.row()
-            row.prop(self, "fallback_duplicate")
-            if self.fallback_duplicate:
-                row.label(text="Will duplicate missing originals", icon='DUPLICATE')
-
-            row = layout.row()
-            if not self.clear_all and not self.clear_invalid_only:
-                row.label(text="Otherwise clears only selected block", icon='INFO')
+                box.label(text=f"Clears {invalid_count} invalid nav points.", icon='INFO')
+                box.label(text="Only broken navigation points.")
 
     def execute(self, context):
         obj = context.edit_object
@@ -446,7 +434,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
         try:
             # 1) Clear only invalid navigation points
-            if self.clear_invalid_only:
+            if self.clear_mode == 'INVALID_ONLY':
                 if "constant_materials" not in obj:
                     self.report({'WARNING'}, "No constant materials found.")
                     return {'CANCELLED'}
@@ -479,30 +467,26 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                         original_material = bpy.data.materials[original_material_name]
 
                     if not original_material:
-                        if self.fallback_duplicate:
-                            const_mat = bpy.data.materials.get(mat_name)
-                            if const_mat:
-                                base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
-                                if base_name in fallback_cache:
-                                    new_mat_name, new_index = fallback_cache[base_name]
-                                else:
-                                    from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
-                                    new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
-                                    if new_mat_name:
-                                        fallback_cache[base_name] = (new_mat_name, new_index)
-                                    else:
-                                        failed_materials.append(mat_name)
-                                        continue
-
-                                block_faces = get_faces_by_material_name(obj, mat_name)
-                                for face_idx in block_faces:
-                                    if face_idx < len(obj.data.polygons):
-                                        obj.data.polygons[face_idx].material_index = new_index
-                                obj.data.update()
-                                restored_with_fallback += 1
+                        const_mat = bpy.data.materials.get(mat_name)
+                        if const_mat:
+                            base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
+                            if base_name in fallback_cache:
+                                new_mat_name, new_index = fallback_cache[base_name]
                             else:
-                                failed_materials.append(mat_name)
-                                continue
+                                from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
+                                new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
+                                if new_mat_name:
+                                    fallback_cache[base_name] = (new_mat_name, new_index)
+                                else:
+                                    failed_materials.append(mat_name)
+                                    continue
+
+                            block_faces = get_faces_by_material_name(obj, mat_name)
+                            for face_idx in block_faces:
+                                if face_idx < len(obj.data.polygons):
+                                    obj.data.polygons[face_idx].material_index = new_index
+                            obj.data.update()
+                            restored_with_fallback += 1
                         else:
                             failed_materials.append(mat_name)
                             continue
@@ -545,40 +529,53 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 return {'FINISHED'}
 
             # 2) Clear all constant materials
-            elif self.clear_all:
-                cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, self.fallback_duplicate)
+            elif self.clear_mode == 'ALL':
+                cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, fallback_duplicate=True)
                 msg = f"Cleared all constants. Restored {cleared_orig} original, {restored_fb} fallback."
                 if failed:
                     msg += f" Failed: {', '.join(failed)}"
                     self.report({'WARNING'}, msg)
                 else:
                     self.report({'INFO'}, msg)
+                # Also clear multi_selected_items
+                if "multi_selected_items" in obj:
+                    obj["multi_selected_items"].clear()
                 return {'FINISHED'}
 
-            # 3) Clear only from the selected block
-            else:
-                selected_polys = [p for p in obj.data.polygons if p.select]
-                if not selected_polys:
-                    self.report({'WARNING'}, "No faces selected.")
-                    return {'CANCELLED'}
-
+            # 3) Clear selected: combine checked items AND 3D selection
+            else:  # SELECTED
                 const_dict = obj.get("constant_materials", {})
                 if not const_dict:
                     self.report({'WARNING'}, "No constant materials.")
                     return {'CANCELLED'}
 
                 mats_to_clear = set()
-                for poly in selected_polys:
-                    mat_idx = poly.material_index
-                    if mat_idx < len(obj.material_slots):
-                        mat = obj.material_slots[mat_idx].material
-                        if mat and mat.name in const_dict:
-                            mats_to_clear.add(mat.name)
+
+                # Add checked items from the list
+                if "multi_selected_items" in obj and obj["multi_selected_items"]:
+                    multi = dict(obj["multi_selected_items"])
+                    for mat_name in multi.keys():
+                        if mat_name in const_dict:
+                            mats_to_clear.add(mat_name)
+                    if mats_to_clear:
+                        self.report({'INFO'}, f"Adding {len(mats_to_clear)} checked material(s) from list.")
+
+                # Add selected blocks from 3D view
+                selected_polys = [p for p in obj.data.polygons if p.select]
+                if selected_polys:
+                    for poly in selected_polys:
+                        mat_idx = poly.material_index
+                        if mat_idx < len(obj.material_slots):
+                            mat = obj.material_slots[mat_idx].material
+                            if mat and mat.name in const_dict:
+                                mats_to_clear.add(mat.name)
+                    self.report({'INFO'}, f"Adding materials from 3D selected faces.")
 
                 if not mats_to_clear:
-                    self.report({'WARNING'}, "No constant material on selected faces.")
+                    self.report({'WARNING'}, "No materials to clear (no checked items and no 3D selection).")
                     return {'CANCELLED'}
 
+                # Process clearing
                 cleared = 0
                 restored_with_fallback = 0
                 failed_materials = []
@@ -595,31 +592,33 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                         continue
 
                     if not original_mat:
-                        if self.fallback_duplicate:
-                            const_mat = bpy.data.materials.get(mat_name)
-                            if const_mat:
-                                base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
-                                if base_name in fallback_cache:
-                                    new_mat_name, new_index = fallback_cache[base_name]
-                                else:
-                                    from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
-                                    new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
-                                    if new_mat_name:
-                                        fallback_cache[base_name] = (new_mat_name, new_index)
-                                    else:
-                                        failed_materials.append(mat_name)
-                                        continue
-
-                                for idx in face_indices:
-                                    if idx < len(obj.data.polygons):
-                                        obj.data.polygons[idx].material_index = new_index
-                                restored_with_fallback += 1
+                        const_mat = bpy.data.materials.get(mat_name)
+                        if const_mat:
+                            base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
+                            if base_name in fallback_cache:
+                                new_mat_name, new_index = fallback_cache[base_name]
                             else:
-                                failed_materials.append(mat_name)
-                                continue
+                                from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
+                                new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
+                                if new_mat_name:
+                                    fallback_cache[base_name] = (new_mat_name, new_index)
+                                else:
+                                    failed_materials.append(mat_name)
+                                    continue
+
+                            for idx in face_indices:
+                                if idx < len(obj.data.polygons):
+                                    obj.data.polygons[idx].material_index = new_index
+                            restored_with_fallback += 1
+                            # Check if the new material has a texture node
+                            new_mat = bpy.data.materials.get(new_mat_name)
+                            if new_mat and new_mat.use_nodes:
+                                has_tex = any(node.type == 'TEX_IMAGE' for node in new_mat.node_tree.nodes)
+                                if not has_tex:
+                                    self.report({'WARNING'}, f"Fallback material '{new_mat_name}' has no texture. It may appear pink.")
                         else:
-                            self.report({'ERROR'}, f"Original material missing for '{mat_name}' and fallback off.")
-                            return {'CANCELLED'}
+                            failed_materials.append(mat_name)
+                            continue
                     else:
                         if original_mat_name not in obj.data.materials:
                             obj.data.materials.append(original_mat)
@@ -628,16 +627,27 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             obj.data.polygons[idx].material_index = orig_idx
                         cleared += 1
 
+                    # Remove from constant_materials dict
                     if mat_name in const_dict:
                         del const_dict[mat_name]
+                    # Remove custom properties
                     props_to_delete = [k for k in obj.keys() if k.startswith("constant_name_") and obj[k] == mat_name]
                     for prop in props_to_delete:
                         del obj[prop]
+                    # Delete material if unused
                     const_mat = bpy.data.materials.get(mat_name)
                     if const_mat and const_mat.users == 0:
                         bpy.data.materials.remove(const_mat)
 
                 obj["constant_materials"] = const_dict
+                # Clear the checked items from multi_selected_items
+                if "multi_selected_items" in obj:
+                    multi = dict(obj["multi_selected_items"])
+                    for mat_name in mats_to_clear:
+                        if mat_name in multi:
+                            del multi[mat_name]
+                    obj["multi_selected_items"] = multi
+
                 obj.data.update()
                 try:
                     bpy.ops.object.material_slot_remove_unused()

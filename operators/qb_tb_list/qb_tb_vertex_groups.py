@@ -260,16 +260,20 @@ class LIST_OT_CreateBlockVertexGroups(bpy.types.Operator):
 
 
 class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
-    """Clear vertex groups of quadblocks and triblocks - all or only selected blocks"""
+    """Clear vertex groups of quadblocks and triblocks - selected blocks or all blocks"""
     bl_idname = "list.clear_block_vertex_groups"
     bl_label = "Clear Block Vertex Groups"
-    bl_description = "Clear vertex groups created for quadblocks and triblocks. Choose to clear all or only selected blocks."
+    bl_description = "Clear vertex groups for selected blocks or all blocks"
     bl_options = {'REGISTER', 'UNDO'}
 
-    clear_all: bpy.props.BoolProperty(
-        name="Clear All",
-        description="Clear all block vertex groups. If unchecked, only clears vertex groups of selected blocks.",
-        default=False
+    clear_mode: bpy.props.EnumProperty(
+        name="Clear Mode",
+        description="What to clear",
+        items=[
+            ('SELECTED', "Clear Selected", "Clear checked items AND selected blocks"),
+            ('ALL', "Clear All", "Clear all block vertex groups"),
+        ],
+        default='SELECTED'
     )
 
     @classmethod
@@ -285,9 +289,6 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
             self.report({'WARNING'}, "No block vertex groups found.")
             return {'CANCELLED'}
         
-        # Initialize the clear_all property to False
-        self.clear_all = False
-        
         wm = context.window_manager
         return wm.invoke_props_dialog(self, width=300)
 
@@ -302,19 +303,18 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
         layout.label(text=f"Found {block_count} block vertex groups", icon='GROUP_VERTEX')
         layout.separator()
         
-        # Checkbox for Clear All
-        row = layout.row()
-        row.prop(self, "clear_all", text="Clear All")
+        # Radio buttons for clear mode
+        col = layout.column(align=True)
+        col.prop(self, "clear_mode", expand=True)
         
-        # Informative message based on selection
+        # Brief info box
         box = layout.box()
-        if self.clear_all:
-            box.label(text="Will remove ALL block vertex groups:", icon='ERROR')
-            box.label(text=f"• {block_count} vertex groups will be deleted")
-        else:
-            box.label(text="Will remove vertex groups of selected blocks only:", icon='INFO')
-            box.label(text="• Select blocks in 3D view before clicking OK")
-            box.label(text="• Only QB_/TB_ groups of selected blocks will be deleted")
+        if self.clear_mode == 'SELECTED':
+            box.label(text="Clears checked items AND selected blocks.", icon='INFO')
+            box.label(text="Combines both selections.")
+        else:  # ALL
+            box.label(text="Removes ALL block vertex groups.", icon='ERROR')
+            box.label(text="This action cannot be undone.")
         
         layout.separator()
         layout.label(text="This action cannot be undone.", icon='QUESTION')
@@ -328,7 +328,7 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
         
         try:
-            if self.clear_all:
+            if self.clear_mode == 'ALL':
                 # Remove all block vertex groups
                 groups_to_remove = [vg for vg in obj.vertex_groups if vg.name.startswith(("QB_", "TB_"))]
                 removed_count = len(groups_to_remove)
@@ -336,9 +336,26 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
                     obj.vertex_groups.remove(vg)
                 
                 self.report({'INFO'}, f"Removed {removed_count} block vertex groups")
+                # Also clear multi_selected_items
+                if "multi_selected_items" in obj:
+                    obj["multi_selected_items"].clear()
+                return {'FINISHED'}
+
+            # SELECTED mode: combine checked items AND 3D selected blocks
             else:
-                # Remove only vertex groups of selected blocks
-                # First, we need to get the selected blocks
+                vertex_groups_to_remove = set()
+
+                # Add checked items from the list
+                if "multi_selected_items" in obj and obj["multi_selected_items"]:
+                    multi = dict(obj["multi_selected_items"])
+                    for vg_name in multi.keys():
+                        if vg_name.startswith(("QB_", "TB_")):
+                            vertex_groups_to_remove.add(vg_name)
+                    if vertex_groups_to_remove:
+                        self.report({'INFO'}, f"Adding {len(vertex_groups_to_remove)} checked vertex group(s) from list.")
+
+                # Add selected blocks from 3D view
+                # Need to temporarily enter edit mode to get selected faces/vertices
                 if original_mode == 'EDIT_MESH':
                     bpy.ops.object.mode_set(mode='EDIT')
                 
@@ -358,10 +375,8 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
                 face_to_triblock = obj["face_to_triblock"]
                 quadblock_centers = obj["quadblock_centers"]
                 
-                # Collect quadblock/triblock IDs to remove
-                blocks_to_remove = set()  # Each element is a tuple: ('quadblock', id) or ('triblock', id)
+                blocks_to_remove = set()
                 
-                # Process selected faces
                 for face in selected_faces:
                     face_index = str(face.index)
                     if face_index in face_to_quadblock:
@@ -371,32 +386,44 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
                         block_id = int(face_to_triblock[face_index])
                         blocks_to_remove.add(('triblock', block_id))
                 
-                # Process selected vertices (for quadblock centers)
                 for vert in selected_verts:
                     if vert.index in quadblock_centers:
                         blocks_to_remove.add(('quadblock', vert.index))
                 
-                if not blocks_to_remove:
-                    self.report({'WARNING'}, "No blocks selected. Select blocks to clear their vertex groups.")
+                if blocks_to_remove:
+                    for block_type, block_id in blocks_to_remove:
+                        if block_type == 'quadblock':
+                            vg_name = f"QB_{block_id}"
+                        else:
+                            vg_name = f"TB_{block_id}"
+                        vertex_groups_to_remove.add(vg_name)
+                    self.report({'INFO'}, f"Adding {len(blocks_to_remove)} block(s) from 3D selection.")
+                
+                # Switch back to object mode for removal
+                if original_mode == 'EDIT_MESH':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                
+                if not vertex_groups_to_remove:
+                    self.report({'WARNING'}, "No vertex groups to clear (no checked items and no 3D selection).")
                     return {'CANCELLED'}
                 
-                # Switch back to object mode to remove vertex groups
-                bpy.ops.object.mode_set(mode='OBJECT')
-                
-                # Now, remove vertex groups for these blocks
+                # Remove the vertex groups
                 removed_count = 0
-                for block_type, block_id in blocks_to_remove:
-                    if block_type == 'quadblock':
-                        vg_name = f"QB_{block_id}"
-                    else:  # triblock
-                        vg_name = f"TB_{block_id}"
-                    
+                for vg_name in vertex_groups_to_remove:
                     if vg_name in obj.vertex_groups:
                         vg = obj.vertex_groups[vg_name]
                         obj.vertex_groups.remove(vg)
                         removed_count += 1
                 
-                self.report({'INFO'}, f"Removed {removed_count} block vertex groups from selected blocks")
+                # Clear these from multi_selected_items
+                if "multi_selected_items" in obj:
+                    multi = dict(obj["multi_selected_items"])
+                    for vg_name in vertex_groups_to_remove:
+                        if vg_name in multi:
+                            del multi[vg_name]
+                    obj["multi_selected_items"] = multi
+                
+                self.report({'INFO'}, f"Removed {removed_count} block vertex groups")
         
         finally:
             # Return to original mode
