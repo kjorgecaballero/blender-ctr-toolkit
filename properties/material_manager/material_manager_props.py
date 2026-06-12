@@ -85,12 +85,16 @@ class CTR_MaterialListProps(PropertyGroup):
         self.scroll = 0
 
 
-# Registration
+# Registration 
 classes = [CTR_MaterialListItem, CTR_MaterialListProps]
 
 
 def register():
     for cls in classes:
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass
         bpy.utils.register_class(cls)
     bpy.types.Scene.ctr_material_list = bpy.props.PointerProperty(type=CTR_MaterialListProps)
 
@@ -98,4 +102,7 @@ def register():
 def unregister():
     del bpy.types.Scene.ctr_material_list
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass
