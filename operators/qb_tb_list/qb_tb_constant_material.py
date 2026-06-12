@@ -2,12 +2,13 @@
 QB/TB Constant Material Operators
 Operators for assigning constant names to blocks via material duplication
 Includes navigation point functionality and invalid material cleanup
-Added reindex‑safe selection and clearing using material names only.
+Reindex‑safe selection and clearing using material names only.
 """
 
 import bpy
 import bmesh
 import time
+import random
 
 from ...utils.qb_tb_navigator import get_faces_by_material_name
 from ...utils.qb_tb_navigator.constant_material_utils import clear_all_constant_materials
@@ -15,15 +16,13 @@ from ...utils.material_utils import is_constant_id_unique
 
 
 class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
-    """Assign a constant name to the selected block by duplicating its material.
-    The base material name is fixed; you can edit only the value after 'ID'.
-    The final name will be: base_name_IDvalue (e.g., Dirt_tex01_IDCustomName).
-    If the resulting name already exists, the operation is cancelled.
-    All IDs must be unique across all constant materials on the object.
+    """Assign a constant name to the selected block(s) by duplicating its material.
+    Supports single block (with custom ID) or multiple blocks (with Base ID + unique suffix).
+    Multi-assign only allowed if all selected blocks share the same base material.
     """
     bl_idname = "list.assign_constant_material"
     bl_label = "Assign/Set Constant Name"
-    bl_description = "Assign a constant name to the selected block. The base material is fixed; you can edit the value after 'ID'."
+    bl_description = "Assign a constant name to the selected block(s). Single or multi-assign."
     bl_options = {'REGISTER', 'UNDO'}
 
     base_name: bpy.props.StringProperty(
@@ -34,7 +33,18 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
 
     id_value: bpy.props.StringProperty(
         name="ID Value",
-        description="Custom value after 'ID' (you can edit this part, e.g., '123' or 'CustomName')",
+        description="Custom value after 'ID' (single assign mode)",
+        default=""
+    )
+
+    multi_assign: bpy.props.BoolProperty(
+        name="Multi-Assign",
+        description="Assign constant materials to all selected blocks at once",
+        default=False
+    )
+    base_id: bpy.props.StringProperty(
+        name="Base ID",
+        description="Base identifier used for all selected blocks (will be combined with a unique suffix)",
         default=""
     )
 
@@ -59,12 +69,12 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
             selected_verts_bm = [v for v in bm.verts if v.select]
 
             if not selected_faces_bm and not selected_verts_bm:
-                self.report({'WARNING'}, "No block selected. Select exactly one quadblock or triblock.")
+                self.report({'WARNING'}, "No quadblock/triblock selected.")
                 bm.free()
                 return {'CANCELLED'}
 
             if not ("face_to_quadblock" in obj and "face_to_triblock" in obj):
-                self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
+                self.report({'WARNING'}, "Run 'Find All Blocks' first.")
                 bm.free()
                 return {'CANCELLED'}
 
@@ -73,92 +83,61 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
             quadblock_faces_map = obj.get("quadblock_faces_map", {})
             triblock_faces_map = obj.get("triblock_faces_map", {})
 
-            block_type = None
-            block_id = None
+            # Collect all unique blocks in the selection
+            found_blocks = set()
+            for face in selected_faces_bm:
+                face_index = str(face.index)
+                if face_index in face_to_quadblock:
+                    found_blocks.add(("quadblock", int(face_to_quadblock[face_index])))
+                elif face_index in face_to_triblock:
+                    found_blocks.add(("triblock", int(face_to_triblock[face_index])))
 
-            if selected_faces_bm:
-                found_blocks = set()
-                for face in selected_faces_bm:
-                    face_index = str(face.index)
-                    if face_index in face_to_quadblock:
-                        found_blocks.add(("quadblock", int(face_to_quadblock[face_index])))
-                    elif face_index in face_to_triblock:
-                        found_blocks.add(("triblock", int(face_to_triblock[face_index])))
-
-                if len(found_blocks) == 0:
-                    self.report({'WARNING'}, "No block found in selection.")
-                    bm.free()
-                    return {'CANCELLED'}
-                elif len(found_blocks) > 1:
-                    self.report({'WARNING'}, "Multiple blocks selected. Select only ONE block at a time.")
-                    bm.free()
-                    return {'CANCELLED'}
-
-                block_type, block_id = list(found_blocks)[0]
-
-            elif selected_verts_bm and len(selected_verts_bm) == 1:
-                vert = selected_verts_bm[0]
+            for vert in selected_verts_bm:
                 if "quadblock_centers" in obj and vert.index in obj["quadblock_centers"]:
-                    block_type = "quadblock"
-                    block_id = vert.index
+                    found_blocks.add(("quadblock", vert.index))
 
-            if not block_type:
-                self.report({'WARNING'}, "Could not identify a valid block from selection.")
+            if not found_blocks:
+                self.report({'WARNING'}, "Selection contains no valid quadblock/triblock.")
                 bm.free()
                 return {'CANCELLED'}
 
-            face_indices = []
-            if block_type == "quadblock":
-                if str(block_id) in quadblock_faces_map:
-                    face_indices = quadblock_faces_map[str(block_id)]
-            else:
-                if str(block_id) in triblock_faces_map:
-                    face_indices = triblock_faces_map[str(block_id)]
+            self.blocks_to_assign = list(found_blocks)
 
-            if not face_indices:
-                self.report({'WARNING'}, f"No faces found for {block_type} {block_id}")
-                bm.free()
-                return {'CANCELLED'}
-
-            first_face_idx = face_indices[0]
-            if first_face_idx >= len(mesh.polygons):
-                self.report({'WARNING'}, f"Face index {first_face_idx} out of range")
-                bm.free()
-                return {'CANCELLED'}
-
-            first_face_material_index = mesh.polygons[first_face_idx].material_index
-            if first_face_material_index >= len(obj.material_slots):
-                self.report({'WARNING'}, f"Selected block has no material assigned. Assign a material first.")
-                bm.free()
-                return {'CANCELLED'}
-
-            current_material = obj.material_slots[first_face_material_index].material
-            if not current_material:
-                self.report({'WARNING'}, "Selected block has no material assigned.")
-                bm.free()
-                return {'CANCELLED'}
-
-            # REINDEX‑SAFE CHECK, does this block already have a constant material? 
+            # Pre‑validation: check for existing constant materials
             const_dict = obj.get("constant_materials", {})
-            for idx in face_indices:
-                poly = mesh.polygons[idx]
-                if poly.material_index < len(obj.material_slots):
-                    mat = obj.material_slots[poly.material_index].material
-                    if mat and mat.name in const_dict:
-                        self.report({'WARNING'}, f"Block already has constant material '{mat.name}'. Clear it first.")
-                        bm.free()
-                        return {'CANCELLED'}
+            blocks_with_const = []
+            for block_type, block_id in self.blocks_to_assign:
+                if block_type == "quadblock":
+                    face_indices = quadblock_faces_map.get(str(block_id), [])
+                else:
+                    face_indices = triblock_faces_map.get(str(block_id), [])
+                for fidx in face_indices:
+                    if fidx < len(mesh.polygons):
+                        mat_idx = mesh.polygons[fidx].material_index
+                        if mat_idx < len(obj.material_slots):
+                            mat = obj.material_slots[mat_idx].material
+                            if mat and mat.name in const_dict:
+                                blocks_with_const.append((block_type, block_id))
+                                break
+            if blocks_with_const:
+                self.report({'WARNING'}, "Some selected blocks already have constant materials. Clear them first.")
+                bm.free()
+                return {'CANCELLED'}
+
+            # For single assign, we need the first block's material for the dialog
+            first_block_type, first_block_id = self.blocks_to_assign[0]
+            if first_block_type == "quadblock":
+                face_indices = quadblock_faces_map.get(str(first_block_id), [])
+            else:
+                face_indices = triblock_faces_map.get(str(first_block_id), [])
+            if face_indices:
+                first_face_idx = face_indices[0]
+                mat_idx = mesh.polygons[first_face_idx].material_index
+                current_material = obj.material_slots[mat_idx].material
+                self.base_name = current_material.name
+                self.id_value = str(first_block_id)
 
             bm.free()
-
-            const_prop_name = f"constant_name_{block_type}_{block_id}"
-            if const_prop_name in obj:
-                existing_material_name = obj[const_prop_name]
-                self.report({'INFO'}, f"Block {block_type} {block_id} already has constant name '{existing_material_name}'. Constant names do not change.")
-                return {'CANCELLED'}
-
-            self.base_name = current_material.name
-            self.id_value = str(block_id)
 
         except Exception as e:
             self.report({'ERROR'}, f"Error preparing dialog: {str(e)}")
@@ -169,15 +148,28 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
 
-        return context.window_manager.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self, width=400)
 
     def draw(self, context):
         layout = self.layout
         layout.label(text=f"Base material: {self.base_name}")
-        row = layout.row(align=True)
-        row.label(text="ID:")
-        row.prop(self, "id_value", text="")
-        layout.label(text=f"Final name will be: {self.base_name}_ID{self.id_value}")
+
+        layout.prop(self, "multi_assign", text="Multi-Assign (selected blocks)")
+
+        if self.multi_assign:
+            row = layout.row()
+            row.prop(self, "base_id", text="Base ID")
+            layout.label(text="Final names: <Base>_ID<BaseID><unique suffix>")
+            layout.label(text="Example: tree_tex_IDtreemax → tree_tex_IDtreemax5021", icon='INFO')
+            if len(self.blocks_to_assign) > 50:
+                box = layout.box()
+                box.alert = True
+                box.label(text=f"Assigning {len(self.blocks_to_assign)} blocks. May be slow.", icon='ERROR')
+        else:
+            row = layout.row(align=True)
+            row.label(text="ID:")
+            row.prop(self, "id_value", text="")
+            layout.label(text=f"Final name: {self.base_name}_ID{self.id_value}")
 
     def execute(self, context):
         obj = context.edit_object
@@ -188,179 +180,180 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
 
         try:
             mesh = obj.data
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
-            bm.verts.ensure_lookup_table()
-            bm.faces.ensure_lookup_table()
-
-            selected_faces_bm = [f for f in bm.faces if f.select]
-            selected_verts_bm = [v for v in bm.verts if v.select]
-
-            if not selected_faces_bm and not selected_verts_bm:
-                self.report({'WARNING'}, "No block selected.")
-                bm.free()
-                return {'CANCELLED'}
-
-            if not ("face_to_quadblock" in obj and "face_to_triblock" in obj):
-                self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
-                bm.free()
-                return {'CANCELLED'}
-
-            face_to_quadblock = obj["face_to_quadblock"]
-            face_to_triblock = obj["face_to_triblock"]
+            const_dict = obj.get("constant_materials", {})
             quadblock_faces_map = obj.get("quadblock_faces_map", {})
             triblock_faces_map = obj.get("triblock_faces_map", {})
 
-            block_type = None
-            block_id = None
-
-            if selected_faces_bm:
-                found_blocks = set()
-                for face in selected_faces_bm:
-                    face_index = str(face.index)
-                    if face_index in face_to_quadblock:
-                        found_blocks.add(("quadblock", int(face_to_quadblock[face_index])))
-                    elif face_index in face_to_triblock:
-                        found_blocks.add(("triblock", int(face_to_triblock[face_index])))
-
-                if len(found_blocks) == 0:
-                    self.report({'WARNING'}, "No block found in selection.")
-                    bm.free()
+            # SINGLE ASSIGN: only allow exactly one block
+            if not self.multi_assign:
+                if not self.id_value.strip():
+                    self.report({'ERROR'}, "ID cannot be empty.")
                     return {'CANCELLED'}
-                elif len(found_blocks) > 1:
-                    self.report({'WARNING'}, "Multiple blocks selected. Select only ONE block.")
-                    bm.free()
+                if len(self.blocks_to_assign) > 1:
+                    self.report({'WARNING'}, f"Single assign supports only 1 quadblock/triblock (found {len(self.blocks_to_assign)}). Enable Multi-Assign.")
                     return {'CANCELLED'}
+                base_id = self.id_value.strip()
 
-                block_type, block_id = list(found_blocks)[0]
-
-            elif selected_verts_bm and len(selected_verts_bm) == 1:
-                vert = selected_verts_bm[0]
-                if "quadblock_centers" in obj and vert.index in obj["quadblock_centers"]:
-                    block_type = "quadblock"
-                    block_id = vert.index
-
-            if not block_type:
-                self.report({'WARNING'}, "Could not identify a valid block.")
-                bm.free()
-                return {'CANCELLED'}
-
-            face_indices = []
-            if block_type == "quadblock":
-                if str(block_id) in quadblock_faces_map:
-                    face_indices = quadblock_faces_map[str(block_id)]
+            #  MULTI ASSIGN: validate all blocks share the same base material
             else:
-                if str(block_id) in triblock_faces_map:
-                    face_indices = triblock_faces_map[str(block_id)]
+                if not self.base_id.strip():
+                    self.report({'ERROR'}, "Base ID cannot be empty.")
+                    return {'CANCELLED'}
+                base_id = self.base_id.strip()
 
-            if not face_indices:
-                self.report({'WARNING'}, f"No faces found for {block_type} {block_id}")
-                bm.free()
-                return {'CANCELLED'}
+                # Collect current material for each block
+                block_materials = {}
+                for block_type, block_id in self.blocks_to_assign:
+                    if block_type == "quadblock":
+                        face_indices = quadblock_faces_map.get(str(block_id), [])
+                    else:
+                        face_indices = triblock_faces_map.get(str(block_id), [])
+                    if not face_indices:
+                        continue
+                    first_face_idx = face_indices[0]
+                    if first_face_idx >= len(mesh.polygons):
+                        continue
+                    mat_idx = mesh.polygons[first_face_idx].material_index
+                    if mat_idx < len(obj.material_slots):
+                        mat = obj.material_slots[mat_idx].material
+                        if mat:
+                            block_materials[(block_type, block_id)] = mat.name
+                unique_materials = set(block_materials.values())
+                if len(unique_materials) > 1:
+                    self.report({'WARNING'}, f"Multi-assign requires same material for all selected quadblocks/triblocks. Found {len(unique_materials)} different materials. Cancelled.")
+                    return {'CANCELLED'}
+                # All good
 
-            first_face_idx = face_indices[0]
-            if first_face_idx >= len(mesh.polygons):
-                self.report({'WARNING'}, f"Face index {first_face_idx} out of range")
-                bm.free()
-                return {'CANCELLED'}
+            # Process blocks
+            processed = 0
+            errors = 0
+            quad_processed = 0
+            tri_processed = 0
 
-            first_face_material_index = mesh.polygons[first_face_idx].material_index
-            if first_face_material_index >= len(obj.material_slots):
-                self.report({'WARNING'}, "Selected block has no material assigned.")
-                bm.free()
-                return {'CANCELLED'}
+            for block_type, block_id in self.blocks_to_assign:
+                # Get faces of the current block
+                face_indices = []
+                if block_type == "quadblock":
+                    if str(block_id) in quadblock_faces_map:
+                        face_indices = quadblock_faces_map[str(block_id)]
+                else:
+                    if str(block_id) in triblock_faces_map:
+                        face_indices = triblock_faces_map[str(block_id)]
 
-            current_material = obj.material_slots[first_face_material_index].material
-            if not current_material:
-                self.report({'WARNING'}, "Selected block has no material.")
-                bm.free()
-                return {'CANCELLED'}
+                if not face_indices:
+                    self.report({'WARNING'}, f"Skipping {block_type} {block_id}: no faces.")
+                    errors += 1
+                    continue
 
-            # Re‑check constant material (in case selection changed)
-            const_dict = obj.get("constant_materials", {})
-            for idx in face_indices:
-                poly = mesh.polygons[idx]
-                if poly.material_index < len(obj.material_slots):
-                    mat = obj.material_slots[poly.material_index].material
-                    if mat and mat.name in const_dict:
-                        self.report({'WARNING'}, f"Block already has constant material '{mat.name}'. Clear it first.")
-                        bm.free()
+                # Double-check constant material presence
+                already_has = False
+                for idx in face_indices:
+                    if idx < len(mesh.polygons):
+                        poly = mesh.polygons[idx]
+                        if poly.material_index < len(obj.material_slots):
+                            mat = obj.material_slots[poly.material_index].material
+                            if mat and mat.name in const_dict:
+                                already_has = True
+                                break
+                if already_has:
+                    self.report({'WARNING'}, f"Skipping {block_type} {block_id}: already constant.")
+                    errors += 1
+                    continue
+
+                # Verify material match
+                first_face_idx = face_indices[0]
+                if first_face_idx < len(mesh.polygons):
+                    mat_idx = mesh.polygons[first_face_idx].material_index
+                    if mat_idx < len(obj.material_slots):
+                        current_mat = obj.material_slots[mat_idx].material
+                        if not current_mat or current_mat.name != self.base_name:
+                            self.report({'WARNING'}, f"Skipping {block_type} {block_id}: material mismatch (expected '{self.base_name}').")
+                            errors += 1
+                            continue
+
+                # Generate final name
+                if self.multi_assign:
+                    suffix = random.randint(1000, 9999)
+                    final_name = f"{self.base_name}_ID{base_id}{suffix}"
+                    attempts = 0
+                    while (final_name in bpy.data.materials or final_name in const_dict) and attempts < 10:
+                        suffix = random.randint(1000, 9999)
+                        final_name = f"{self.base_name}_ID{base_id}{suffix}"
+                        attempts += 1
+                    if final_name in bpy.data.materials or final_name in const_dict:
+                        self.report({'ERROR'}, f"Unique name failed for {block_type} {block_id}.")
+                        errors += 1
+                        continue
+                else:
+                    final_name = f"{self.base_name}_ID{base_id}"
+                    if not is_constant_id_unique(obj, base_id):
+                        self.report({'ERROR'}, f"ID '{base_id}' already used.")
+                        return {'CANCELLED'}
+                    if final_name in bpy.data.materials:
+                        self.report({'ERROR'}, f"Material '{final_name}' already exists.")
                         return {'CANCELLED'}
 
-            bm.free()
+                base_mat = bpy.data.materials.get(self.base_name)
+                if not base_mat:
+                    self.report({'ERROR'}, f"Base material '{self.base_name}' not found.")
+                    return {'CANCELLED'}
 
-            const_prop_name = f"constant_name_{block_type}_{block_id}"
-            if const_prop_name in obj:
-                existing_material_name = obj[const_prop_name]
-                self.report({'INFO'}, f"Block already has constant name '{existing_material_name}'.")
-                return {'FINISHED'}
+                new_material = base_mat.copy()
+                new_material.name = final_name
 
-            if not self.id_value.strip():
-                self.report({'ERROR'}, "ID value cannot be empty.")
-                return {'CANCELLED'}
+                if final_name not in obj.data.materials:
+                    obj.data.materials.append(new_material)
 
-            id_value = self.id_value.strip()
-            final_name = f"{self.base_name}_ID{id_value}"
+                new_mat_index = obj.data.materials.find(final_name)
 
-            # Check ID uniqueness across all constant materials
-            if not is_constant_id_unique(obj, id_value):
-                self.report({'ERROR'}, f"ID '{id_value}' is already used by another constant material. Please choose a unique ID.")
-                return {'CANCELLED'}
+                for face_idx in face_indices:
+                    if face_idx < len(mesh.polygons):
+                        mesh.polygons[face_idx].material_index = new_mat_index
 
-            # Check if the full name already exists (global materials or constant materials)
-            if final_name in bpy.data.materials:
-                self.report({'ERROR'}, f"Material name '{final_name}' already exists. Choose a different base or ID.")
-                return {'CANCELLED'}
+                const_prop_name = f"constant_name_{block_type}_{block_id}"
+                obj[const_prop_name] = final_name
 
-            if "constant_materials" in obj and final_name in obj["constant_materials"]:
-                existing_block_info = obj["constant_materials"][final_name]
-                existing_block_type = existing_block_info.get("block_type", "")
-                existing_block_id = existing_block_info.get("block_id", 0)
-                self.report({'ERROR'}, f"Name '{final_name}' is already assigned to {existing_block_type} {existing_block_id}. Cannot reuse.")
-                return {'CANCELLED'}
+                if "constant_materials" not in obj:
+                    obj["constant_materials"] = {}
+                const_dict = obj["constant_materials"]
+                const_dict[final_name] = {
+                    "block_type": block_type,
+                    "block_id": block_id,
+                    "original_material": self.base_name,
+                    "assigned_time": time.time(),
+                    "is_navigation_point": False
+                }
+                obj["constant_materials"] = const_dict
 
-            # Create new material
-            new_material = current_material.copy()
-            new_material.name = final_name
-
-            if final_name not in obj.data.materials:
-                obj.data.materials.append(new_material)
-
-            new_mat_index = obj.data.materials.find(final_name)
-
-            for face_idx in face_indices:
-                if face_idx < len(mesh.polygons):
-                    mesh.polygons[face_idx].material_index = new_mat_index
+                processed += 1
+                if block_type == "quadblock":
+                    quad_processed += 1
+                else:
+                    tri_processed += 1
 
             mesh.update()
-
-            obj[const_prop_name] = final_name
-
-            if "constant_materials" not in obj:
-                obj["constant_materials"] = {}
-
-            constant_materials = obj["constant_materials"]
-            constant_materials[final_name] = {
-                "block_type": block_type,
-                "block_id": block_id,
-                "original_material": self.base_name,
-                "assigned_time": time.time(),
-                "is_navigation_point": False
-            }
-
-            self.report({'INFO'}, f"Assigned constant name '{final_name}' to {block_type} {block_id} (based on '{self.base_name}')")
 
             try:
                 bpy.ops.object.material_slot_remove_unused()
             except Exception as e:
-                self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
+                self.report({'WARNING'}, f"Could not remove unused slots: {e}")
+
+            if processed > 0:
+                if quad_processed > 0 and tri_processed > 0:
+                    msg = f"Assigned {quad_processed} quadblock(s) and {tri_processed} triblock(s). Errors: {errors}"
+                elif quad_processed > 0:
+                    msg = f"Assigned {quad_processed} quadblock(s). Errors: {errors}"
+                else:
+                    msg = f"Assigned {tri_processed} triblock(s). Errors: {errors}"
+                self.report({'INFO'}, msg)
+            else:
+                self.report({'WARNING'}, "No quadblocks/triblocks assigned (all skipped).")
 
         except Exception as e:
             self.report({'ERROR'}, f"Error: {str(e)}")
             import traceback
             traceback.print_exc()
             return {'CANCELLED'}
-
         finally:
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
@@ -369,10 +362,7 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
 
 
 class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
-    """Clear constant name from the selected quadblock/triblock, all constant materials, or only invalid navigation points.
-    When the original material is missing and 'Duplicate as fallback' is enabled, a new base material is created from the
-    constant material (by stripping the '_ID' suffix) and all blocks sharing the same base are reassigned to it.
-    """
+    """Clear constant name from the selected quadblock/triblock, all constant materials, or only invalid navigation points."""
     bl_idname = "list.clear_constant_material"
     bl_label = "Clear Constant Name"
     bl_description = "Clear constant name from selected block, all constant materials, or only invalid navigation points"
@@ -408,7 +398,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             wm = context.window_manager
             return wm.invoke_props_dialog(self, width=350)
         else:
-            self.report({'WARNING'}, "No constant materials found on this object.")
+            self.report({'WARNING'}, "No constant materials found.")
             return {'CANCELLED'}
 
     def draw(self, context):
@@ -436,7 +426,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             face_indices = get_faces_by_material_name(obj, mat_name)
                             if len(face_indices) != 4:
                                 invalid_count += 1
-                row.label(text=f"Will clear {invalid_count} invalid navigation points", icon='ERROR')
+                row.label(text=f"Will clear {invalid_count} invalid nav points", icon='ERROR')
 
             row = layout.row()
             row.prop(self, "fallback_duplicate")
@@ -445,7 +435,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
             row = layout.row()
             if not self.clear_all and not self.clear_invalid_only:
-                row.label(text="When unchecked: clears only from selected block", icon='INFO')
+                row.label(text="Otherwise clears only selected block", icon='INFO')
 
     def execute(self, context):
         obj = context.edit_object
@@ -455,8 +445,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         try:
-
-            # 1) Clear only invalid navigation points (unchanged)
+            # 1) Clear only invalid navigation points
             if self.clear_invalid_only:
                 if "constant_materials" not in obj:
                     self.report({'WARNING'}, "No constant materials found.")
@@ -515,7 +504,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 failed_materials.append(mat_name)
                                 continue
                         else:
-                            # No fallback, cannot restore -> keep constant material untouched
                             failed_materials.append(mat_name)
                             continue
                     else:
@@ -532,7 +520,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                         obj.data.update()
                         cleared_count += 1
 
-                    # Only if restoration succeeded do we delete the constant material
                     if mat_name in obj["constant_materials"]:
                         del obj["constant_materials"][mat_name]
                     const_prop_name = f"constant_name_{block_type}_{block_id}"
@@ -547,37 +534,37 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 try:
                     bpy.ops.object.material_slot_remove_unused()
                 except Exception as e:
-                    self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
+                    self.report({'WARNING'}, f"Could not remove unused slots: {e}")
 
-                msg = f"Cleared {len(broken_points) - len(failed_materials)} invalid constant materials. "
+                msg = f"Cleared {len(broken_points) - len(failed_materials)} invalid constants. "
                 if restored_with_fallback > 0:
-                    msg += f"Restored {restored_with_fallback} using fallback. "
+                    msg += f"Restored {restored_with_fallback} via fallback. "
                 if failed_materials:
-                    msg += f"Could NOT restore (missing original & fallback off): {', '.join(failed_materials)}"
+                    msg += f"Failed: {', '.join(failed_materials)}"
                 self.report({'INFO'} if not failed_materials else {'WARNING'}, msg)
                 return {'FINISHED'}
 
-            # 2) Clear all constant materials (unchanged)
+            # 2) Clear all constant materials
             elif self.clear_all:
                 cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, self.fallback_duplicate)
-                msg = f"Cleared all constant materials. Restored {cleared_orig} with original, {restored_fb} with fallback."
+                msg = f"Cleared all constants. Restored {cleared_orig} original, {restored_fb} fallback."
                 if failed:
-                    msg += f" Could NOT restore (missing original & fallback off): {', '.join(failed)}"
+                    msg += f" Failed: {', '.join(failed)}"
                     self.report({'WARNING'}, msg)
                 else:
                     self.report({'INFO'}, msg)
                 return {'FINISHED'}
 
-            # 3) Clear only from the selected block (unchanged)
+            # 3) Clear only from the selected block
             else:
                 selected_polys = [p for p in obj.data.polygons if p.select]
                 if not selected_polys:
-                    self.report({'WARNING'}, "No faces selected. Select a block to clear its constant material.")
+                    self.report({'WARNING'}, "No faces selected.")
                     return {'CANCELLED'}
 
                 const_dict = obj.get("constant_materials", {})
                 if not const_dict:
-                    self.report({'WARNING'}, "No constant materials on this object.")
+                    self.report({'WARNING'}, "No constant materials.")
                     return {'CANCELLED'}
 
                 mats_to_clear = set()
@@ -589,7 +576,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                             mats_to_clear.add(mat.name)
 
                 if not mats_to_clear:
-                    self.report({'WARNING'}, "Selected faces have no constant material.")
+                    self.report({'WARNING'}, "No constant material on selected faces.")
                     return {'CANCELLED'}
 
                 cleared = 0
@@ -631,7 +618,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                                 failed_materials.append(mat_name)
                                 continue
                         else:
-                            self.report({'ERROR'}, f"Original material '{original_mat_name}' missing and fallback disabled for '{mat_name}'.")
+                            self.report({'ERROR'}, f"Original material missing for '{mat_name}' and fallback off.")
                             return {'CANCELLED'}
                     else:
                         if original_mat_name not in obj.data.materials:
@@ -643,11 +630,9 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 
                     if mat_name in const_dict:
                         del const_dict[mat_name]
-
                     props_to_delete = [k for k in obj.keys() if k.startswith("constant_name_") and obj[k] == mat_name]
                     for prop in props_to_delete:
                         del obj[prop]
-
                     const_mat = bpy.data.materials.get(mat_name)
                     if const_mat and const_mat.users == 0:
                         bpy.data.materials.remove(const_mat)
@@ -657,14 +642,14 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 try:
                     bpy.ops.object.material_slot_remove_unused()
                 except Exception as e:
-                    self.report({'WARNING'}, f"Could not remove unused material slots: {e}")
+                    self.report({'WARNING'}, f"Could not remove unused slots: {e}")
 
                 if failed_materials:
-                    self.report({'WARNING'}, f"Some materials could not be cleared (missing original & fallback off): {', '.join(failed_materials)}")
+                    self.report({'WARNING'}, f"Failed to clear: {', '.join(failed_materials)}")
                 else:
                     msg = f"Cleared {cleared} constant material(s)"
                     if restored_with_fallback > 0:
-                        msg += f", restored {restored_with_fallback} with fallback"
+                        msg += f", restored {restored_with_fallback} via fallback"
                     self.report({'INFO'}, msg)
 
         except Exception as e:
@@ -672,7 +657,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             import traceback
             traceback.print_exc()
             return {'CANCELLED'}
-
         finally:
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
