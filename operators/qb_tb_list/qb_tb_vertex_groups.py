@@ -159,7 +159,11 @@ class LIST_OT_CreateBlockVertexGroups(bpy.types.Operator):
         if original_mode == 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='EDIT')
         
-        self.report({'INFO'}, f"Created {len(created_groups)} clean vertex groups for blocks")
+        # Count quadblock and triblock groups separately
+        quad_count = sum(1 for vg in created_groups if vg.name.startswith("QB_"))
+        tri_count = sum(1 for vg in created_groups if vg.name.startswith("TB_"))
+        
+        self.report({'INFO'}, f"Created {quad_count} quadblocks and {tri_count} triblocks vertex groups")
         return {'FINISHED'}
     
     def is_quadblock_center(self, center_vert):
