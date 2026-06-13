@@ -40,6 +40,16 @@ from .qb_tb_navigator import (
     get_all_navigation_points,
 )
 
+from .material_utils import (
+    update_derived_materials,
+    is_constant_id_unique,
+    get_material_categories,
+    is_base_name_in_use,
+    rename_material_if_unique,
+    update_constant_material_base_reference,
+    rename_base_material_family,
+)
+
 
 __all__ = [
     # Compatibility functions
@@ -78,4 +88,13 @@ __all__ = [
     'get_faces_by_material_name',
     'is_valid_navigation_point',
     'get_all_navigation_points',
+    
+    # Material manager utils
+    'update_derived_materials',
+    'is_constant_id_unique',
+    'get_material_categories',
+    'is_base_name_in_use',
+    'rename_material_if_unique',
+    'update_constant_material_base_reference',
+    'rename_base_material_family',
 ]

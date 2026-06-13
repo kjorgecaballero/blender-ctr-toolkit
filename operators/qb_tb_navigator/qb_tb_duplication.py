@@ -373,11 +373,14 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
+    # Sanitize suffixes
     def _sanitize_material_suffixes(self, obj):
         """
         Convert material names like 'name.001' to 'name_001'
-        to avoid collisions during the duplication process.
+        using the Material Manager's rename logic to update the whole family.
         """
+        from ...utils.material_utils import rename_base_material_family
+
         renamed_count = 0
         for slot in obj.material_slots:
             mat = slot.material
@@ -393,11 +396,15 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     new_name = f"{original_new}_{counter:03d}"
                     counter += 1
                 if new_name != old_name:
-                    mat.name = new_name
-                    renamed_count += 1
-                    print(f"  Renamed material: '{old_name}' -> '{new_name}'")
+                    # Use the Material Manager's family rename logic
+                    success, msg, updated = rename_base_material_family(obj, old_name, new_name)
+                    if success:
+                        self.report({'INFO'}, msg)
+                        renamed_count += 1
+                    else:
+                        self.report({'WARNING'}, f"Could not rename material '{old_name}': {msg}")
         if renamed_count:
-            self.report({'INFO'}, f"Renamed {renamed_count} material(s) with .001 suffix to _001 in {obj.name}")
+            self.report({'INFO'}, f"Renamed {renamed_count} material family(s) in {obj.name}")
 
     def _clear_processed_collection(self, context, collection_name="Processed_Blocks"):
         col = bpy.data.collections.get(collection_name)
