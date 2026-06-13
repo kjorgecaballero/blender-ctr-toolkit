@@ -70,7 +70,7 @@ class LIST_OT_ConfirmDeletePending(bpy.types.Operator):
         pending = self.pending_materials.split(',')
         layout.label(text="Could not create fallback materials for:", icon='ERROR')
         for name in pending[:5]:
-            layout.label(text=f"  • {name}")
+            layout.label(text=f"  - {name}")
         if len(pending) > 5:
             layout.label(text=f"  ... and {len(pending) - 5} more")
         layout.separator()
@@ -110,6 +110,9 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
         description="Base identifier used for all selected blocks (will be combined with a unique suffix)",
         default=""
     )
+
+    # Internal property to store multi-material block count for warning
+    _multi_mat_count = 0
 
     @classmethod
     def poll(cls, context):
@@ -200,6 +203,25 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                 self.base_name = current_material.name
                 self.id_value = str(first_block_id)
 
+            # Check for multiple materials in the selected blocks (just count for warning)
+            multi_mat_count = 0
+            for block_type, block_id in self.blocks_to_assign:
+                if block_type == "quadblock":
+                    face_indices = quadblock_faces_map.get(str(block_id), [])
+                else:
+                    face_indices = triblock_faces_map.get(str(block_id), [])
+                unique_mats = set()
+                for fidx in face_indices:
+                    if fidx < len(mesh.polygons):
+                        mat_idx = mesh.polygons[fidx].material_index
+                        if mat_idx < len(obj.material_slots):
+                            mat = obj.material_slots[mat_idx].material
+                            if mat:
+                                unique_mats.add(mat.name)
+                if len(unique_mats) > 1:
+                    multi_mat_count += 1
+            self._multi_mat_count = multi_mat_count
+
             bm.free()
 
         except Exception as e:
@@ -217,13 +239,20 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
         layout = self.layout
         layout.label(text=f"Base material: {self.base_name}")
 
+        # Show warning if any selected block has multiple materials
+        if self._multi_mat_count > 0:
+            box = layout.box()
+            box.alert = True
+            box.label(text=f"Warning: {self._multi_mat_count} selected block(s) have multiple materials.", icon='ERROR')
+            box.label(text="Assigning a constant material will replace all textures on those blocks.")
+
         layout.prop(self, "multi_assign", text="Multi-Assign (selected blocks)")
 
         if self.multi_assign:
             row = layout.row()
             row.prop(self, "base_id", text="Base ID")
             layout.label(text="Final names: <Base>_ID<BaseID><unique suffix>")
-            layout.label(text="Example: tree_tex_IDtreemax → tree_tex_IDtreemax5021", icon='INFO')
+            layout.label(text="Example: tree_tex_IDtreemax -> tree_tex_IDtreemax5021", icon='INFO')
             if len(self.blocks_to_assign) > 50:
                 box = layout.box()
                 box.alert = True
@@ -257,7 +286,7 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                     return {'CANCELLED'}
                 base_id = self.id_value.strip()
 
-            #  MULTI ASSIGN: validate all blocks share the same base material
+            # MULTI ASSIGN: validate all blocks share the same base material
             else:
                 if not self.base_id.strip():
                     self.report({'ERROR'}, "Base ID cannot be empty.")
@@ -402,12 +431,23 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                 self.report({'WARNING'}, f"Could not remove unused slots: {e}")
 
             if processed > 0:
-                if quad_processed > 0 and tri_processed > 0:
-                    msg = f"Assigned {quad_processed} quadblock(s) and {tri_processed} triblock(s). Errors: {errors}"
-                elif quad_processed > 0:
-                    msg = f"Assigned {quad_processed} quadblock(s). Errors: {errors}"
+                # Build natural language message
+                parts = []
+                if quad_processed > 0:
+                    parts.append(f"{quad_processed} quadblock{'s' if quad_processed != 1 else ''}")
+                if tri_processed > 0:
+                    parts.append(f"{tri_processed} triblock{'s' if tri_processed != 1 else ''}")
+                
+                if len(parts) == 2:
+                    msg = f"Assigned constant to {parts[0]} and {parts[1]}"
                 else:
-                    msg = f"Assigned {tri_processed} triblock(s). Errors: {errors}"
+                    msg = f"Assigned constant to {parts[0]}"
+                
+                if errors > 0:
+                    msg += f" with {errors} error{'s' if errors != 1 else ''}"
+                else:
+                    msg += " successfully"
+                
                 self.report({'INFO'}, msg)
             else:
                 self.report({'WARNING'}, "No quadblocks/triblocks assigned (all skipped).")
@@ -671,7 +711,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 # Print full list to console for debugging
                 if cleared_names:
                     print(f"Cleared invalid constant materials: {', '.join(cleared_names)}")
-                    # Build user-friendly message
+                    # message
                     msg = f"Cleared {len(cleared_names)} invalid constant material(s): {', '.join(cleared_names[:5])}"
                     if len(cleared_names) > 5:
                         msg += f" and {len(cleared_names)-5} more"
