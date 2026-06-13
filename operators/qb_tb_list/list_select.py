@@ -6,6 +6,59 @@ import bpy
 import bmesh
 from bpy.types import Operator
 
+from ..qb_tb_list.list_multi_selection import _get_filtered_display_items
+
+ITEMS_PER_PAGE = 10
+
+
+def _scroll_to_item(context, obj, scene, target_item_name):
+    """Scroll the list to make the specified item visible."""
+    if not target_item_name:
+        return
+
+    # Get current visible items (respects filters, search, etc.)
+    items = _get_filtered_display_items(context, obj, scene)
+    if not items:
+        return
+
+    # Apply current sort settings (same as in list_panel)
+    reverse_type = (scene.list_sort_type_direction == 'DESC')
+    reverse_name = (scene.list_sort_name_direction == 'DESC')
+
+    def sort_key(item):
+        type_order = 0 if item['block_type'] == 'quadblock' else 1
+        if reverse_type:
+            type_order = 1 - type_order
+        name_key = item['name'].lower()
+        return (type_order, name_key)
+
+    items.sort(key=sort_key)
+    if reverse_name:
+        items.reverse()
+
+    # Find target item index
+    target_index = -1
+    for idx, it in enumerate(items):
+        if it['name'] == target_item_name:
+            target_index = idx
+            break
+
+    if target_index == -1:
+        return
+
+    # Calculate page start
+    page_start = (target_index // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
+    max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
+    new_scroll = min(page_start, max_scroll)
+
+    scene.list_vertical_scroll = new_scroll
+    scene.list_list_index = target_index
+
+    # Force UI redraw
+    for area in context.screen.areas:
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
+
 
 class LIST_OT_SelectListFromBlock(Operator):
     bl_idname = "list.select_list_from_block"
@@ -55,26 +108,9 @@ class LIST_OT_SelectListFromBlock(Operator):
                 multi[mat_name] = True
             obj["multi_selected_items"] = multi
 
-            # Sync the list index (optional, for scrolling)
-            # Build visible items to find first added material
-            items = []
-            if "constant_materials" in obj:
-                for mat_name, info in obj["constant_materials"].items():
-                    bt = info.get("block_type", "")
-                    if (bt == "quadblock" and scene.list_filter_cm_qb) or \
-                       (bt == "triblock" and scene.list_filter_cm_tb):
-                        items.append(mat_name)
-            search = scene.list_search_text.lower()
-            if search:
-                items = [it for it in items if search in it.lower()]
-            items.sort(key=lambda x: x.lower())
-            if added and added[0] in items:
-                idx = items.index(added[0])
-                scene.list_list_index = idx
-                ITEMS_PER_PAGE = 10
-                page_start = (idx // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
-                max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
-                scene.list_vertical_scroll = min(page_start, max_scroll)
+            # Scroll to the LAST added item (most recent selection)
+            if added:
+                _scroll_to_item(context, obj, scene, added[-1])
 
             # Select the checked items in 3D view
             bpy.ops.list.select_multi_checked(select_all=False)
@@ -82,7 +118,7 @@ class LIST_OT_SelectListFromBlock(Operator):
             return {'FINISHED'}
 
         else:
-            # VERTEX_GROUPS mode: original logic (uses block indices and face maps)
+            # VERTEX_GROUPS mode: uses block indices and face maps
             if "face_to_quadblock" not in obj and "face_to_triblock" not in obj:
                 self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
                 return {'CANCELLED'}
@@ -137,61 +173,14 @@ class LIST_OT_SelectListFromBlock(Operator):
 
             obj["multi_selected_items"] = multi
 
-            self._sync_list_index(context, obj, scene, found_blocks)
+            # Scroll to the LAST added item (most recent selection)
+            if found_blocks:
+                last_block_name = found_blocks[-1][2]  # (type, id, name)
+                _scroll_to_item(context, obj, scene, last_block_name)
 
             bpy.ops.list.select_multi_checked(select_all=False)
             self.report({'INFO'}, f"Added {len(found_blocks)} blocks to checklist")
             return {'FINISHED'}
-
-    def _sync_list_index(self, context, obj, scene, found_blocks):
-        """Adjust the scroll to show the first block found."""
-        items = []
-        if scene.list_display_type == 'VERTEX_GROUPS':
-            for vg in obj.vertex_groups:
-                if vg.name.startswith("QB_") and scene.list_filter_show_qb:
-                    items.append(vg.name)
-                elif vg.name.startswith("TB_") and scene.list_filter_show_tb:
-                    items.append(vg.name)
-        else:
-            if "constant_materials" in obj:
-                for mat_name, info in obj["constant_materials"].items():
-                    bt = info.get("block_type", "")
-                    if (bt == "quadblock" and scene.list_filter_cm_qb) or \
-                       (bt == "triblock" and scene.list_filter_cm_tb):
-                        items.append(mat_name)
-
-        search = scene.list_search_text.lower()
-        if search:
-            items = [it for it in items if search in it.lower()]
-
-        def sort_key(name):
-            is_qb = name.startswith("QB_")
-            return (0 if is_qb else 1, name.lower())
-        items.sort(key=sort_key)
-        if scene.list_sort_name_direction == 'DESC':
-            items.reverse()
-
-        if not items:
-            return
-
-        target = None
-        bt, bid, bname = found_blocks[0]
-        if scene.list_display_type == 'VERTEX_GROUPS':
-            target = bname
-        else:
-            const_prop = f"constant_name_{bt}_{bid}"
-            if const_prop in obj:
-                target = obj[const_prop]
-            else:
-                target = bname
-
-        if target and target in items:
-            idx = items.index(target)
-            scene.list_list_index = idx
-            ITEMS_PER_PAGE = 10
-            page_start = (idx // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
-            max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
-            scene.list_vertical_scroll = min(page_start, max_scroll)
 
 
 classes = [LIST_OT_SelectListFromBlock]

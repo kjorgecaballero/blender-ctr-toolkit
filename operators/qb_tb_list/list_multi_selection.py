@@ -71,13 +71,23 @@ def _get_filtered_display_items(context, obj, scene):
     if mat_filter:
         items = [it for it in items if it['material'] == mat_filter]
 
-    # Search filter
+    # Search filter (FIXED: also search in material name for vertex groups)
     search = scene.list_search_text.lower()
     if search:
-        items = [it for it in items if
-                 search in it['name'].lower() or
-                 search in str(it['block_id']) or
-                 search in it['block_type'].lower()]
+        filtered_items = []
+        for it in items:
+            # Check name, block_id, block_type
+            if (search in it['name'].lower() or
+                search in str(it['block_id']) or
+                search in it['block_type'].lower()):
+                filtered_items.append(it)
+                continue
+            # For vertex groups, also check the material name
+            if display_type == 'VERTEX_GROUPS' and it.get('material'):
+                if search in it['material'].lower():
+                    filtered_items.append(it)
+                    continue
+        items = filtered_items
 
     # Issue filter for vertex groups
     if display_type == 'VERTEX_GROUPS':

@@ -7,6 +7,66 @@ import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty
 
+from ..qb_tb_list.list_multi_selection import _get_filtered_display_items
+
+ITEMS_PER_PAGE = 10
+
+
+def _adjust_scroll_to_checked(context, obj, scene):
+    """Adjust scroll position and list index to show the first checked item."""
+    if "multi_selected_items" not in obj or not obj["multi_selected_items"]:
+        return
+
+    checked_names = set(dict(obj["multi_selected_items"]).keys())
+    if not checked_names:
+        return
+
+    # Get the current list of visible items (respects filters, search, etc.)
+    items = _get_filtered_display_items(context, obj, scene)
+    if not items:
+        return
+
+    # Sort items according to current sort settings (same logic as in list_panel)
+    reverse_type = (scene.list_sort_type_direction == 'DESC')
+    reverse_name = (scene.list_sort_name_direction == 'DESC')
+
+    def sort_key(item):
+        # Primary sort: block type (QB first or TB first)
+        type_order = 0 if item['block_type'] == 'quadblock' else 1
+        if reverse_type:
+            type_order = 1 - type_order
+        # Secondary: name
+        name_key = item['name'].lower()
+        return (type_order, name_key)
+
+    items.sort(key=sort_key)
+    if reverse_name:
+        items.reverse()
+
+    # Find first checked item in the sorted list
+    target_index = -1
+    for idx, it in enumerate(items):
+        if it['name'] in checked_names:
+            target_index = idx
+            break
+
+    if target_index == -1:
+        return
+
+    # Calculate page start index
+    page_start = (target_index // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
+    max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
+    new_scroll = min(page_start, max_scroll)
+
+    # Apply new scroll and list index
+    scene.list_vertical_scroll = new_scroll
+    scene.list_list_index = target_index
+
+    # Force UI redraw
+    for area in context.screen.areas:
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
+
 
 class LIST_OT_ToggleSortName(Operator):
     bl_idname = "list.toggle_sort_name"
@@ -16,7 +76,12 @@ class LIST_OT_ToggleSortName(Operator):
 
     def execute(self, context):
         scene = context.scene
+        obj = context.edit_object
+        # Flip direction
         scene.list_sort_name_direction = 'DESC' if scene.list_sort_name_direction == 'ASC' else 'ASC'
+        # Adjust scroll to keep checked items visible
+        if obj:
+            _adjust_scroll_to_checked(context, obj, scene)
         return {'FINISHED'}
 
 
@@ -28,7 +93,12 @@ class LIST_OT_ToggleSortType(Operator):
 
     def execute(self, context):
         scene = context.scene
+        obj = context.edit_object
+        # Flip direction
         scene.list_sort_type_direction = 'DESC' if scene.list_sort_type_direction == 'ASC' else 'ASC'
+        # Adjust scroll to keep checked items visible
+        if obj:
+            _adjust_scroll_to_checked(context, obj, scene)
         return {'FINISHED'}
 
 
