@@ -13,6 +13,69 @@ import random
 from ...utils.qb_tb_navigator import get_faces_by_material_name
 from ...utils.qb_tb_navigator.constant_material_utils import clear_all_constant_materials
 from ...utils.material_utils import is_constant_id_unique
+from ...utils.qb_tb_navigator.qb_tb_navigation_utils import detect_block_from_selection
+
+
+class LIST_OT_ConfirmDeletePending(bpy.types.Operator):
+    """Popup to confirm deletion of constant materials that failed fallback restoration"""
+    bl_idname = "list.confirm_delete_pending"
+    bl_label = "Delete Constant Materials Without Restoration?"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    pending_materials: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def execute(self, context):
+        obj = context.edit_object
+        if not obj or "constant_materials" not in obj:
+            return {'CANCELLED'}
+
+        pending_list = self.pending_materials.split(',')
+        const_dict = dict(obj["constant_materials"])
+        removed = 0
+
+        for mat_name in pending_list:
+            if mat_name not in const_dict:
+                continue
+            block_info = const_dict[mat_name]
+            block_type = block_info.get("block_type", "")
+            block_id = block_info.get("block_id", 0)
+
+            # Remove from constant_materials dict
+            if mat_name in obj["constant_materials"]:
+                del obj["constant_materials"][mat_name]
+            const_prop_name = f"constant_name_{block_type}_{block_id}"
+            if const_prop_name in obj:
+                del obj[const_prop_name]
+
+            # Delete material if unused
+            if mat_name in bpy.data.materials:
+                mat = bpy.data.materials[mat_name]
+                if mat.users == 0:
+                    bpy.data.materials.remove(mat)
+            removed += 1
+
+        try:
+            bpy.ops.object.material_slot_remove_unused()
+        except Exception:
+            pass
+
+        self.report({'INFO'}, f"Deleted {removed} constant materials without restoration.")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=400)
+
+    def draw(self, context):
+        layout = self.layout
+        pending = self.pending_materials.split(',')
+        layout.label(text="Could not create fallback materials for:", icon='ERROR')
+        for name in pending[:5]:
+            layout.label(text=f"  • {name}")
+        if len(pending) > 5:
+            layout.label(text=f"  ... and {len(pending) - 5} more")
+        layout.separator()
+        layout.label(text="Delete these constant materials without restoring any material?")
+        layout.label(text="Affected faces will keep the constant material (may appear pink).")
 
 
 class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
@@ -362,10 +425,10 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
 
 
 class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
-    """Clear constant name from the selected quadblock/triblock, all constant materials, or only invalid navigation points."""
+    """Clear constant name from the selected quadblock/triblock, all constant materials, or only invalid constant materials (including non‑navigation)."""
     bl_idname = "list.clear_constant_material"
     bl_label = "Clear Constant Name"
-    bl_description = "Clear constant name from selected block, all constants, or invalid nav points"
+    bl_description = "Clear constant name from selected block, all constants, or invalid constant materials (geometry or face count)"
     bl_options = {'REGISTER', 'UNDO'}
 
     clear_mode: bpy.props.EnumProperty(
@@ -374,7 +437,7 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
         items=[
             ('SELECTED', "Clear Selected", "Clear checked items AND selected blocks"),
             ('ALL', "Clear All", "Clear all constants from this object"),
-            ('INVALID_ONLY', "Clear Invalid Only", "Clear broken navigation points only"),
+            ('INVALID_ONLY', "Clear Invalid Only", "Clear any constant material with invalid face count or geometry"),
         ],
         default='SELECTED'
     )
@@ -412,18 +475,44 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 box.label(text="Combines both selections.")
             elif self.clear_mode == 'ALL':
                 box.label(text="Removes ALL constant materials.", icon='ERROR')
-                box.label(text="Base materials restored automatically.")
+                box.label(text="Base materials restored automatically (if possible).")
+                box.label(text="If fallback fails, you will be asked.")
             else:  # INVALID_ONLY
+                # Count invalid constant materials (all, not only navigation points)
                 invalid_count = 0
                 if "constant_materials" in obj:
-                    constant_materials_dict = dict(obj["constant_materials"])
-                    for mat_name, info in constant_materials_dict.items():
-                        if info.get("is_navigation_point", False):
-                            face_indices = get_faces_by_material_name(obj, mat_name)
-                            if len(face_indices) != 4:
-                                invalid_count += 1
-                box.label(text=f"Clears {invalid_count} invalid nav points.", icon='INFO')
-                box.label(text="Only broken navigation points.")
+                    bm = bmesh.new()
+                    bm.from_mesh(obj.data)
+                    bm.faces.ensure_lookup_table()
+                    const_dict = dict(obj["constant_materials"])
+                    for mat_name, info in const_dict.items():
+                        face_indices = get_faces_by_material_name(obj, mat_name)
+                        if len(face_indices) != 4:
+                            invalid_count += 1
+                        else:
+                            bm_faces = [bm.faces[i] for i in face_indices if i < len(bm.faces)]
+                            if len(bm_faces) == 4:
+                                center, _ = detect_block_from_selection(bm_faces)
+                                if center is None:
+                                    invalid_count += 1
+                    bm.free()
+                box.label(text=f"Found {invalid_count} invalid constant material(s).", icon='INFO')
+                box.label(text="Removes any constant material with wrong face count or broken geometry.")
+
+    def purge_orphan_data(self):
+        """Remove unused data blocks (materials, images, textures)"""
+        # Purge materials with no users
+        for mat in list(bpy.data.materials):
+            if mat.users == 0:
+                bpy.data.materials.remove(mat)
+        # Purge images with no users
+        for img in list(bpy.data.images):
+            if img.users == 0:
+                bpy.data.images.remove(img)
+        # Purge textures
+        for tex in list(bpy.data.textures):
+            if tex.users == 0:
+                bpy.data.textures.remove(tex)
 
     def execute(self, context):
         obj = context.edit_object
@@ -433,113 +522,204 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         try:
-            # 1) Clear only invalid navigation points
+            # Helper function to process a list of material names (same logic for all modes)
+            def process_materials(materials_to_clear, obj, fallback_cache):
+                cleared = 0
+                restored_with_fallback = 0
+                failed = []
+                pending_delete = []
+
+                for mat_name in materials_to_clear:
+                    const_dict = obj.get("constant_materials", {})
+                    if mat_name not in const_dict:
+                        # Already removed
+                        continue
+
+                    block_info = const_dict[mat_name]
+                    block_type = block_info.get("block_type", "")
+                    block_id = block_info.get("block_id", 0)
+                    original_mat_name = block_info.get("original_material", "")
+                    original_mat = bpy.data.materials.get(original_mat_name)
+
+                    face_indices = get_faces_by_material_name(obj, mat_name)
+                    if not face_indices:
+                        # No faces use this material, just remove the constant entry
+                        if mat_name in obj["constant_materials"]:
+                            del obj["constant_materials"][mat_name]
+                        const_prop_name = f"constant_name_{block_type}_{block_id}"
+                        if const_prop_name in obj:
+                            del obj[const_prop_name]
+                        if mat_name in bpy.data.materials and bpy.data.materials[mat_name].users == 0:
+                            bpy.data.materials.remove(bpy.data.materials[mat_name])
+                        cleared += 1
+                        continue
+
+                    # Case 1: original material exists
+                    if original_mat:
+                        if original_mat_name not in obj.data.materials:
+                            obj.data.materials.append(original_mat)
+                        orig_idx = obj.data.materials.find(original_mat_name)
+                        for idx in face_indices:
+                            if idx < len(obj.data.polygons):
+                                obj.data.polygons[idx].material_index = orig_idx
+                        cleared += 1
+                        # Remove constant data
+                        if mat_name in obj["constant_materials"]:
+                            del obj["constant_materials"][mat_name]
+                        const_prop_name = f"constant_name_{block_type}_{block_id}"
+                        if const_prop_name in obj:
+                            del obj[const_prop_name]
+                        if mat_name in bpy.data.materials:
+                            mat = bpy.data.materials[mat_name]
+                            if mat.users == 0:
+                                bpy.data.materials.remove(mat)
+                        continue
+
+                    # Case 2: original material missing, try fallback
+                    const_mat = bpy.data.materials.get(mat_name)
+                    if const_mat:
+                        base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
+                        if base_name in fallback_cache:
+                            new_mat_name, new_index = fallback_cache[base_name]
+                        else:
+                            from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
+                            new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
+                            if new_mat_name:
+                                fallback_cache[base_name] = (new_mat_name, new_index)
+                            else:
+                                # Fallback creation failed -> ask user later
+                                pending_delete.append(mat_name)
+                                continue
+
+                        if new_mat_name:
+                            for idx in face_indices:
+                                if idx < len(obj.data.polygons):
+                                    obj.data.polygons[idx].material_index = new_index
+                            restored_with_fallback += 1
+                            # Remove constant data
+                            if mat_name in obj["constant_materials"]:
+                                del obj["constant_materials"][mat_name]
+                            const_prop_name = f"constant_name_{block_type}_{block_id}"
+                            if const_prop_name in obj:
+                                del obj[const_prop_name]
+                            if mat_name in bpy.data.materials:
+                                mat = bpy.data.materials[mat_name]
+                                if mat.users == 0:
+                                    bpy.data.materials.remove(mat)
+                    else:
+                        # Constant material itself is missing from bpy.data.materials -> just delete entry
+                        if mat_name in obj["constant_materials"]:
+                            del obj["constant_materials"][mat_name]
+                        const_prop_name = f"constant_name_{block_type}_{block_id}"
+                        if const_prop_name in obj:
+                            del obj[const_prop_name]
+                        cleared += 1
+
+                return cleared, restored_with_fallback, failed, pending_delete
+
+            # 1) Clear only invalid constant materials (ALL constant materials, not just navigation points)
             if self.clear_mode == 'INVALID_ONLY':
                 if "constant_materials" not in obj:
                     self.report({'WARNING'}, "No constant materials found.")
                     return {'CANCELLED'}
 
-                broken_points = []
-                constant_materials_dict = dict(obj["constant_materials"])
-                for mat_name, block_info in constant_materials_dict.items():
-                    if block_info.get("is_navigation_point", False):
-                        face_indices = get_faces_by_material_name(obj, mat_name)
-                        if len(face_indices) != 4:
-                            broken_points.append(mat_name)
+                # Detect invalid constant materials: face count != 4 OR geometry invalid
+                invalid_materials = []
+                const_dict = dict(obj["constant_materials"])
+                bm = bmesh.new()
+                bm.from_mesh(obj.data)
+                bm.faces.ensure_lookup_table()
 
-                if not broken_points:
+                for mat_name, block_info in const_dict.items():
+                    # Check face count first (catches duplicated materials on multiple blocks)
+                    face_indices = get_faces_by_material_name(obj, mat_name)
+                    if len(face_indices) != 4:
+                        invalid_materials.append(mat_name)
+                        continue
+                    # Even with 4 faces, verify they form a valid qb/tb center
+                    bm_faces = [bm.faces[i] for i in face_indices if i < len(bm.faces)]
+                    if len(bm_faces) == 4:
+                        center, _ = detect_block_from_selection(bm_faces)
+                        if center is None:
+                            invalid_materials.append(mat_name)
+                bm.free()
+
+                if not invalid_materials:
                     self.report({'INFO'}, "No invalid constant materials found.")
                     return {'FINISHED'}
 
-                cleared_count = 0
-                restored_with_fallback = 0
-                failed_materials = []
+                # Store before state to know what was cleared
+                before_const = set(obj["constant_materials"].keys())
+
                 fallback_cache = {}
+                cleared, restored, failed, pending = process_materials(invalid_materials, obj, fallback_cache)
 
-                for mat_name in broken_points:
-                    block_info = constant_materials_dict[mat_name]
-                    block_type = block_info.get("block_type", "")
-                    block_id = block_info.get("block_id", 0)
-                    original_material_name = block_info.get("original_material", "")
+                # Determine which materials were actually cleared
+                after_const = set(obj["constant_materials"].keys())
+                cleared_names = [m for m in invalid_materials if m in before_const and m not in after_const]
 
-                    original_material = None
-                    if original_material_name and original_material_name in bpy.data.materials:
-                        original_material = bpy.data.materials[original_material_name]
-
-                    if not original_material:
-                        const_mat = bpy.data.materials.get(mat_name)
-                        if const_mat:
-                            base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
-                            if base_name in fallback_cache:
-                                new_mat_name, new_index = fallback_cache[base_name]
-                            else:
-                                from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
-                                new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
-                                if new_mat_name:
-                                    fallback_cache[base_name] = (new_mat_name, new_index)
-                                else:
-                                    failed_materials.append(mat_name)
-                                    continue
-
-                            block_faces = get_faces_by_material_name(obj, mat_name)
-                            for face_idx in block_faces:
-                                if face_idx < len(obj.data.polygons):
-                                    obj.data.polygons[face_idx].material_index = new_index
-                            obj.data.update()
-                            restored_with_fallback += 1
-                        else:
-                            failed_materials.append(mat_name)
-                            continue
-                    else:
-                        block_faces = get_faces_by_material_name(obj, mat_name)
-                        if not block_faces:
-                            failed_materials.append(mat_name)
-                            continue
-
-                        if original_material_name not in obj.data.materials:
-                            obj.data.materials.append(original_material)
-                        original_mat_index = obj.data.materials.find(original_material_name)
-                        for face_idx in block_faces:
-                            obj.data.polygons[face_idx].material_index = original_mat_index
-                        obj.data.update()
-                        cleared_count += 1
-
-                    if mat_name in obj["constant_materials"]:
-                        del obj["constant_materials"][mat_name]
-                    const_prop_name = f"constant_name_{block_type}_{block_id}"
-                    if const_prop_name in obj:
-                        del obj[const_prop_name]
-
-                    if mat_name in bpy.data.materials:
-                        material = bpy.data.materials[mat_name]
-                        if material.users == 0:
-                            bpy.data.materials.remove(material)
+                if pending:
+                    pending_str = ','.join(pending)
+                    bpy.ops.list.confirm_delete_pending('INVOKE_DEFAULT', pending_materials=pending_str)
 
                 try:
                     bpy.ops.object.material_slot_remove_unused()
-                except Exception as e:
-                    self.report({'WARNING'}, f"Could not remove unused slots: {e}")
+                except Exception:
+                    pass
+                self.purge_orphan_data()
 
-                msg = f"Cleared {len(broken_points) - len(failed_materials)} invalid constants. "
-                if restored_with_fallback > 0:
-                    msg += f"Restored {restored_with_fallback} via fallback. "
-                if failed_materials:
-                    msg += f"Failed: {', '.join(failed_materials)}"
-                self.report({'INFO'} if not failed_materials else {'WARNING'}, msg)
+                # Print full list to console for debugging
+                if cleared_names:
+                    print(f"Cleared invalid constant materials: {', '.join(cleared_names)}")
+                    # Build user-friendly message
+                    msg = f"Cleared {len(cleared_names)} invalid constant material(s): {', '.join(cleared_names[:5])}"
+                    if len(cleared_names) > 5:
+                        msg += f" and {len(cleared_names)-5} more"
+                    if restored > 0:
+                        msg += f" (restored {restored} via fallback)"
+                    if pending:
+                        msg += f" | {len(pending)} require confirmation"
+                    self.report({'INFO'}, msg)
+                else:
+                    self.report({'INFO'}, f"Processed invalid materials. Restored: {restored}, pending: {len(pending)}")
+
+                if failed:
+                    self.report({'WARNING'}, f"Failed to clear: {', '.join(failed)}")
                 return {'FINISHED'}
 
             # 2) Clear all constant materials
             elif self.clear_mode == 'ALL':
-                cleared_orig, restored_fb, failed = clear_all_constant_materials(obj, fallback_duplicate=True)
-                msg = f"Cleared all constants. Restored {cleared_orig} original, {restored_fb} fallback."
-                if failed:
-                    msg += f" Failed: {', '.join(failed)}"
-                    self.report({'WARNING'}, msg)
-                else:
-                    self.report({'INFO'}, msg)
+                if "constant_materials" not in obj:
+                    self.report({'WARNING'}, "No constant materials found.")
+                    return {'CANCELLED'}
+
+                all_materials = list(obj["constant_materials"].keys())
+                if not all_materials:
+                    self.report({'INFO'}, "No constant materials to clear.")
+                    return {'FINISHED'}
+
+                fallback_cache = {}
+                cleared, restored, failed, pending = process_materials(all_materials, obj, fallback_cache)
+
+                if pending:
+                    pending_str = ','.join(pending)
+                    bpy.ops.list.confirm_delete_pending('INVOKE_DEFAULT', pending_materials=pending_str)
+
+                try:
+                    bpy.ops.object.material_slot_remove_unused()
+                except Exception:
+                    pass
+                self.purge_orphan_data()
                 # Also clear multi_selected_items
                 if "multi_selected_items" in obj:
                     obj["multi_selected_items"].clear()
+
+                msg = f"Cleared all constants. Restored {cleared} original, {restored} fallback."
+                if pending:
+                    msg += f" {len(pending)} require confirmation."
+                if failed:
+                    msg += f" Failed: {', '.join(failed)}"
+                self.report({'INFO'}, msg)
                 return {'FINISHED'}
 
             # 3) Clear selected: combine checked items AND 3D selection
@@ -575,91 +755,27 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                     self.report({'WARNING'}, "No materials to clear (no checked items and no 3D selection).")
                     return {'CANCELLED'}
 
-                # Process clearing
-                cleared = 0
-                restored_with_fallback = 0
-                failed_materials = []
                 fallback_cache = {}
+                cleared, restored, failed, pending = process_materials(list(mats_to_clear), obj, fallback_cache)
 
-                for mat_name in mats_to_clear:
-                    block_info = const_dict[mat_name]
-                    original_mat_name = block_info.get("original_material", "")
-                    original_mat = bpy.data.materials.get(original_mat_name)
+                if pending:
+                    pending_str = ','.join(pending)
+                    bpy.ops.list.confirm_delete_pending('INVOKE_DEFAULT', pending_materials=pending_str)
 
-                    face_indices = get_faces_by_material_name(obj, mat_name)
-                    if not face_indices:
-                        failed_materials.append(mat_name)
-                        continue
-
-                    if not original_mat:
-                        const_mat = bpy.data.materials.get(mat_name)
-                        if const_mat:
-                            base_name = mat_name.rsplit('_ID', 1)[0] if '_ID' in mat_name else mat_name
-                            if base_name in fallback_cache:
-                                new_mat_name, new_index = fallback_cache[base_name]
-                            else:
-                                from ...utils.qb_tb_navigator.constant_material_utils import _create_base_material_from_constant
-                                new_mat_name, new_index = _create_base_material_from_constant(obj, mat_name)
-                                if new_mat_name:
-                                    fallback_cache[base_name] = (new_mat_name, new_index)
-                                else:
-                                    failed_materials.append(mat_name)
-                                    continue
-
-                            for idx in face_indices:
-                                if idx < len(obj.data.polygons):
-                                    obj.data.polygons[idx].material_index = new_index
-                            restored_with_fallback += 1
-                            # Check if the new material has a texture node
-                            new_mat = bpy.data.materials.get(new_mat_name)
-                            if new_mat and new_mat.use_nodes:
-                                has_tex = any(node.type == 'TEX_IMAGE' for node in new_mat.node_tree.nodes)
-                                if not has_tex:
-                                    self.report({'WARNING'}, f"Fallback material '{new_mat_name}' has no texture. It may appear pink.")
-                        else:
-                            failed_materials.append(mat_name)
-                            continue
-                    else:
-                        if original_mat_name not in obj.data.materials:
-                            obj.data.materials.append(original_mat)
-                        orig_idx = obj.data.materials.find(original_mat_name)
-                        for idx in face_indices:
-                            obj.data.polygons[idx].material_index = orig_idx
-                        cleared += 1
-
-                    # Remove from constant_materials dict
-                    if mat_name in const_dict:
-                        del const_dict[mat_name]
-                    # Remove custom properties
-                    props_to_delete = [k for k in obj.keys() if k.startswith("constant_name_") and obj[k] == mat_name]
-                    for prop in props_to_delete:
-                        del obj[prop]
-                    # Delete material if unused
-                    const_mat = bpy.data.materials.get(mat_name)
-                    if const_mat and const_mat.users == 0:
-                        bpy.data.materials.remove(const_mat)
-
-                obj["constant_materials"] = const_dict
-                # Clear the checked items from multi_selected_items
-                if "multi_selected_items" in obj:
-                    multi = dict(obj["multi_selected_items"])
-                    for mat_name in mats_to_clear:
-                        if mat_name in multi:
-                            del multi[mat_name]
-                    obj["multi_selected_items"] = multi
-
-                obj.data.update()
                 try:
                     bpy.ops.object.material_slot_remove_unused()
-                except Exception as e:
-                    self.report({'WARNING'}, f"Could not remove unused slots: {e}")
+                except Exception:
+                    pass
+                self.purge_orphan_data()
 
-                if failed_materials:
-                    self.report({'WARNING'}, f"Failed to clear: {', '.join(failed_materials)}")
+                if failed:
+                    self.report({'WARNING'}, f"Failed to clear: {', '.join(failed)}")
                 else:
                     msg = f"Cleared {cleared} constant material(s)"
-                    if restored_with_fallback > 0:
-                        msg += f", restored {restored_with_fallback} via fallback"
+                    if restored > 0:
+                        msg += f", restored {restored} via fallback"
+                    if pending:
+                        msg += f", {len(pending)} require confirmation"
                     self.report({'INFO'}, msg)
 
         except Exception as e:
@@ -677,4 +793,5 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
 classes = [
     LIST_OT_AssignConstantMaterial,
     LIST_OT_ClearConstantMaterial,
+    LIST_OT_ConfirmDeletePending,
 ]
