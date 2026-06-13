@@ -183,6 +183,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         # Preprocessing
         box = layout.box()
         box.label(text="Preprocessing", icon='MODIFIER')
+        box.prop(self, "export_colors")
         box.prop(self, "apply_modifiers")
         box.prop(self, "separate_loose_parts")
 
