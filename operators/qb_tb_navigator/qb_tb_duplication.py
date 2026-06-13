@@ -2,7 +2,6 @@
 QB/TB Duplication Operators
 Operators for duplicating blocks by group
 Export to OBJ and re-import functionality for optimized performance.
-Avoid references to deleted objects when exporting processed duplicates.
 """
 
 import bpy
@@ -444,6 +443,13 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         quadblock_count = 0
         triblock_count = 0
 
+        # Store the name of the source object BEFORE any destructive operations
+        source_obj = context.edit_object
+        if source_obj is None:
+            self.report({'ERROR'}, "No active mesh object in edit mode")
+            return {'CANCELLED'}
+        original_obj_name = source_obj.name   # store name, not reference
+
         try:
             original_mode = context.mode
             original_obj = context.object
@@ -676,8 +682,9 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 restore_ps1_render(context, ps1_was_active)
 
                 # Restore original collection if it was moved
-                if moved_to_root and source_obj.name in bpy.data.objects:
-                    obj_to_restore = bpy.data.objects[source_obj.name]
+                # Use the stored object name to safely retrieve the object
+                if moved_to_root and original_obj_name in bpy.data.objects:
+                    obj_to_restore = bpy.data.objects[original_obj_name]
                     # Unlink from root collection
                     if obj_to_restore.name in root_collection.objects:
                         root_collection.objects.unlink(obj_to_restore)
@@ -688,6 +695,9 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                                 coll.objects.link(obj_to_restore)
                     context.view_layer.update()
                     self.report({'INFO'}, f"Restored '{obj_to_restore.name}' to its original collections")
+                else:
+                    # If the source object no longer exists (very rare), just warn
+                    self.report({'WARNING'}, f"Could not restore collections for '{original_obj_name}' - object may have been deleted")
 
         finally:
             _temp_duplicated_objects = []

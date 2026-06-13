@@ -71,7 +71,7 @@ def _get_filtered_display_items(context, obj, scene):
     if mat_filter:
         items = [it for it in items if it['material'] == mat_filter]
 
-    # Search filter (FIXED: also search in material name for vertex groups)
+    # Search filter also search in material name for vertex groups
     search = scene.list_search_text.lower()
     if search:
         filtered_items = []
