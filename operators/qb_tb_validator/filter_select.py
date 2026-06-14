@@ -33,6 +33,8 @@ class QB_TB_OT_FilterSelectObjects(Operator):
                 select_this = "invalid_triblock_uvs" in issues
             elif option == 'DEGENERATED_UVS':
                 select_this = "degenerated_uvs" in issues
+            elif option == 'MISSING_UVS':
+                select_this = "missing_uvs" in issues
             elif option == 'TRIBLOCK':
                 select_this = mesh_type == 'TRIBLOCK'
             elif option == 'QUADBLOCK':

@@ -53,6 +53,8 @@ class QB_TB_OT_SelectVertexGroupsByType(Operator):
                 match = 'invalid_triblock_uvs' in issues
             elif option == 'DEGENERATED_UVS':
                 match = 'degenerated_uvs' in issues
+            elif option == 'MISSING_UVS':
+                match = 'missing_uvs' in issues
             elif option == 'OUT_OF_RANGE':
                 match = 'out_of_range' in issues
             elif option == 'MULTIPLE_MATERIALS':

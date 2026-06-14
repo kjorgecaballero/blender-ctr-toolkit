@@ -198,6 +198,17 @@ class LIST_OT_SetIssueFilterDegeneratedUVs(Operator):
         return {'FINISHED'}
 
 
+class LIST_OT_SetIssueFilterMissingUVs(Operator):
+    bl_idname = "list.set_issue_filter_missing_uvs"
+    bl_label = "Missing UVs"
+    bl_description = "Show blocks that have no UV map"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        context.scene.list_issue_filter = 'MISSING_UVS'
+        return {'FINISHED'}
+
+
 class LIST_OT_SetIssueFilterOutOfRange(Operator):
     bl_idname = "list.set_issue_filter_out_of_range"
     bl_label = "Out of Range"
@@ -232,6 +243,7 @@ classes = [
     LIST_OT_SetIssueFilterInvalidUVs,
     LIST_OT_SetIssueFilterInvalidTriblockUVs,
     LIST_OT_SetIssueFilterDegeneratedUVs,
+    LIST_OT_SetIssueFilterMissingUVs,
     LIST_OT_SetIssueFilterOutOfRange,
     LIST_OT_SetIssueFilterMultipleMaterials,
 ]

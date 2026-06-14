@@ -39,6 +39,8 @@ class QB_TB_OT_ObjectQbTbSuffix(Operator):
                 match = "invalid_triblock_uvs" in issues
             elif option == 'DEGENERATED_UVS':
                 match = "degenerated_uvs" in issues
+            elif option == 'MISSING_UVS':
+                match = "missing_uvs" in issues
             elif option == 'NGONS':
                 match = "ngon" in issues
             elif option == 'NON_MESH':

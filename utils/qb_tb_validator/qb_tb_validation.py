@@ -149,7 +149,7 @@ def are_uvs_degenerated(uv_layer, tolerance=0.0001):
             return False
     return True
 
-# Validate triblock UVs for an entire object (kept for compatibility)
+# Validate triblock UVs for an entire object
 def are_triblock_uvs_valid(obj, tolerance=0.0001):
     if obj.type != 'MESH':
         return False
@@ -253,9 +253,11 @@ def get_face_uv_issues(obj, face_indices):
     issues = []
     mesh = obj.data
     if not mesh.uv_layers:
+        issues.append("missing_uvs")
         return issues
     uv_layer = mesh.uv_layers.active
     if not uv_layer or len(uv_layer.data) == 0:
+        issues.append("missing_uvs")
         return issues
 
     uv_data = uv_layer.data
@@ -386,7 +388,7 @@ def analyze_faces_for_block(obj, face_indices):
     and return a list of issues.
     Possible issues: 'quadblock', 'triblock', 'invalid_geometry',
                      'invalid_uvs', 'degenerated_uvs', 'invalid_triblock_uvs',
-                     'multiple_materials' (NEW)
+                     'multiple_materials', 'missing_uvs'
     """
     issues = []
     if not face_indices:
@@ -406,7 +408,6 @@ def analyze_faces_for_block(obj, face_indices):
         if len(unique_materials) > 1:
             issues.append("multiple_materials")
             break
-
 
     # Check geometry type
     is_quad = analyze_faces_for_quadblock(obj, face_indices)

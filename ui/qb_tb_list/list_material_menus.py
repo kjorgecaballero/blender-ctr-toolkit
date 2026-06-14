@@ -1,6 +1,6 @@
 """
 Material Selection Menus for Quadblock/Triblock List
-Includes the Issue Filter Menu with individual operators.
+Issue Filter Menu with individual operators.
 """
 
 import bpy
@@ -154,6 +154,7 @@ class LIST_MT_IssueFilterMenu(bpy.types.Menu):
         draw_item("list.set_issue_filter_invalid_uvs", "Invalid UVs", 'UV', 'INVALID_UVS')
         draw_item("list.set_issue_filter_invalid_triblock_uvs", "Invalid Triblock UVs", 'MESH_CONE', 'INVALID_TRIBLOCK_UVS')
         draw_item("list.set_issue_filter_degenerated_uvs", "Degenerated UVs", 'GROUP_UVS', 'DEGENERATED_UVS')
+        draw_item("list.set_issue_filter_missing_uvs", "Missing UVs", 'UV', 'MISSING_UVS')
         draw_item("list.set_issue_filter_out_of_range", "Out of Range", 'BOUNDS', 'OUT_OF_RANGE')
         draw_item("list.set_issue_filter_multiple_materials", "Multiple Materials", 'MATERIAL', 'MULTIPLE_MATERIALS')
 

@@ -128,6 +128,9 @@ def _get_filtered_display_items(context, obj, scene):
             elif issue_filter == 'MULTIPLE_MATERIALS':
                 if 'multiple_materials' in item_issues:
                     filtered.append(it)
+            elif issue_filter == 'MISSING_UVS':
+                if 'missing_uvs' in item_issues:
+                    filtered.append(it)
         items = filtered
 
     return items
@@ -576,6 +579,7 @@ class LIST_OT_ShowVertexGroupIssues(Operator):
             'degenerated_uvs': ("Degenerated UVs (all UVs identical)", 'GROUP_UVS'),
             'out_of_range': ("Vertices outside range box (500 units)", 'BOUNDS'),
             'multiple_materials': ("Multiple materials on block faces", 'MATERIAL'),
+            'missing_uvs': ("Missing UV map", 'UV'),
         }
 
         for issue in issues:

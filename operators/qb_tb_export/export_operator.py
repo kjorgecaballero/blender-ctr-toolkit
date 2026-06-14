@@ -120,6 +120,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
+    export_missing_uvs: BoolProperty(
+        name="Missing UVs",
+        description="Export objects with no UV map",
+        default=False,
+    )
+
     path_mode: EnumProperty(
         name="Path Mode",
         description="Texture path handling",
@@ -194,6 +200,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         box.prop(self, "export_invalid_uvs", text="Invalid UVs")
         box.prop(self, "export_invalid_triblock_uvs", text="Invalid Triblock UVs")
         box.prop(self, "export_degenerated_uvs", text="Degenerated UVs")
+        box.prop(self, "export_missing_uvs", text="Missing UVs")
         box.prop(self, "export_multiple_materials", text="Multiple Materials")
 
         # Duplicates
@@ -240,6 +247,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         self.export_processed_duplicates = context.scene.export_processed_duplicates
         self.export_details = context.scene.export_details
         self.export_multiple_materials = context.scene.export_multiple_materials
+        self.export_missing_uvs = context.scene.export_missing_uvs
         return super().invoke(context, event)
 
     def _save_export_settings(self, context):
@@ -258,6 +266,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.export_invalid_triblock_uvs = self.export_invalid_triblock_uvs
         context.scene.export_degenerated_uvs = self.export_degenerated_uvs
         context.scene.export_multiple_materials = self.export_multiple_materials
+        context.scene.export_missing_uvs = self.export_missing_uvs
         context.scene.path_mode = self.path_mode
         context.scene.export_details = self.export_details
         context.scene.allow_out_of_range = self.allow_out_of_range

@@ -8,7 +8,7 @@ class ValidationHandler:
     
     Responsibilities:
     - Filter objects by type (Quadblock/Triblock)
-    - Validate UV issues (invalid, degenerated, triblock-specific)
+    - Validate UV issues (invalid, degenerated, triblock-specific, missing)
     - Apply range box filtering
     - Collect export statistics for reporting
     """
@@ -68,6 +68,8 @@ class ValidationHandler:
             if 'invalid_triblock_uvs' in issues and not settings.export_invalid_triblock_uvs:
                 continue
             if 'degenerated_uvs' in issues and not settings.export_degenerated_uvs:
+                continue
+            if 'missing_uvs' in issues and not settings.export_missing_uvs:
                 continue
             
             # Apply multiple materials filter

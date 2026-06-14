@@ -104,6 +104,12 @@ def register():
         default=False
     )
     
+    bpy.types.Scene.export_missing_uvs = bpy.props.BoolProperty(
+        name="Missing UVs",
+        description="Export objects with no UV map",
+        default=False
+    )
+    
     bpy.types.Scene.path_mode = bpy.props.EnumProperty(
         name="Path Mode",
         description="Texture path handling",
@@ -164,6 +170,7 @@ def unregister():
     del bpy.types.Scene.export_invalid_triblock_uvs
     del bpy.types.Scene.export_degenerated_uvs
     del bpy.types.Scene.export_multiple_materials
+    del bpy.types.Scene.export_missing_uvs
     del bpy.types.Scene.path_mode
     del bpy.types.Scene.export_details
     del bpy.types.Scene.allow_out_of_range

@@ -29,6 +29,7 @@ class ExportSettings:
         self.export_invalid_triblock_uvs = False
         self.export_degenerated_uvs = False
         self.export_multiple_materials = False
+        self.export_missing_uvs = False
         self.path_mode = 'COPY'
         self.folder_behavior = 'SUFFIX'
         self.folder_name = ""
@@ -62,6 +63,7 @@ class ExportSettings:
         settings.export_invalid_triblock_uvs = operator.export_invalid_triblock_uvs
         settings.export_degenerated_uvs = operator.export_degenerated_uvs
         settings.export_multiple_materials = operator.export_multiple_materials
+        settings.export_missing_uvs = getattr(operator, 'export_missing_uvs', False)
         settings.path_mode = operator.path_mode
         settings.folder_behavior = operator.folder_behavior
         settings.allow_out_of_range = operator.allow_out_of_range
@@ -94,6 +96,7 @@ class ExportSettings:
         settings.export_invalid_triblock_uvs = context.scene.export_invalid_triblock_uvs
         settings.export_degenerated_uvs = context.scene.export_degenerated_uvs
         settings.export_multiple_materials = context.scene.export_multiple_materials
+        settings.export_missing_uvs = getattr(context.scene, 'export_missing_uvs', False)
         settings.path_mode = context.scene.path_mode
         settings.folder_behavior = context.scene.folder_behavior
         settings.allow_out_of_range = context.scene.allow_out_of_range

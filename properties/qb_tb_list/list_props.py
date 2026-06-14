@@ -93,6 +93,7 @@ def register():
             ('INVALID_UVS', 'Invalid UVs', 'Show blocks with UVs outside 0-1 range'),
             ('INVALID_TRIBLOCK_UVS', 'Invalid Triblock UVs', 'Show triblocks with incorrect UV arrangement'),
             ('DEGENERATED_UVS', 'Degenerated UVs', 'Show blocks with all UVs identical'),
+            ('MISSING_UVS', 'Missing UVs', 'Show blocks with no UV map'),
             ('OUT_OF_RANGE', 'Out of Range', 'Show blocks with vertices outside the range box'),
             ('MULTIPLE_MATERIALS', 'Multiple Materials', 'Show blocks with more than one material'),
         ],

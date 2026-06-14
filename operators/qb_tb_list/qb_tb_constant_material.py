@@ -198,7 +198,16 @@ class LIST_OT_AssignConstantMaterial(bpy.types.Operator):
                 face_indices = triblock_faces_map.get(str(first_block_id), [])
             if face_indices:
                 first_face_idx = face_indices[0]
+                if first_face_idx >= len(mesh.polygons):
+                    self.report({'ERROR'}, "Invalid face index for block.")
+                    bm.free()
+                    return {'CANCELLED'}
                 mat_idx = mesh.polygons[first_face_idx].material_index
+                # Check if material index is valid
+                if mat_idx >= len(obj.material_slots) or not obj.material_slots[mat_idx].material:
+                    self.report({'ERROR'}, "Selected block has no material assigned.")
+                    bm.free()
+                    return {'CANCELLED'}
                 current_material = obj.material_slots[mat_idx].material
                 self.base_name = current_material.name
                 self.id_value = str(first_block_id)
@@ -711,7 +720,6 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
                 # Print full list to console for debugging
                 if cleared_names:
                     print(f"Cleared invalid constant materials: {', '.join(cleared_names)}")
-                    # message
                     msg = f"Cleared {len(cleared_names)} invalid constant material(s): {', '.join(cleared_names[:5])}"
                     if len(cleared_names) > 5:
                         msg += f" and {len(cleared_names)-5} more"

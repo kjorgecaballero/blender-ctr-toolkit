@@ -210,6 +210,7 @@ class LIST_PT_BlockListPanel(Panel):
                 'DEGENERATED_UVS': "Degenerated UVs",
                 'OUT_OF_RANGE': "Out of Range",
                 'MULTIPLE_MATERIALS': "Multiple Mats",
+                'MISSING_UVS': "Missing UVs",
             }.get(scene.list_issue_filter, "All")
             right_col.menu("LIST_MT_IssueFilterMenu", text=issue_text, icon='ERROR')
 
@@ -368,6 +369,8 @@ class LIST_PT_BlockListPanel(Panel):
                     show = 'out_of_range' in item_issues
                 elif issue_filter == 'MULTIPLE_MATERIALS':
                     show = 'multiple_materials' in item_issues
+                elif issue_filter == 'MISSING_UVS':
+                    show = 'missing_uvs' in item_issues
                 else:
                     show = True
                 if not show:
@@ -543,7 +546,6 @@ class LIST_PT_BlockListPanel(Panel):
                         right_side = row.row(align=True)
                         right_side.alignment = 'RIGHT'
                         is_nav = item.get('is_nav_point', False)
-                        # Use custom icons if available, otherwise fallback to native Blender icons
                         nav_icon_val = get_icon("nav_point_icon") if is_nav else get_icon("constant_mat_icon")
                         if nav_icon_val:
                             nav_op = right_side.operator("list.toggle_navigation_point",
@@ -642,7 +644,10 @@ class LIST_PT_BlockListPanel(Panel):
                     else:
                         message = f"No items match group filter: {scene.list_active_group}"
                 elif scene.list_display_type == 'VERTEX_GROUPS' and issue_filter != 'ALL':
-                    message = f"No items match issue filter: {issue_filter}"
+                    if issue_filter == 'MISSING_UVS':
+                        message = "No items match issue filter: Missing UVs"
+                    else:
+                        message = f"No items match issue filter: {issue_filter}"
                 else:
                     message = "No items match current search"
 
