@@ -8,8 +8,9 @@ core_classes = (
     toggle_ps1.TogglePS1Resolution,
     toggle_ps1.ToggleCTRRender,
     blend_mode.ApplyBlendMode,
-    material_overrides.ApplyMaterialOverrides,
     material_overrides.ResetMaterialOverrides,
+    material_overrides.ResetOverlapDefault,
+    material_overrides.ToggleOverlap,
     analyze_image.AnalyzeImage,
     split_screen.ToggleSplitScreen,
 )

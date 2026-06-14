@@ -28,7 +28,6 @@ class PS1MaterialSetup:
 
     def build_setup(self, mode):
         setup_config = NODE_SETUPS[mode]
-        # Safety checks
         if not isinstance(setup_config['nodes'], list):
             raise TypeError(f"'nodes' for mode {mode} is not a list (got {type(setup_config['nodes'])})")
         if not isinstance(setup_config['connections'], list):
@@ -126,13 +125,27 @@ class PS1MaterialSetup:
                     self.mat.blend_method = 'HASHED'
                 else:
                     self.mat.blend_method = 'HASHED'
+
+        # Compute default overlap value 
+        default_overlap = not used_additive_translucent_setup
+
+        # Determine final overlap value based on user's mode
+        mode_choice = getattr(self.mat, 'ps1_transparency_overlap_mode', 'DEFAULT')
+        if mode_choice == 'DEFAULT':
+            final_overlap = default_overlap
+            print(f"  Using DEFAULT overlap: {final_overlap}")
+        else:  # MANUAL
+            final_overlap = getattr(self.mat, 'ps1_transparency_overlap_manual', True)
+            print(f"  Using MANUAL overlap: {final_overlap}")
+
+        # Apply to the actual Blender property
         if hasattr(self.mat, 'use_transparency_overlap'):
-            if used_additive_translucent_setup:
-                self.mat.use_transparency_overlap = False
-            else:
-                self.mat.use_transparency_overlap = True
+            self.mat.use_transparency_overlap = final_overlap
+        elif hasattr(self.mat, 'show_transparent_back'):
+            self.mat.show_transparent_back = final_overlap
         else:
-            print("  Material has no 'use_transparency_overlap' attribute, skipping.")
+            print("  Material has no transparency overlap property, skipping.")
+
         if hasattr(self.mat, 'ps1_show_backface'):
             self.mat.use_backface_culling = not self.mat.ps1_show_backface
         else:

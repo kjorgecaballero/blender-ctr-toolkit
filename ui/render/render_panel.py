@@ -2,9 +2,11 @@ import bpy
 from ...utils.compat import is_blender_ge_3_5, is_blender_ge_4_0
 from ...icons import get_icon
 
+
 def _icon(name, fallback):
     ico = get_icon(name)
     return {'icon_value': ico} if ico else {'icon': fallback}
+
 
 def draw_render(context, layout):
     scene = context.scene
@@ -19,7 +21,7 @@ def draw_render(context, layout):
     op_hide = row.operator("psx.set_backface", text="Hide", icon='HIDE_ON')
     op_hide.show = False
 
-    # Row 2: Toggle CTR Render (circular radio toggle) + Apply
+    # Row 2: Toggle CTR Render + Apply
     row = col.row(align=True)
     if scene.psx_render_state:
         toggle_icon = 'RADIOBUT_ON'
@@ -48,15 +50,14 @@ def draw_render(context, layout):
             row.prop(scene, "show_ps1fx_section", text="",
                      icon='TRIA_DOWN' if scene.show_ps1fx_section else 'TRIA_RIGHT',
                      emboss=False)
-            # Header with custom psx_icon
             row.label(text="PS1 FX", **_icon("psx_icon", 'FILE_MOVIE'))
             if scene.show_ps1fx_section:
                 col_inner = ps1fx_box.column(align=True)
-                
-                # PS1 Resolution toggle (blue when active) with custom resolution_icon
+
+                # PS1 Resolution toggle
                 row_toggle = col_inner.row(align=True)
                 row_toggle.prop(scene, "ps1_resolution", text="PS1 Resolution", **_icon("resolution_icon", 'FILE_MOVIE'), toggle=True)
-                
+
                 if is_blender_ge_4_0():
                     col_inner.separator()
                     col_inner.label(text="Vertex Snap", icon='SNAP_GRID')
@@ -66,9 +67,8 @@ def draw_render(context, layout):
                     row_snap = col_inner.row(align=True)
                     row_snap.operator("vxsnap.add_snap", text="Add", icon='ADD')
                     row_snap.operator("vxsnap.remove_snap", text="Remove", icon='REMOVE')
-        # If Blender < 3.5, the PS1 FX section is not drawn at all
 
-        # Blending section (always visible)
+        # Blending section 
         blending_box = adv_box.box()
         row = blending_box.row(align=True)
         row.prop(scene, "show_blending_section", text="",
@@ -80,15 +80,30 @@ def draw_render(context, layout):
             col_inner = blending_box.column(align=True)
             material = context.active_object.active_material if context.active_object else None
             if material:
-                row = col_inner.row(align=True)
-                row.prop(material, "ps1_blend_method_override", text="")
-                row = col_inner.row(align=True)
-                row.operator("psx.apply_material_overrides", text="Apply", icon='CHECKMARK')
-                row.operator("psx.reset_material_overrides", text="Reset", icon='LOOP_BACK')
+                # Blend Method row: Default button + dropdown
+                row_blend = col_inner.row(align=True)
+                row_blend.operator("psx.reset_material_overrides", text="Default", icon='LOOP_BACK')
+                row_blend.prop(material, "ps1_blend_method_override", text="")
+
+                col_inner.separator()
+                col_inner.label(text="Transparency Overlap:", icon='SHADING_RENDERED')
+                row_overlap = col_inner.row(align=True)
+                row_overlap.operator("psx.reset_overlap_default", text="Default", icon='LOOP_BACK')
+
+                # Determine current overlap state
+                if material.ps1_transparency_overlap_mode == 'MANUAL':
+                    current_overlap = material.ps1_transparency_overlap_manual
+                else:
+                    current_overlap = material.ps1_transparency_overlap_manual
+
+                toggle_op = row_overlap.operator("psx.toggle_overlap", text="Overlap",
+                                                 depress=current_overlap,
+                                                 icon='CHECKBOX_HLT' if current_overlap else 'CHECKBOX_DEHLT')
+                toggle_op.value = not current_overlap
             else:
                 col_inner.label(text="No active material", icon='ERROR')
 
-        # View section (always visible)
+        # View section
         view_box = adv_box.box()
         row = view_box.row(align=True)
         row.prop(scene, "show_view_section", text="",
