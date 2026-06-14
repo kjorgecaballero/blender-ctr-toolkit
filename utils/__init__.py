@@ -48,6 +48,7 @@ from .material_utils import (
     rename_material_if_unique,
     update_constant_material_base_reference,
     rename_base_material_family,
+    get_family_materials,
 )
 
 
@@ -97,4 +98,5 @@ __all__ = [
     'rename_material_if_unique',
     'update_constant_material_base_reference',
     'rename_base_material_family',
+    'get_family_materials',
 ]

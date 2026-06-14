@@ -1,4 +1,5 @@
 import bpy
+import os
 from bpy.types import Operator
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
@@ -68,6 +69,16 @@ def restore_ps1_render(context, was_active):
         bpy.ops.psx.toggle_ctr_render()
 
 
+def paths_equal(p1, p2):
+    """Compare two file paths safely across different drives/volumes."""
+    if not p1 or not p2:
+        return False
+    abs1 = bpy.path.abspath(p1)
+    abs2 = bpy.path.abspath(p2)
+    # Normalize case and separators for cross‑platform comparison
+    return os.path.normcase(abs1) == os.path.normcase(abs2)
+
+
 class MATERIAL_OT_RemapMaterial(Operator):
     """Remap texture image for the selected material and all linked materials (base + constants)."""
     bl_idname = "material.remap_material"
@@ -131,8 +142,6 @@ class MATERIAL_OT_RemapMaterial(Operator):
             mat = bpy.data.materials.get(mat_name)
             if not material_has_texture_node(mat):
                 need_node_creation = True
-                # Debug: print which material is missing a texture node
-                print(f"DEBUG: Material '{mat_name}' has no texture node. Need to disable PS1 render.")
                 break
 
         # Only disable PS1 render if it's active AND we need to create nodes
@@ -141,9 +150,6 @@ class MATERIAL_OT_RemapMaterial(Operator):
         if need_node_creation and getattr(context.scene, 'ps1_render_active', False):
             was_ps1_active = temporary_disable_ps1_render(context)
             ps1_was_disabled = True
-            print("DEBUG: PS1 render temporarily disabled for node creation.")
-        else:
-            print("DEBUG: No need to disable PS1 render.")
 
         try:
             if base_materials:
@@ -186,11 +192,13 @@ class MATERIAL_OT_RemapFromFile(Operator, ImportHelper):
             self.report({'ERROR'}, "No file selected")
             return {'CANCELLED'}
 
+        # Find existing image by comparing absolute paths
         image = None
         for img in bpy.data.images:
-            if img.filepath == filepath or (img.filepath and img.filepath == bpy.path.relpath(filepath)):
+            if paths_equal(img.filepath, filepath):
                 image = img
                 break
+
         if image is None:
             try:
                 image = bpy.data.images.load(filepath)
@@ -234,7 +242,6 @@ class MATERIAL_OT_RemapFromFile(Operator, ImportHelper):
             mat = bpy.data.materials.get(mat_name)
             if not material_has_texture_node(mat):
                 need_node_creation = True
-                print(f"DEBUG: Material '{mat_name}' has no texture node. Need to disable PS1 render.")
                 break
 
         was_ps1_active = False
@@ -242,9 +249,6 @@ class MATERIAL_OT_RemapFromFile(Operator, ImportHelper):
         if need_node_creation and getattr(context.scene, 'ps1_render_active', False):
             was_ps1_active = temporary_disable_ps1_render(context)
             ps1_was_disabled = True
-            print("DEBUG: PS1 render temporarily disabled for node creation.")
-        else:
-            print("DEBUG: No need to disable PS1 render.")
 
         try:
             if base_materials:

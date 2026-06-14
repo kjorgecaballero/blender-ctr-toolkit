@@ -40,14 +40,44 @@ def update_ps1_blend_mode(self, context):
 
 
 def update_blend_method_override(self, context):
-    """Apply blend method override immediately when changed."""
-    if context.scene.ps1_render_active and self.ps1_blend_mode != 'NONE':
+    """Apply blend method override immediately when changed, respecting scope."""
+    scene = context.scene
+    obj = context.active_object
+    if not scene.ps1_render_active or self.ps1_blend_mode == 'NONE':
+        return
+    if not obj or obj.type != 'MESH':
+        # Fallback: only update this material
         try:
             from ...utils.render import PS1MaterialFactory
             setup = PS1MaterialFactory.get_material_setup(self, self.ps1_blend_mode)
             setup.apply_setup()
         except Exception as e:
             print(f"Error applying blend method override: {e}")
+        return
+
+    from ...utils.material_utils import get_family_materials
+    scope = scene.blend_apply_scope
+    family_names = get_family_materials(self, obj, scope)
+
+    for mat_name in family_names:
+        mat = bpy.data.materials.get(mat_name)
+        if not mat or mat == self:
+            continue
+        mat.ps1_blend_method_override = self.ps1_blend_method_override
+        try:
+            from ...utils.render import PS1MaterialFactory
+            setup = PS1MaterialFactory.get_material_setup(mat, mat.ps1_blend_mode)
+            setup.apply_setup()
+        except Exception as e:
+            print(f"Error applying blend method override to '{mat.name}': {e}")
+
+    # Apply to the original material as well
+    try:
+        from ...utils.render import PS1MaterialFactory
+        setup = PS1MaterialFactory.get_material_setup(self, self.ps1_blend_mode)
+        setup.apply_setup()
+    except Exception as e:
+        print(f"Error applying blend method override: {e}")
 
 
 def register():
@@ -74,6 +104,19 @@ def register():
     bpy.types.Scene.ps1_render_active = BoolProperty(default=False)
     bpy.types.Scene.ps1_prev_shadow_state = BoolProperty(default=True)
     bpy.types.Scene.show_advanced_overrides = BoolProperty(default=False)
+
+    # Blend apply scope 
+    bpy.types.Scene.blend_apply_scope = EnumProperty(
+        name="Apply Blend Mode to",
+        description="Defines which materials are affected when applying a blend mode or other material changes",
+        items=[
+            ('SELECTED', "Selected", "Apply only to the directly selected material(s)"),
+            ('FAMILY', "Full", "Apply to base material and all its constants"),
+            ('CONSTANTS_ONLY', "Constants", "Apply only to constant materials (excludes base)"),
+            ('BASE_ONLY', "Base", "Apply only to the base material"),
+        ],
+        default='FAMILY'
+    )
 
     # Collapsible sections
     bpy.types.Scene.show_ps1fx_section = BoolProperty(
@@ -159,6 +202,7 @@ def unregister():
     del bpy.types.Scene.ps1_render_active
     del bpy.types.Scene.ps1_prev_shadow_state
     del bpy.types.Scene.show_advanced_overrides
+    del bpy.types.Scene.blend_apply_scope
     del bpy.types.Scene.show_ps1fx_section
     del bpy.types.Scene.show_blending_section
     del bpy.types.Scene.show_view_section

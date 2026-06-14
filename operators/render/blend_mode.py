@@ -4,8 +4,57 @@ from bpy.types import Operator
 from ...utils.render import verify_attribute_for_active_object, PS1MaterialFactory
 
 
+def expand_materials_by_scope(material_names, obj, scope):
+    """
+    Expand a set of material names based on the chosen scope.
+    """
+    if not obj or obj.type != 'MESH' or scope == 'SELECTED':
+        return set(material_names)
+
+    const_dict = obj.get("constant_materials", {})
+    if not const_dict:
+        return set(material_names)
+
+    base_to_constants = {}
+    for cname, cinfo in const_dict.items():
+        base = cinfo.get("original_material", "")
+        if base:
+            base_to_constants.setdefault(base, set()).add(cname)
+
+    result = set()
+    for mat_name in material_names:
+        if mat_name in const_dict:
+            base = const_dict[mat_name].get("original_material", "")
+            if not base:
+                result.add(mat_name)
+                continue
+            if scope == 'FAMILY':
+                result.add(base)
+                result.update(base_to_constants.get(base, set()))
+            elif scope == 'CONSTANTS_ONLY':
+                result.update(base_to_constants.get(base, set()))
+            elif scope == 'BASE_ONLY':
+                result.add(base)
+            else:
+                result.add(mat_name)
+        else:
+            if mat_name in base_to_constants:
+                if scope == 'FAMILY':
+                    result.add(mat_name)
+                    result.update(base_to_constants[mat_name])
+                elif scope == 'CONSTANTS_ONLY':
+                    result.update(base_to_constants[mat_name])
+                elif scope == 'BASE_ONLY':
+                    result.add(mat_name)
+                else:
+                    result.add(mat_name)
+            else:
+                result.add(mat_name)
+    return result
+
+
 class ApplyBlendMode(Operator):
-    """Apply selected blend mode to material(s) of selected faces (Edit Mode) or selected materials (Object Mode)"""
+    """Apply selected blend mode to material(s) of selected faces (Edit Mode) or selected materials (Object Mode)."""
     bl_idname = "psx.apply_blend_mode"
     bl_label = "Apply Blend Mode"
     bl_description = "In Edit Mode: applies to materials of selected faces. In Object Mode: applies to selected materials/objects."
@@ -15,7 +64,10 @@ class ApplyBlendMode(Operator):
         scene = context.scene
         mode = scene.blend_mode
         obj = context.active_object
-        materials_to_apply = set()
+        scope = scene.blend_apply_scope
+
+        # Collect originally selected material names ----
+        selected_material_names = set()
 
         # Case 1: Edit Mode with active mesh object
         if context.mode == 'EDIT_MESH' and obj and obj.type == 'MESH':
@@ -25,15 +77,13 @@ class ApplyBlendMode(Operator):
                 self.report({'WARNING'}, "No faces selected. Select faces to apply blend mode.")
                 return {'CANCELLED'}
 
-            # Collect unique material indices from selected faces
             material_indices = set(f.material_index for f in selected_faces)
             for idx in material_indices:
                 if idx < len(obj.material_slots):
                     mat = obj.material_slots[idx].material
                     if mat:
-                        materials_to_apply.add(mat)
+                        selected_material_names.add(mat.name)
 
-            # Also check other objects in multi-object edit mode
             for edit_obj in context.objects_in_mode:
                 if edit_obj == obj or edit_obj.type != 'MESH':
                     continue
@@ -45,36 +95,37 @@ class ApplyBlendMode(Operator):
                         if idx < len(edit_obj.material_slots):
                             mat = edit_obj.material_slots[idx].material
                             if mat:
-                                materials_to_apply.add(mat)
+                                selected_material_names.add(mat.name)
 
-            if not materials_to_apply:
+            if not selected_material_names:
                 self.report({'WARNING'}, "Selected faces have no materials assigned.")
                 return {'CANCELLED'}
 
-        # Case 2: Object Mode – try Outliner selection, then selected objects' active materials
+        # Case 2: Object Mode
         else:
-            # Check Outliner selection
             for mat in bpy.data.materials:
                 if hasattr(mat, 'select_get') and mat.select_get():
-                    materials_to_apply.add(mat)
+                    selected_material_names.add(mat.name)
 
-            # If no Outliner selection, use active materials of selected objects
-            if not materials_to_apply:
+            if not selected_material_names:
                 for obj_sel in context.selected_objects:
                     if obj_sel.type == 'MESH' and obj_sel.active_material:
-                        materials_to_apply.add(obj_sel.active_material)
+                        selected_material_names.add(obj_sel.active_material.name)
 
-            # Final fallback: active material of active object
-            if not materials_to_apply and context.active_object and context.active_object.active_material:
-                materials_to_apply.add(context.active_object.active_material)
+            if not selected_material_names and context.active_object and context.active_object.active_material:
+                selected_material_names.add(context.active_object.active_material.name)
 
-            if not materials_to_apply:
+            if not selected_material_names:
                 self.report({'WARNING'}, "No materials selected. Select materials in Outliner, select objects with materials, or enter Edit Mode and select faces.")
                 return {'CANCELLED'}
 
-        # Apply blend mode to all collected materials
+        # Expand according to chosen scope
+        final_names = expand_materials_by_scope(selected_material_names, obj, scope)
+
+        # Apply blend mode
         applied_count = 0
-        for material in materials_to_apply:
+        for mat_name in final_names:
+            material = bpy.data.materials.get(mat_name)
             if not material or not material.use_nodes:
                 continue
 
@@ -92,16 +143,14 @@ class ApplyBlendMode(Operator):
 
             applied_count += 1
 
-        # Ensure vertex color attributes exist (for active object only)
         if context.active_object and context.active_object.type == 'MESH':
             verify_attribute_for_active_object(context, "VertexColor")
 
         context.view_layer.update()
-        self.report({'INFO'}, f"Applied '{mode}' blend mode to {applied_count} material(s) from selected faces/objects.")
+        self.report({'INFO'}, f"Applied '{mode}' blend mode to {applied_count} material(s).")
         return {'FINISHED'}
 
 
-# Registration
 classes = [ApplyBlendMode]
 
 

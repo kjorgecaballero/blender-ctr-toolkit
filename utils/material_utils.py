@@ -83,7 +83,7 @@ def is_constant_id_unique(obj, id_value, exclude_material=None):
     return True
 
 
-# MATERIAL MANAGER HELPERS
+# Material Manager helpers
 
 def get_material_categories():
     """Return three sets: normal, constant, nav_point (global)."""
@@ -261,3 +261,65 @@ def rename_base_material_family(obj, old_base_name, new_base_name):
     
     obj["constant_materials"] = const_dict
     return True, f"Renamed base '{old_base_name}' → '{new_base_name}' and updated {updated} constant(s)", updated
+
+
+
+def get_family_materials(material, obj, scope):
+    """
+    Given a starting material and a scope setting, return a set of material names
+    that should be affected.
+
+    Args:
+        material: bpy.types.Material (the source material)
+        obj: bpy.types.Object (mesh object containing constant_materials dict)
+        scope: string from scene.blend_apply_scope ('SELECTED', 'FAMILY', 'CONSTANTS_ONLY', 'BASE_ONLY')
+
+    Returns:
+        set of material names
+    """
+    if scope == 'SELECTED' or not obj or obj.type != 'MESH':
+        return {material.name}
+
+    const_dict = obj.get("constant_materials", {})
+    if not const_dict:
+        return {material.name}
+
+    # Build reverse mapping: base -> set of constants
+    base_to_constants = {}
+    for cname, cinfo in const_dict.items():
+        base = cinfo.get("original_material", "")
+        if base:
+            base_to_constants.setdefault(base, set()).add(cname)
+
+    mat_name = material.name
+    result = set()
+
+    # Case: material is a constant
+    if mat_name in const_dict:
+        base = const_dict[mat_name].get("original_material", "")
+        if not base:
+            return {mat_name}
+        if scope == 'FAMILY':
+            result.add(base)
+            result.update(base_to_constants.get(base, set()))
+        elif scope == 'CONSTANTS_ONLY':
+            result.update(base_to_constants.get(base, set()))
+        elif scope == 'BASE_ONLY':
+            result.add(base)
+        else:
+            result.add(mat_name)
+    # Case: material is normal (possibly a base)
+    else:
+        if mat_name in base_to_constants:
+            if scope == 'FAMILY':
+                result.add(mat_name)
+                result.update(base_to_constants[mat_name])
+            elif scope == 'CONSTANTS_ONLY':
+                result.update(base_to_constants[mat_name])
+            elif scope == 'BASE_ONLY':
+                result.add(mat_name)
+            else:
+                result.add(mat_name)
+        else:
+            result.add(mat_name)
+    return result

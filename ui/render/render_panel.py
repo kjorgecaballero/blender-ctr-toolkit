@@ -43,7 +43,12 @@ def draw_render(context, layout):
     row.label(text="Advanced", icon='SETTINGS')
 
     if scene.show_advanced_overrides:
-        # PS1 FX SECTION – only for Blender 3.5+
+        # Apply scope selector (moved to top, no extra space)
+        scope_row = adv_box.row(align=True)
+        scope_row.label(text="Apply:", icon='SHADING_RENDERED')
+        scope_row.prop(scene, "blend_apply_scope", text="")
+
+        # PS1 FX SECTION (only for Blender 3.5+)
         if is_blender_ge_3_5():
             ps1fx_box = adv_box.box()
             row = ps1fx_box.row(align=True)
@@ -54,9 +59,9 @@ def draw_render(context, layout):
             if scene.show_ps1fx_section:
                 col_inner = ps1fx_box.column(align=True)
 
-                # PS1 Resolution toggle
+                # 512×216 Resolution toggle
                 row_toggle = col_inner.row(align=True)
-                row_toggle.prop(scene, "ps1_resolution", text="PS1 Resolution", **_icon("resolution_icon", 'FILE_MOVIE'), toggle=True)
+                row_toggle.prop(scene, "ps1_resolution", text="512×216 Resolution", **_icon("resolution_icon", 'FILE_MOVIE'), toggle=True)
 
                 if is_blender_ge_4_0():
                     col_inner.separator()
@@ -68,7 +73,7 @@ def draw_render(context, layout):
                     row_snap.operator("vxsnap.add_snap", text="Add", icon='ADD')
                     row_snap.operator("vxsnap.remove_snap", text="Remove", icon='REMOVE')
 
-        # Blending section 
+        # BLENDING SECTION
         blending_box = adv_box.box()
         row = blending_box.row(align=True)
         row.prop(scene, "show_blending_section", text="",
@@ -78,19 +83,20 @@ def draw_render(context, layout):
 
         if scene.show_blending_section:
             col_inner = blending_box.column(align=True)
+
             material = context.active_object.active_material if context.active_object else None
             if material:
-                # Blend Method row: Default button + dropdown
+                # Blend Method row: Default button
                 row_blend = col_inner.row(align=True)
-                row_blend.operator("psx.reset_material_overrides", text="Default", icon='LOOP_BACK')
+                row_blend.operator("psx.reset_material_overrides", text="Default", icon='RECOVER_LAST')
                 row_blend.prop(material, "ps1_blend_method_override", text="")
 
                 col_inner.separator()
                 col_inner.label(text="Transparency Overlap:", icon='SHADING_RENDERED')
                 row_overlap = col_inner.row(align=True)
-                row_overlap.operator("psx.reset_overlap_default", text="Default", icon='LOOP_BACK')
+                # Second Default button 
+                row_overlap.operator("psx.reset_overlap_default", text="Default", icon='RECOVER_LAST')
 
-                # Determine current overlap state
                 if material.ps1_transparency_overlap_mode == 'MANUAL':
                     current_overlap = material.ps1_transparency_overlap_manual
                 else:
@@ -103,7 +109,7 @@ def draw_render(context, layout):
             else:
                 col_inner.label(text="No active material", icon='ERROR')
 
-        # View section
+        # VIEW SECTION
         view_box = adv_box.box()
         row = view_box.row(align=True)
         row.prop(scene, "show_view_section", text="",
