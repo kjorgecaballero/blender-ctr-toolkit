@@ -57,9 +57,11 @@ class ExportManager:
     def _get_base_export_path(self, context):
         if context.scene.last_export_path and os.path.exists(context.scene.last_export_path):
             last_path = context.scene.last_export_path
-            if "_increment" in last_path or "_replace" in last_path:
+            # If last_path is a .obj file, use its directory as base
+            if last_path.lower().endswith('.obj'):
                 return os.path.dirname(last_path)
-            return last_path
+            else:
+                return last_path
         elif context.scene.export_default_path:
             return context.scene.export_default_path
         return None
@@ -98,7 +100,16 @@ class ExportManager:
         return valid_objects, stats
     
     def prepare_export_paths(self, filepath, settings, is_quick_export=False):
+        """
+        Prepare all export paths (OBJ file, texture directory, folders).
+        
+        For quick export, if the stored last_export_path points to a direct .obj file,
+        we use that exact path and ignore the "Export to Folder" setting.
+        Otherwise, we behave normally (creating project folders etc.).
+        """
         original_filepath = filepath
+        
+        # Determine base directory
         if is_quick_export:
             base_path = self._get_base_export_path(self.context)
             if not base_path:
@@ -108,7 +119,15 @@ class ExportManager:
         
         obj_name = os.path.splitext(os.path.basename(filepath))[0]
         
-        if settings.export_to_folder:
+        # Check if we should force direct export (when last export was a single .obj)
+        force_direct = False
+        if is_quick_export and self.context.scene.last_export_path:
+            last = self.context.scene.last_export_path
+            if last.lower().endswith('.obj'):
+                force_direct = True
+        
+        if settings.export_to_folder and not force_direct:
+            # Normal folder-based export
             project_name = obj_name[:50]
             project_folder = self._try_create_project_folder(
                 base_path, project_name, settings.folder_behavior
@@ -143,10 +162,13 @@ class ExportManager:
             if project_folder:
                 self.context.scene.last_export_path = project_folder
         else:
+            # Direct file export (no folder structure)
             project_folder = None
             export_subfolder = None
             texture_dir = None
             obj_filepath = original_filepath
+            # Store the actual .obj filepath for future quick exports
+            self.context.scene.last_export_path = obj_filepath
         
         export_paths = {
             'original_filepath': original_filepath,

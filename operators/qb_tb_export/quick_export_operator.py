@@ -15,13 +15,13 @@ class QB_TB_OT_QuickExport(Operator):
 
     @classmethod
     def poll(cls, context):
-        # Always return True so operator is always available
         return True
 
     def execute(self, context):
         # Check if a valid export path exists
-        if not context.scene.last_export_path:
-            self.report({'ERROR'}, "No export location saved. Please do a regular export first (File > Export > Qb/Tb .obj).")
+        last_path = context.scene.last_export_path
+        if not last_path:
+            self.report({'ERROR'}, "No previous export found. Please do a normal export first (File > Export > Qb/Tb .obj).")
             return {'CANCELLED'}
 
         if not context.scene.export_quadblocks and not context.scene.export_triblocks:
@@ -31,15 +31,29 @@ class QB_TB_OT_QuickExport(Operator):
         try:
             settings = ExportSettings.from_scene_props(context)
 
-            if bpy.data.filepath:
-                scene_name = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+            # Determine filename and base path based on last_export_path
+            if last_path.lower().endswith('.obj'):
+                # Last export was a direct .obj file
+                export_dir = os.path.dirname(last_path)
+                obj_filename = os.path.basename(last_path)
+                # Use the same filename to keep consistency.
+                filename = obj_filename
+                # Force direct export (no folder structure) - the manager will detect this
+                # because last_path is a .obj and we'll pass it as filepath.
+                filepath = last_path
             else:
-                scene_name = "untitled"
-
-            filename = f"{scene_name}.obj"
+                # Last export was a folder (project folder)
+                export_dir = last_path
+                # Get scene name for default .obj filename
+                if bpy.data.filepath:
+                    scene_name = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+                else:
+                    scene_name = "untitled"
+                filename = f"{scene_name}.obj"
+                filepath = os.path.join(export_dir, filename)
 
             manager = ExportManager(context)
-            export_paths = manager.prepare_export_paths(filename, settings, is_quick_export=True)
+            export_paths = manager.prepare_export_paths(filepath, settings, is_quick_export=True)
             settings.filepath = export_paths['obj_filepath']
 
             # DUPLICATE EXPORT LOGIC (if enabled)
