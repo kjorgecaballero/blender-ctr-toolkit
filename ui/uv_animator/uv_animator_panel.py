@@ -49,6 +49,10 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
                 sub.enabled = False
                 sub.operator("uv_animator.play_preview", text="Play", icon='PLAY')
 
+        # Export animation
+        row = layout.row(align=True)
+        row.operator("uv_animator.export_animation", text="Export Animation", icon='EXPORT')
+
         # Group filter
         row = layout.row(align=True)
         active_group = scene.uv_animator_active_group
@@ -127,7 +131,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         else:
             header.label(text=f"{group_name} ({len(objects)} objects)", icon='GROUP')
 
-        # Group playback(only for real groups)
+        # Group playback button (only for real groups)
         if not is_ungrouped and objects:
             all_enabled = all(obj.uv_animator_playback_enabled for obj in objects)
             playback_icon = 'PLAY' if all_enabled else 'PAUSE'

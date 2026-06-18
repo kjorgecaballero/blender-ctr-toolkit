@@ -4,6 +4,7 @@ from .uv_groups import *
 from .uv_collapse import *
 from .uv_textures import *
 from .uv_animation import *
+from .uv_export import *
 
 # Combined list of all classes from all modules
 classes = [
@@ -37,6 +38,7 @@ classes = [
     UV_OT_StopPreview,
     UV_OT_DeleteAnimation,
     UV_OT_ToggleGroupPlayback,
+    UV_OT_ExportAnimation,
 ]
 
 def register():
