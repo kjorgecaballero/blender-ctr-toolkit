@@ -3,9 +3,7 @@ import json
 import os
 from bpy.types import Operator
 
-
-# SECTION COLLAPSE TOGGLES
-
+# Section Collapse Toggles
 
 class UV_OT_ToggleGroupSection(Operator):
     bl_idname = "uv_animator.toggle_group_section"

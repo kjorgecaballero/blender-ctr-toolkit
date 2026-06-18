@@ -36,7 +36,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         row = layout.row(align=True)
         row.operator("uv_animator.assign_frame", text="Assign Frame", icon='UV')
 
-        # Play/Stop
+        # Play / Stop
         if UV_OT_PlayPreview.is_playing():
             row.operator("uv_animator.stop_preview", text="Stop", icon='PAUSE')
         else:
@@ -116,7 +116,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         else:
             header.label(text="", icon='RADIOBUT_OFF')
 
-        # Expand/collapse
+        # Expand / collapse
         icon = 'TRIA_DOWN' if is_expanded else 'TRIA_RIGHT'
         op = header.operator("uv_animator.toggle_group_section", text="", icon=icon, emboss=False)
         op.group_name = group_name
@@ -176,10 +176,19 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
                 for idx, frame in enumerate(frames):
                     row2 = col.row(align=True)
                     row2.label(text=f"Frame {idx}")
+                    
+                    # Start frame toggle (MARKER / MARKER_HLT)
+                    is_start = (obj.uv_start_frame == idx)
+                    start_icon = 'MARKER_HLT' if is_start else 'MARKER'
+                    op_start = row2.operator("uv_animator.set_start_frame", text="", icon=start_icon, emboss=False)
+                    op_start.object_name = obj.name
+                    op_start.frame_index = idx
+                    
                     # Texture icon button -> shows popup with path
                     op_tex = row2.operator("uv_animator.show_frame_texture", text="", icon='TEXTURE')
                     op_tex.object_name = obj.name
                     op_tex.frame_index = idx
+                    
                     # Delete button
                     op_del = row2.operator("uv_animator.delete_frame", text="", icon='X')
                     op_del.object_name = obj.name
@@ -191,7 +200,6 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
             self.draw_texture_section(box, scene, obj, expanded)
 
     def draw_texture_section(self, layout, scene, obj, expanded):
-        """Collapsible section with sub-sections for each unique texture."""
         key = f"_textures_{obj.name}"
         is_texture_expanded = expanded.get(key, False)
 
@@ -219,16 +227,13 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
             box = col.box()
             header = box.row(align=True)
 
-            # Collapse toggle
             icon_sub = 'TRIA_DOWN' if is_sub_expanded else 'TRIA_RIGHT'
             op_sub = header.operator("uv_animator.toggle_texture_subsection", text="", icon=icon_sub, emboss=False)
             op_sub.object_name = obj.name
             op_sub.texture_path = item.texture_path
 
-            # Texture name / label
             header.label(text=os.path.basename(item.texture_path), icon='FILE_IMAGE')
 
-            # Folder icon to change the texture (per object)
             op_change = header.operator("uv_animator.change_texture_path", text="", icon='FILE_FOLDER')
             op_change.object_name = obj.name
             op_change.old_texture_path = item.texture_path

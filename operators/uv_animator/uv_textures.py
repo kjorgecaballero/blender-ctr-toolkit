@@ -4,8 +4,7 @@ import os
 from bpy.types import Operator
 from ...properties.uv_animator.uv_animator_props import UVTextureItem
 
-
-# FRAME TEXTURE POPUP
+# Frame Texture Popup
 
 class UV_OT_ShowFrameTexturePopup(Operator):
     bl_idname = "uv_animator.show_frame_texture"
@@ -32,9 +31,7 @@ class UV_OT_ShowFrameTexturePopup(Operator):
         context.window_manager.popup_menu(draw_popup, title=f"Texture for Frame {self.frame_index}", icon='INFO')
         return {'FINISHED'}
 
-
-# CHANGE TEXTURE PATH (per object)
-
+# Change Texture Path (per object)
 
 class UV_OT_ChangeTexturePath(Operator):
     bl_idname = "uv_animator.change_texture_path"
@@ -62,7 +59,6 @@ class UV_OT_ChangeTexturePath(Operator):
         
         old_path = self.old_texture_path
         
-        # Check if the new path already exists in another texture item
         existing_item = None
         for item in obj.uv_texture_items:
             if item.texture_path == new_path:
@@ -70,23 +66,19 @@ class UV_OT_ChangeTexturePath(Operator):
                 break
         
         if existing_item:
-            # Merge: update all frames to point to the existing item's path
             for frame in obj.uv_animation_frames:
                 if frame.texture_path == old_path:
                     frame.texture_path = new_path
-            # Remove the old item
             for i, item in enumerate(obj.uv_texture_items):
                 if item.texture_path == old_path:
                     obj.uv_texture_items.remove(i)
                     break
             self.report({'INFO'}, f"Merged texture into existing entry: {os.path.basename(new_path)}")
         else:
-            # Update the item's path
             for item in obj.uv_texture_items:
                 if item.texture_path == old_path:
                     item.texture_path = new_path
                     break
-            # Update all frames
             for frame in obj.uv_animation_frames:
                 if frame.texture_path == old_path:
                     frame.texture_path = new_path
@@ -94,9 +86,7 @@ class UV_OT_ChangeTexturePath(Operator):
         
         return {'FINISHED'}
 
-
-# GROUP TEXTURE SETTINGS with collapsible subsections
-
+# Group Texture Settings with collapsible subsections
 
 class UV_OT_GroupTextureSettings(Operator):
     bl_idname = "uv_animator.group_texture_settings"
@@ -105,15 +95,11 @@ class UV_OT_GroupTextureSettings(Operator):
     bl_options = {'REGISTER'}
     
     group_name: bpy.props.StringProperty()
-    
-    # Temporary collection to hold unique textures from the group
     temp_textures: bpy.props.CollectionProperty(type=UVTextureItem)
     
     def invoke(self, context, event):
-        # Reset temp data
         self.temp_textures.clear()
         
-        # Collect all objects in the group
         groups_dict = json.loads(context.scene.uv_animator_groups)
         if self.group_name not in groups_dict:
             self.report({'WARNING'}, f"Group '{self.group_name}' not found")
@@ -126,8 +112,7 @@ class UV_OT_GroupTextureSettings(Operator):
             self.report({'WARNING'}, f"Group '{self.group_name}' has no valid mesh objects")
             return {'CANCELLED'}
         
-        # Build a unified list of textures from all objects
-        texture_map = {}  # path -> blend_mode (use first encountered)
+        texture_map = {}
         for obj in self._group_objects:
             for item in obj.uv_texture_items:
                 if item.texture_path not in texture_map:
@@ -137,7 +122,6 @@ class UV_OT_GroupTextureSettings(Operator):
             self.report({'WARNING'}, f"No textures found in group '{self.group_name}'")
             return {'CANCELLED'}
         
-        # Populate temp_textures
         for path, blend in texture_map.items():
             new_item = self.temp_textures.add()
             new_item.texture_path = path
@@ -154,7 +138,6 @@ class UV_OT_GroupTextureSettings(Operator):
             layout.label(text="No textures found", icon='INFO')
             return
         
-        # Parse expanded state from scene property
         try:
             expanded_dict = json.loads(context.scene.uv_group_texture_expanded)
         except:
@@ -168,20 +151,15 @@ class UV_OT_GroupTextureSettings(Operator):
             box = layout.box()
             header = box.row(align=True)
             
-            # Collapse toggle
             icon = 'TRIA_DOWN' if is_expanded else 'TRIA_RIGHT'
             op = header.operator("uv_animator.group_toggle_texture_subsection", text="", icon=icon, emboss=False)
             op.group_name = self.group_name
             op.texture_path = tex_path
             op.index = idx
             
-            # Texture name
             header.label(text=os.path.basename(tex_path), icon='FILE_IMAGE')
-            
-            # Blend mode dropdown (editable directly, updates temp item automatically)
             header.prop(item, "blend_mode", text="")
             
-            # Change image button
             op_img = header.operator("uv_animator.group_change_texture_image", text="", icon='FILE_FOLDER')
             op_img.group_name = self.group_name
             op_img.texture_path = tex_path
@@ -192,12 +170,10 @@ class UV_OT_GroupTextureSettings(Operator):
                 sub_col.label(text=f"Path: {tex_path}", icon='FILE_IMAGE')
     
     def execute(self, context):
-        # Apply all changes from the temp collection to the actual objects
         for temp_item in self.temp_textures:
             tex_path = temp_item.texture_path
             blend_mode = temp_item.blend_mode
             for obj in self._group_objects:
-                # Find the texture item in the object
                 for tex_item in obj.uv_texture_items:
                     if tex_item.texture_path == tex_path:
                         tex_item.blend_mode = blend_mode
@@ -205,9 +181,7 @@ class UV_OT_GroupTextureSettings(Operator):
         self.report({'INFO'}, f"Applied texture settings to {len(self._group_objects)} object(s)")
         return {'FINISHED'}
 
-
-# GROUP TOGGLE TEXTURE SUBSECTION (inside popup)
-
+# Group Toggle Texture Subsection (inside popup)
 
 class UV_OT_GroupToggleTextureSubsection(Operator):
     bl_idname = "uv_animator.group_toggle_texture_subsection"
@@ -230,9 +204,7 @@ class UV_OT_GroupToggleTextureSubsection(Operator):
         
         return {'FINISHED'}
 
-
-# GROUP CHANGE TEXTURE IMAGE (from popup)
-
+# Group Change Texture Image (from popup)
 
 class UV_OT_GroupChangeTextureImage(Operator):
     bl_idname = "uv_animator.group_change_texture_image"
@@ -267,7 +239,6 @@ class UV_OT_GroupChangeTextureImage(Operator):
             if not obj or obj.type != 'MESH':
                 continue
             
-            # Check if the new path already exists in this object
             existing_item = None
             for item in obj.uv_texture_items:
                 if item.texture_path == new_path:
@@ -275,7 +246,6 @@ class UV_OT_GroupChangeTextureImage(Operator):
                     break
             
             if existing_item:
-                # Merge: update frames and remove old item
                 for frame in obj.uv_animation_frames:
                     if frame.texture_path == old_path:
                         frame.texture_path = new_path
@@ -284,12 +254,10 @@ class UV_OT_GroupChangeTextureImage(Operator):
                         obj.uv_texture_items.remove(i)
                         break
             else:
-                # Update the item's path
                 for item in obj.uv_texture_items:
                     if item.texture_path == old_path:
                         item.texture_path = new_path
                         break
-                # Update frames
                 for frame in obj.uv_animation_frames:
                     if frame.texture_path == old_path:
                         frame.texture_path = new_path

@@ -1,10 +1,9 @@
 import bpy
 import json
 from bpy.types import Operator
-
+from ...utils.uv_animator.uv_animator_utils import apply_uvs_to_object
 
 # Toggle / Selection Operators
-
 
 class UV_OT_ToggleExpand(Operator):
     bl_idname = "uv_animator.toggle_expand"
@@ -56,4 +55,34 @@ class UV_OT_SetActiveUVObject(Operator):
     def execute(self, context):
         context.scene.active_uv_object_name = self.object_name
         self.report({'INFO'}, f"Active: {self.object_name}")
+        return {'FINISHED'}
+
+# Set Start Frame (with immediate preview)
+
+class UV_OT_SetStartFrame(Operator):
+    bl_idname = "uv_animator.set_start_frame"
+    bl_label = "Set Start Frame"
+    bl_description = "Set this frame as the start frame for playback (toggle off to disable)"
+    bl_options = {'REGISTER', 'UNDO'}
+    object_name: bpy.props.StringProperty()
+    frame_index: bpy.props.IntProperty()
+
+    def execute(self, context):
+        obj = bpy.data.objects.get(self.object_name)
+        if not obj:
+            return {'CANCELLED'}
+        
+        if obj.uv_start_frame == self.frame_index:
+            obj.uv_start_frame = -1
+        else:
+            obj.uv_start_frame = self.frame_index
+        
+        # Apply the selected frame immediately so the user sees the result
+        frames = obj.uv_animation_frames
+        if self.frame_index < len(frames):
+            frame = frames[self.frame_index]
+            uvs = json.loads(frame.uv_data)
+            tex = frame.texture_path
+            apply_uvs_to_object(obj, uvs, tex)
+        
         return {'FINISHED'}

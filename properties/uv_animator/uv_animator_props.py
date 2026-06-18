@@ -32,6 +32,14 @@ def register():
     bpy.types.Object.uv_animator_playback_enabled = bpy.props.BoolProperty(default=True)
     bpy.types.Object.uv_selected_for_group = bpy.props.BoolProperty(default=False)
     
+    # Start frame index
+    bpy.types.Object.uv_start_frame = bpy.props.IntProperty(
+        name="Start Frame",
+        description="Index of the frame to start playback from (-1 = disabled)",
+        default=-1,
+        min=-1
+    )
+    
     bpy.types.Scene.active_uv_object_name = bpy.props.StringProperty(default="")
     bpy.types.Scene.uv_animator_expanded = bpy.props.StringProperty(default="{}")
     
@@ -52,7 +60,6 @@ def register():
         description="JSON string: { 'group_name': true/false } for active group assignment"
     )
     
-    # Store expanded state for the group texture popup
     bpy.types.Scene.uv_group_texture_expanded = bpy.props.StringProperty(
         name="Group Texture Expanded",
         default="{}",
@@ -66,6 +73,7 @@ def unregister():
     del bpy.types.Scene.uv_animator_groups
     del bpy.types.Scene.uv_animator_expanded
     del bpy.types.Scene.active_uv_object_name
+    del bpy.types.Object.uv_start_frame
     del bpy.types.Object.uv_selected_for_group
     del bpy.types.Object.uv_animator_playback_enabled
     del bpy.types.Object.is_uv_animated

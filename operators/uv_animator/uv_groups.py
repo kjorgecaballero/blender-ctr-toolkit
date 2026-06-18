@@ -4,9 +4,7 @@ from bpy.types import Operator
 
 _active_uv_group_dialog = None
 
-
-# GROUP MANAGEMENT OPERATORS
-
+# Group Management
 
 class UV_OT_ToggleGroupActive(Operator):
     bl_idname = "uv_animator.toggle_group_active"
@@ -25,7 +23,6 @@ class UV_OT_ToggleGroupActive(Operator):
         toggles[self.group_name] = not toggles.get(self.group_name, False)
         scene.uv_animator_group_toggles = json.dumps(toggles)
 
-        # Force redraw of IMAGE_EDITOR areas
         for window in context.window_manager.windows:
             for area in window.screen.areas:
                 if area.type == 'IMAGE_EDITOR':

@@ -9,9 +9,7 @@ from ...utils.uv_animator.uv_animator_utils import (
     sync_texture_items
 )
 
-
-# MAIN ANIMATION OPERATORS
-
+# Main Animation Operators
 
 def get_target_objects(context):
     active_obj = get_target_object(context)
@@ -34,6 +32,7 @@ class UV_OT_NewAnimation(Operator):
             obj.uv_texture_items.clear()
             obj.is_uv_animated = True
             obj.uv_animator_playback_enabled = True
+            obj.uv_start_frame = -1
             expanded[obj.name] = True
             if obj == selected[0]:
                 context.scene.active_uv_object_name = obj.name
@@ -115,6 +114,10 @@ class UV_OT_DeleteFrame(Operator):
         frames = obj.uv_animation_frames
         if 0 <= self.frame_index < len(frames):
             frames.remove(self.frame_index)
+            if obj.uv_start_frame == self.frame_index:
+                obj.uv_start_frame = -1
+            elif obj.uv_start_frame > self.frame_index:
+                obj.uv_start_frame -= 1
             sync_texture_items(obj)
             self.report({'INFO'}, f"Frame {self.frame_index} deleted from '{obj.name}'")
         else:
@@ -156,8 +159,13 @@ class UV_OT_PlayPreview(Operator):
 
         self._frame_indices = {}
         for obj in play_objects:
-            if len(obj.uv_animation_frames) > 0:
-                self._frame_indices[obj.name] = 0
+            frames = obj.uv_animation_frames
+            if len(frames) == 0:
+                continue
+            start_idx = obj.uv_start_frame if obj.uv_start_frame >= 0 else 0
+            if start_idx >= len(frames):
+                start_idx = 0
+            self._frame_indices[obj.name] = start_idx
 
         wm = context.window_manager
         self._timer = wm.event_timer_add(1.0/24.0, window=context.window)
@@ -181,7 +189,10 @@ class UV_OT_PlayPreview(Operator):
                 uvs = json.loads(frame.uv_data)
                 tex = frame.texture_path
                 apply_uvs_to_object(obj, uvs, tex)
-                self._frame_indices[obj_name] = (idx + 1) % len(frames)
+                # Simple cyclic increment: 0,1,2,...,n-1,0,1,...
+                
+                next_idx = (idx + 1) % len(frames)
+                self._frame_indices[obj_name] = next_idx
             return {'PASS_THROUGH'}
         elif event.type in {'RIGHTMOUSE', 'ESC'}:
             self.cancel(context)
@@ -221,6 +232,7 @@ class UV_OT_DeleteAnimation(Operator):
         obj.uv_animation_frames.clear()
         obj.uv_texture_items.clear()
         obj.is_uv_animated = False
+        obj.uv_start_frame = -1
         expanded = json.loads(context.scene.uv_animator_expanded)
         if obj.name in expanded:
             del expanded[obj.name]

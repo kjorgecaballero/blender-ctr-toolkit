@@ -7,10 +7,12 @@ from .uv_animation import *
 
 # Combined list of all classes from all modules
 classes = [
+
     UV_OT_ToggleExpand,
     UV_OT_TogglePlayback,
     UV_OT_ToggleGroupSelection,
     UV_OT_SetActiveUVObject,
+    UV_OT_SetStartFrame,
     UV_OT_ToggleGroupActive,
     UV_OT_GroupManagementDialog,
     UV_OT_NewGroupSimple,
