@@ -32,12 +32,20 @@ def register():
     bpy.types.Object.uv_animator_playback_enabled = bpy.props.BoolProperty(default=True)
     bpy.types.Object.uv_selected_for_group = bpy.props.BoolProperty(default=False)
     
-    # Start frame index
+    # Start frame index (always valid when frames exist)
     bpy.types.Object.uv_start_frame = bpy.props.IntProperty(
         name="Start Frame",
-        description="Index of the frame to start playback from (-1 = disabled)",
-        default=-1,
-        min=-1
+        description="Index of the frame to start playback from (0 if no frames)",
+        default=0,
+        min=0
+    )
+    
+    # Frame duration multiplier
+    bpy.types.Object.uv_frame_duration = bpy.props.IntProperty(
+        name="Frame Duration",
+        description="Duration multiplier for each frame (0 = 0.033s, 1 = 0.066s, 2 = 0.099s, ...)",
+        default=0,
+        min=0
     )
     
     bpy.types.Scene.active_uv_object_name = bpy.props.StringProperty(default="")
@@ -73,6 +81,7 @@ def unregister():
     del bpy.types.Scene.uv_animator_groups
     del bpy.types.Scene.uv_animator_expanded
     del bpy.types.Scene.active_uv_object_name
+    del bpy.types.Object.uv_frame_duration
     del bpy.types.Object.uv_start_frame
     del bpy.types.Object.uv_selected_for_group
     del bpy.types.Object.uv_animator_playback_enabled

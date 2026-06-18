@@ -1,5 +1,6 @@
 import bpy
 import json
+import time
 from bpy.types import Operator
 from ...utils.uv_animator.uv_animator_utils import (
     get_current_uvs_from_mesh,
@@ -32,7 +33,8 @@ class UV_OT_NewAnimation(Operator):
             obj.uv_texture_items.clear()
             obj.is_uv_animated = True
             obj.uv_animator_playback_enabled = True
-            obj.uv_start_frame = -1
+            obj.uv_start_frame = 0  # Default start frame
+            obj.uv_frame_duration = 0
             expanded[obj.name] = True
             if obj == selected[0]:
                 context.scene.active_uv_object_name = obj.name
@@ -94,6 +96,10 @@ class UV_OT_AssignFrame(Operator):
             frame.texture_path = tex_path
             assigned_count += 1
 
+            # Ensure start frame is valid (if this is the first frame, set to 0)
+            if len(obj.uv_animation_frames) == 1:
+                obj.uv_start_frame = 0
+
             sync_texture_items(obj)
 
         self.report({'INFO'}, f"Frame assigned to {assigned_count} object(s)")
@@ -114,10 +120,20 @@ class UV_OT_DeleteFrame(Operator):
         frames = obj.uv_animation_frames
         if 0 <= self.frame_index < len(frames):
             frames.remove(self.frame_index)
-            if obj.uv_start_frame == self.frame_index:
-                obj.uv_start_frame = -1
-            elif obj.uv_start_frame > self.frame_index:
-                obj.uv_start_frame -= 1
+            
+            # Adjust start frame if necessary
+            if len(frames) == 0:
+                obj.uv_start_frame = 0  # Default, but no frames
+            else:
+                # If the deleted frame was the start frame, set to 0
+                if obj.uv_start_frame == self.frame_index:
+                    obj.uv_start_frame = 0
+                elif obj.uv_start_frame > self.frame_index:
+                    obj.uv_start_frame -= 1
+                # Ensure start frame is within range
+                if obj.uv_start_frame >= len(frames):
+                    obj.uv_start_frame = len(frames) - 1
+            
             sync_texture_items(obj)
             self.report({'INFO'}, f"Frame {self.frame_index} deleted from '{obj.name}'")
         else:
@@ -129,6 +145,7 @@ class UV_OT_PlayPreview(Operator):
     bl_label = "Play Preview"
     _timer = None
     _frame_indices = {}
+    _last_update = {}
     _active_instance = None
 
     @classmethod
@@ -158,41 +175,56 @@ class UV_OT_PlayPreview(Operator):
             return {'CANCELLED'}
 
         self._frame_indices = {}
+        self._last_update = {}
+        current_time = time.perf_counter()
+        
         for obj in play_objects:
             frames = obj.uv_animation_frames
             if len(frames) == 0:
                 continue
-            start_idx = obj.uv_start_frame if obj.uv_start_frame >= 0 else 0
+            start_idx = obj.uv_start_frame
             if start_idx >= len(frames):
                 start_idx = 0
             self._frame_indices[obj.name] = start_idx
+            self._last_update[obj.name] = current_time
 
         wm = context.window_manager
-        self._timer = wm.event_timer_add(1.0/24.0, window=context.window)
+        self._timer = wm.event_timer_add(1.0/60.0, window=context.window)
         wm.modal_handler_add(self)
         UV_OT_PlayPreview._active_instance = self
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
         if event.type == 'TIMER':
+            current_time = time.perf_counter()
+            
             for obj_name, idx in list(self._frame_indices.items()):
                 obj = bpy.data.objects.get(obj_name)
                 if not obj or not obj.is_uv_animated or not obj.uv_animator_playback_enabled:
                     del self._frame_indices[obj_name]
+                    del self._last_update[obj_name]
                     continue
+                
                 frames = obj.uv_animation_frames
                 if not frames:
                     continue
-                if idx >= len(frames):
-                    idx = 0
-                frame = frames[idx]
-                uvs = json.loads(frame.uv_data)
-                tex = frame.texture_path
-                apply_uvs_to_object(obj, uvs, tex)
-                # Simple cyclic increment: 0,1,2,...,n-1,0,1,...
                 
-                next_idx = (idx + 1) % len(frames)
-                self._frame_indices[obj_name] = next_idx
+                duration_multiplier = obj.uv_frame_duration
+                frame_duration = (duration_multiplier + 1) * 0.033
+                
+                if current_time - self._last_update[obj_name] >= frame_duration:
+                    self._last_update[obj_name] = current_time
+                    
+                    if idx >= len(frames):
+                        idx = 0
+                    frame = frames[idx]
+                    uvs = json.loads(frame.uv_data)
+                    tex = frame.texture_path
+                    apply_uvs_to_object(obj, uvs, tex)
+                    
+                    next_idx = (idx + 1) % len(frames)
+                    self._frame_indices[obj_name] = next_idx
+            
             return {'PASS_THROUGH'}
         elif event.type in {'RIGHTMOUSE', 'ESC'}:
             self.cancel(context)
@@ -206,6 +238,7 @@ class UV_OT_PlayPreview(Operator):
         if UV_OT_PlayPreview._active_instance == self:
             UV_OT_PlayPreview._active_instance = None
         self._frame_indices.clear()
+        self._last_update.clear()
 
 class UV_OT_StopPreview(Operator):
     bl_idname = "uv_animator.stop_preview"
@@ -232,7 +265,8 @@ class UV_OT_DeleteAnimation(Operator):
         obj.uv_animation_frames.clear()
         obj.uv_texture_items.clear()
         obj.is_uv_animated = False
-        obj.uv_start_frame = -1
+        obj.uv_start_frame = 0
+        obj.uv_frame_duration = 0
         expanded = json.loads(context.scene.uv_animator_expanded)
         if obj.name in expanded:
             del expanded[obj.name]

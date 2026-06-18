@@ -57,12 +57,12 @@ class UV_OT_SetActiveUVObject(Operator):
         self.report({'INFO'}, f"Active: {self.object_name}")
         return {'FINISHED'}
 
-# Set Start Frame (with immediate preview)
+# Set Start Frame (cannot be disabled, only changed)
 
 class UV_OT_SetStartFrame(Operator):
     bl_idname = "uv_animator.set_start_frame"
     bl_label = "Set Start Frame"
-    bl_description = "Set this frame as the start frame for playback (toggle off to disable)"
+    bl_description = "Set this frame as the start frame for playback"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
     frame_index: bpy.props.IntProperty()
@@ -72,17 +72,57 @@ class UV_OT_SetStartFrame(Operator):
         if not obj:
             return {'CANCELLED'}
         
-        if obj.uv_start_frame == self.frame_index:
-            obj.uv_start_frame = -1
-        else:
-            obj.uv_start_frame = self.frame_index
-        
-        # Apply the selected frame immediately so the user sees the result
         frames = obj.uv_animation_frames
+        if len(frames) == 0:
+            return {'CANCELLED'}
+        
+        # Set the start frame to the clicked frame
+        obj.uv_start_frame = self.frame_index
+        
+        # Apply the selected frame immediately
         if self.frame_index < len(frames):
             frame = frames[self.frame_index]
             uvs = json.loads(frame.uv_data)
             tex = frame.texture_path
             apply_uvs_to_object(obj, uvs, tex)
         
+        return {'FINISHED'}
+
+# Set Frame Duration (per object)
+
+class UV_OT_SetFrameDuration(Operator):
+    bl_idname = "uv_animator.set_frame_duration"
+    bl_label = "Set Frame Duration"
+    bl_description = "Set the duration multiplier for each frame"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    object_name: bpy.props.StringProperty()
+    duration: bpy.props.IntProperty(
+        name="Duration",
+        description="Duration multiplier",
+        default=0,
+        min=0,
+        max=30
+    )
+    
+    def invoke(self, context, event):
+        obj = bpy.data.objects.get(self.object_name)
+        if obj:
+            self.duration = obj.uv_frame_duration
+        return context.window_manager.invoke_props_dialog(self)
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "duration")
+        real_duration = (self.duration + 1) * 0.033
+        ms = real_duration * 1000
+        layout.label(text=f"Duration: {ms:.1f} ms ({real_duration:.3f} s)", icon='TIME')
+    
+    def execute(self, context):
+        obj = bpy.data.objects.get(self.object_name)
+        if not obj:
+            self.report({'ERROR'}, "Object not found")
+            return {'CANCELLED'}
+        obj.uv_frame_duration = self.duration
+        self.report({'INFO'}, f"Frame duration set to {self.duration} ({(self.duration + 1) * 0.033:.3f}s)")
         return {'FINISHED'}

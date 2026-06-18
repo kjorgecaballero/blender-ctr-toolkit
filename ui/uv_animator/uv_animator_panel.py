@@ -107,6 +107,11 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         box = layout.box()
         header = box.row(align=True)
 
+        # Expand / collapse
+        icon = 'TRIA_DOWN' if is_expanded else 'TRIA_RIGHT'
+        op = header.operator("uv_animator.toggle_group_section", text="", icon=icon, emboss=False)
+        op.group_name = group_name
+
         # Group toggle (radio button)
         is_active = toggles.get(group_name, False)
         toggle_icon = 'RADIOBUT_ON' if is_active else 'RADIOBUT_OFF'
@@ -116,16 +121,17 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         else:
             header.label(text="", icon='RADIOBUT_OFF')
 
-        # Expand / collapse
-        icon = 'TRIA_DOWN' if is_expanded else 'TRIA_RIGHT'
-        op = header.operator("uv_animator.toggle_group_section", text="", icon=icon, emboss=False)
-        op.group_name = group_name
-
         # Label
         if is_ungrouped:
             header.label(text=f"{group_name} ({len(objects)} objects)", icon='OBJECT_DATA')
         else:
             header.label(text=f"{group_name} ({len(objects)} objects)", icon='GROUP')
+
+        # Group duration (only for real groups)
+        if not is_ungrouped and objects:
+            duration = objects[0].uv_frame_duration
+            op_clock = header.operator("uv_animator.group_set_frame_duration", text=f"{duration}", icon='TIME')
+            op_clock.group_name = group_name
 
         # Only for real groups
         if not is_ungrouped:
@@ -144,21 +150,19 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
 
         header = box.row(align=True)
 
-        # Selection checkbox
-        sel_icon = 'CHECKBOX_HLT' if obj.uv_selected_for_group else 'CHECKBOX_DEHLT'
-        op_sel = header.operator("uv_animator.toggle_group_selection", text="", icon=sel_icon, emboss=False)
-        op_sel.object_name = obj.name
-
         # Expand toggle for frames
         icon = 'TRIA_DOWN' if is_expanded else 'TRIA_RIGHT'
         op_exp = header.operator("uv_animator.toggle_expand", text="", icon=icon, emboss=False)
         op_exp.object_name = obj.name
 
-        # Active radio
+        # Active radio (object name)
         is_active = (scene.active_uv_object_name == obj.name)
         active_icon = 'RADIOBUT_ON' if is_active else 'RADIOBUT_OFF'
         op_act = header.operator("uv_animator.set_active_uv_object", text=obj.name, icon=active_icon, emboss=False)
         op_act.object_name = obj.name
+
+        # Frame count
+        header.label(text=f"({len(obj.uv_animation_frames)} frames)")
 
         # Playback toggle
         playback_enabled = obj.uv_animator_playback_enabled
@@ -166,7 +170,15 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         op_tv = header.operator("uv_animator.toggle_playback", text="", icon=tv_icon, emboss=False)
         op_tv.object_name = obj.name
 
-        header.label(text=f"({len(obj.uv_animation_frames)} frames)")
+        # Duration per frame
+        duration = obj.uv_frame_duration
+        op_clock = header.operator("uv_animator.set_frame_duration", text=f"{duration}", icon='TIME')
+        op_clock.object_name = obj.name
+
+        # Selection checkbox (group check)
+        sel_icon = 'CHECKBOX_HLT' if obj.uv_selected_for_group else 'CHECKBOX_DEHLT'
+        op_sel = header.operator("uv_animator.toggle_group_selection", text="", icon=sel_icon, emboss=False)
+        op_sel.object_name = obj.name
 
         if is_expanded:
             # Frame list
@@ -177,7 +189,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
                     row2 = col.row(align=True)
                     row2.label(text=f"Frame {idx}")
                     
-                    # Start frame toggle (MARKER / MARKER_HLT)
+                    # Start frame marker 
                     is_start = (obj.uv_start_frame == idx)
                     start_icon = 'MARKER_HLT' if is_start else 'MARKER'
                     op_start = row2.operator("uv_animator.set_start_frame", text="", icon=start_icon, emboss=False)

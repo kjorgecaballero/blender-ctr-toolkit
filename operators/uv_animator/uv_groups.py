@@ -334,3 +334,56 @@ class UV_OT_ClearActiveGroupFilter(Operator):
     def execute(self, context):
         context.scene.uv_animator_active_group = ""
         return {'FINISHED'}
+
+# Group Set Frame Duration
+
+class UV_OT_GroupSetFrameDuration(Operator):
+    bl_idname = "uv_animator.group_set_frame_duration"
+    bl_label = "Group Set Frame Duration"
+    bl_description = "Set the frame duration for all objects in this group"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    group_name: bpy.props.StringProperty()
+    duration: bpy.props.IntProperty(
+        name="Duration",
+        description="Duration multiplier",
+        default=0,
+        min=0,
+        max=30
+    )
+    
+    def invoke(self, context, event):
+        groups_dict = json.loads(context.scene.uv_animator_groups)
+        if self.group_name in groups_dict:
+            object_names = groups_dict[self.group_name]
+            for name in object_names:
+                obj = bpy.data.objects.get(name)
+                if obj and obj.type == 'MESH':
+                    self.duration = obj.uv_frame_duration
+                    break
+        return context.window_manager.invoke_props_dialog(self)
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "duration")
+        real_duration = (self.duration + 1) * 0.033
+        ms = real_duration * 1000
+        layout.label(text=f"Duration: {ms:.1f} ms ({real_duration:.3f} s)", icon='TIME')
+    
+    def execute(self, context):
+        groups_dict = json.loads(context.scene.uv_animator_groups)
+        if self.group_name not in groups_dict:
+            self.report({'ERROR'}, "Group not found")
+            return {'CANCELLED'}
+        
+        object_names = groups_dict[self.group_name]
+        updated = 0
+        
+        for obj_name in object_names:
+            obj = bpy.data.objects.get(obj_name)
+            if obj and obj.type == 'MESH':
+                obj.uv_frame_duration = self.duration
+                updated += 1
+        
+        self.report({'INFO'}, f"Set frame duration to {self.duration} for {updated} object(s)")
+        return {'FINISHED'}
