@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 import json
+from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 
 def get_all_uvs(obj):
     """
@@ -165,3 +166,44 @@ def sync_texture_items(obj):
             new_item = obj.uv_texture_items.add()
             new_item.texture_path = path
             new_item.blend_mode = "0"
+
+# Validation
+def is_valid_for_uv_animation(obj):
+    """
+    Check if an object is a valid Quadblock or Triblock with correct UVs.
+    Returns True if the object is a valid Quadblock or Triblock and has no UV issues.
+    Works in both Object and Edit Mode by temporarily switching to Object Mode if needed.
+    This function is safe for Blender 3.3+.
+    """
+    if obj.type != 'MESH':
+        return False
+
+    context = bpy.context
+    original_mode = obj.mode
+    original_active = context.view_layer.objects.active
+
+    # If in Edit Mode, switch to Object Mode to get updated mesh data
+    if original_mode == 'EDIT':
+        if context.view_layer.objects.active != obj:
+            context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Validate geometry type and UV issues
+    mesh_type = get_mesh_type(obj)
+    if mesh_type not in ('QUADBLOCK', 'TRIBLOCK'):
+        if original_mode == 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+        return False
+
+    issues = get_object_issues(obj)
+    uv_problems = {'invalid_uvs', 'degenerated_uvs', 'invalid_triblock_uvs', 'missing_uvs'}
+    if any(issue in issues for issue in uv_problems):
+        if original_mode == 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+        return False
+
+    # Restore original mode if it was Edit
+    if original_mode == 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+
+    return True

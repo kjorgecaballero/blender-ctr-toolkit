@@ -112,7 +112,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         op = header.operator("uv_animator.toggle_group_section", text="", icon=icon, emboss=False)
         op.group_name = group_name
 
-        # Group toggle (radio button)
+        # Group toggle (radio button) - only for real groups
         is_active = toggles.get(group_name, False)
         toggle_icon = 'RADIOBUT_ON' if is_active else 'RADIOBUT_OFF'
         if not is_ungrouped:
@@ -126,6 +126,13 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
             header.label(text=f"{group_name} ({len(objects)} objects)", icon='OBJECT_DATA')
         else:
             header.label(text=f"{group_name} ({len(objects)} objects)", icon='GROUP')
+
+        # Group playback(only for real groups)
+        if not is_ungrouped and objects:
+            all_enabled = all(obj.uv_animator_playback_enabled for obj in objects)
+            playback_icon = 'PLAY' if all_enabled else 'PAUSE'
+            op_play = header.operator("uv_animator.toggle_group_playback", text="", icon=playback_icon, emboss=False)
+            op_play.group_name = group_name
 
         # Group duration (only for real groups)
         if not is_ungrouped and objects:

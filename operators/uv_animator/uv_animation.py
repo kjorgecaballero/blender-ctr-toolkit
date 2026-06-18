@@ -7,7 +7,8 @@ from ...utils.uv_animator.uv_animator_utils import (
     get_active_texture_path,
     apply_uvs_to_object,
     get_target_object,
-    sync_texture_items
+    sync_texture_items,
+    is_valid_for_uv_animation
 )
 
 # Main Animation Operators
@@ -27,20 +28,31 @@ class UV_OT_NewAnimation(Operator):
             self.report({'WARNING'}, "Select at least one mesh object")
             return {'CANCELLED'}
 
+        # Filter objects that are valid for UV animation (Quadblock/Triblock with good UVs)
+        valid_objects = [obj for obj in selected if is_valid_for_uv_animation(obj)]
+        invalid_objects = [obj for obj in selected if obj not in valid_objects]
+
+        if not valid_objects:
+            self.report({'ERROR'}, "None of the selected objects are valid Quadblocks or Triblocks with valid UVs.")
+            return {'CANCELLED'}
+
+        if invalid_objects:
+            self.report({'WARNING'}, f"Skipped {len(invalid_objects)} object(s) because they are not valid Quadblocks/Triblocks or have UV issues.")
+
         expanded = json.loads(context.scene.uv_animator_expanded)
-        for obj in selected:
+        for obj in valid_objects:
             obj.uv_animation_frames.clear()
             obj.uv_texture_items.clear()
             obj.is_uv_animated = True
             obj.uv_animator_playback_enabled = True
-            obj.uv_start_frame = 0  # Default start frame
+            obj.uv_start_frame = 0
             obj.uv_frame_duration = 0
             expanded[obj.name] = True
-            if obj == selected[0]:
+            if obj == valid_objects[0]:
                 context.scene.active_uv_object_name = obj.name
 
         context.scene.uv_animator_expanded = json.dumps(expanded)
-        self.report({'INFO'}, f"Created animations for {len(selected)} object(s)")
+        self.report({'INFO'}, f"Created animations for {len(valid_objects)} valid object(s)")
         return {'FINISHED'}
 
 class UV_OT_AssignFrame(Operator):
@@ -78,8 +90,28 @@ class UV_OT_AssignFrame(Operator):
         else:
             target_objects = [active_obj]
 
+        # Initial filter for valid objects (type + UVs)
+        valid_targets = [obj for obj in target_objects if is_valid_for_uv_animation(obj)]
+        invalid_targets = [obj for obj in target_objects if obj not in valid_targets]
+
+        # If there are no valid objects, show the error first, then the warning (so warning is last)
+        if not valid_targets:
+            self.report({'ERROR'}, "No valid objects to assign frame.")
+            if invalid_targets:
+                self.report({'WARNING'}, f"Skipped {len(invalid_targets)} object(s) because they are not valid Quadblocks/Triblocks or have UV issues.")
+            return {'CANCELLED'}
+
+        # If there are valid objects, show the warning (if any) before the success message
+        if invalid_targets:
+            self.report({'WARNING'}, f"Skipped {len(invalid_targets)} object(s) because they are not valid Quadblocks/Triblocks or have UV issues.")
+
         assigned_count = 0
-        for obj in target_objects:
+        for obj in valid_targets:
+            # Re-validate at the moment of assignment to catch any UV changes made in Edit Mode
+            if not is_valid_for_uv_animation(obj):
+                self.report({'ERROR'}, f"Cannot assign frame to '{obj.name}' because UVs are invalid (out of range, degenerated, or triblock pattern incorrect).")
+                continue
+
             uvs, error = get_current_uvs_from_mesh(obj)
             if uvs is None:
                 self.report({'WARNING'}, f"Can't capture UVs from {obj.name}: {error}")
@@ -96,7 +128,6 @@ class UV_OT_AssignFrame(Operator):
             frame.texture_path = tex_path
             assigned_count += 1
 
-            # Ensure start frame is valid (if this is the first frame, set to 0)
             if len(obj.uv_animation_frames) == 1:
                 obj.uv_start_frame = 0
 
@@ -121,16 +152,13 @@ class UV_OT_DeleteFrame(Operator):
         if 0 <= self.frame_index < len(frames):
             frames.remove(self.frame_index)
             
-            # Adjust start frame if necessary
             if len(frames) == 0:
-                obj.uv_start_frame = 0  # Default, but no frames
+                obj.uv_start_frame = 0
             else:
-                # If the deleted frame was the start frame, set to 0
                 if obj.uv_start_frame == self.frame_index:
                     obj.uv_start_frame = 0
                 elif obj.uv_start_frame > self.frame_index:
                     obj.uv_start_frame -= 1
-                # Ensure start frame is within range
                 if obj.uv_start_frame >= len(frames):
                     obj.uv_start_frame = len(frames) - 1
             

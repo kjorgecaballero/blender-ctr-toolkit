@@ -36,6 +36,7 @@ classes = [
     UV_OT_PlayPreview,
     UV_OT_StopPreview,
     UV_OT_DeleteAnimation,
+    UV_OT_ToggleGroupPlayback,
 ]
 
 def register():

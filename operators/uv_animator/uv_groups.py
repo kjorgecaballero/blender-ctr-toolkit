@@ -387,3 +387,43 @@ class UV_OT_GroupSetFrameDuration(Operator):
         
         self.report({'INFO'}, f"Set frame duration to {self.duration} for {updated} object(s)")
         return {'FINISHED'}
+
+# Toggle Group Playback
+class UV_OT_ToggleGroupPlayback(Operator):
+    bl_idname = "uv_animator.toggle_group_playback"
+    bl_label = "Toggle Group Playback"
+    bl_description = "Enable/disable playback for all objects in the group"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    group_name: bpy.props.StringProperty()
+    
+    def execute(self, context):
+        groups_dict = json.loads(context.scene.uv_animator_groups)
+        if self.group_name == "Ungrouped":
+            # Get all animated objects not in any group
+            all_animated = [obj for obj in bpy.data.objects if obj.type == 'MESH' and obj.is_uv_animated]
+            grouped_names = set()
+            for members in groups_dict.values():
+                grouped_names.update(members)
+            objects = [obj for obj in all_animated if obj.name not in grouped_names]
+        else:
+            if self.group_name not in groups_dict:
+                self.report({'WARNING'}, f"Group '{self.group_name}' not found")
+                return {'CANCELLED'}
+            object_names = groups_dict[self.group_name]
+            objects = [obj for obj in bpy.data.objects if obj.name in object_names and obj.type == 'MESH']
+        
+        if not objects:
+            self.report({'WARNING'}, f"No objects in group '{self.group_name}'")
+            return {'CANCELLED'}
+        
+        # Check if all objects have playback enabled
+        all_enabled = all(obj.uv_animator_playback_enabled for obj in objects)
+        # Toggle: if all are enabled, disable all; otherwise enable all
+        new_state = not all_enabled
+        
+        for obj in objects:
+            obj.uv_animator_playback_enabled = new_state
+        
+        self.report({'INFO'}, f"{'Enabled' if new_state else 'Disabled'} playback for {len(objects)} object(s) in group '{self.group_name}'")
+        return {'FINISHED'}
