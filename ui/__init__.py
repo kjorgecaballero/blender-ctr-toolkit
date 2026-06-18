@@ -6,7 +6,7 @@ from . import qb_tb_validator
 from . import mesh_menus
 from .material_manager import register as register_mat_mgr_ui, unregister as unregister_mat_mgr_ui
 from . import help_utils
-
+from .uv_animator import register as register_uv_animator_ui, unregister as unregister_uv_animator_ui
 
 def register():
     register_main_panel()
@@ -15,8 +15,10 @@ def register():
     mesh_menus.register()
     register_mat_mgr_ui()
     help_utils.register()
+    register_uv_animator_ui()
 
 def unregister():
+    unregister_uv_animator_ui()
     help_utils.unregister()
     unregister_mat_mgr_ui()
     mesh_menus.unregister()

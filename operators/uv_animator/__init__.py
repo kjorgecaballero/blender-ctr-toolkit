@@ -1,0 +1,43 @@
+import bpy
+from .uv_controls import *
+from .uv_groups import *
+from .uv_collapse import *
+from .uv_textures import *
+from .uv_animation import *
+
+# Combined list of all classes from all modules
+classes = [
+    UV_OT_ToggleExpand,
+    UV_OT_TogglePlayback,
+    UV_OT_ToggleGroupSelection,
+    UV_OT_SetActiveUVObject,
+    UV_OT_ToggleGroupActive,
+    UV_OT_GroupManagementDialog,
+    UV_OT_NewGroupSimple,
+    UV_OT_DeleteGroupSimple,
+    UV_OT_AddToGroup,
+    UV_OT_RemoveFromGroup,
+    UV_OT_ClearActiveGroupFilter,
+    UV_OT_ToggleGroupSection,
+    UV_OT_ToggleTextureSection,
+    UV_OT_ToggleTextureSubsection,
+    UV_OT_ShowFrameTexturePopup,
+    UV_OT_ChangeTexturePath,
+    UV_OT_GroupTextureSettings,
+    UV_OT_GroupToggleTextureSubsection,
+    UV_OT_GroupChangeTextureImage,
+    UV_OT_NewAnimation,
+    UV_OT_AssignFrame,
+    UV_OT_DeleteFrame,
+    UV_OT_PlayPreview,
+    UV_OT_StopPreview,
+    UV_OT_DeleteAnimation,
+]
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
