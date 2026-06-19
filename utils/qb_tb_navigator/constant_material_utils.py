@@ -1,6 +1,8 @@
 """
 Constant Material Utilities
-Functions for validating and manipulating constant materials, especially navigation points, clear_all_constant_materials() for bulk cleanup with fallback duplication.
+Functions for validating and manipulating constant materials, especially navigation points,
+clear_all_constant_materials() for bulk cleanup with fallback duplication.
+Automatic detection from materials without requiring a constant_materials dict.
 """
 
 import bpy
@@ -41,43 +43,26 @@ def get_faces_by_material_name(obj, material_name):
 
 def is_valid_navigation_point(obj, material_name, bm=None):
     """
-    Check if a constant material is a valid navigation point
-
-    Args:
-        obj: Blender object
-        material_name: Name of the constant material
-        bm: Optional existing BMesh (will create if None)
-
-    Returns:
-        Tuple: (is_valid, error_message, center_element, block_type)
+    Check if a constant material is a valid navigation point (requires dict).
     """
-    # Validation 1: Check if object has constant materials
     if "constant_materials" not in obj:
         return False, "No constant materials found on object", None, None
 
-    # Convert IDPropertyGroup to dict
     constant_materials = dict(obj["constant_materials"])
-
-    # Validation 2: Check if material exists in constant materials
     if material_name not in constant_materials:
         return False, f"Material '{material_name}' not in constant materials", None, None
 
-    # Validation 3: Check if marked as navigation point
     block_info = constant_materials[material_name]
     if not block_info.get("is_navigation_point", False):
         return False, f"Material '{material_name}' is not marked as navigation point", None, None
 
-    # Validation 4: Get faces by material name (reindex-safe)
     face_indices = get_faces_by_material_name(obj, material_name)
-
     if not face_indices:
         return False, f"No faces found with material '{material_name}'", None, None
 
-    # Validation 5: Must have exactly 4 faces
     if len(face_indices) != 4:
         return False, f"Has {len(face_indices)} faces, expected 4", None, None
 
-    # Get or create BMesh
     should_free_bmesh = False
     if bm is None:
         bm = bmesh.new()
@@ -86,7 +71,6 @@ def is_valid_navigation_point(obj, material_name, bm=None):
         should_free_bmesh = True
 
     try:
-        # Get BMesh faces
         bm_faces = []
         for face_idx in face_indices:
             if face_idx < len(bm.faces):
@@ -96,70 +80,102 @@ def is_valid_navigation_point(obj, material_name, bm=None):
                     bm.free()
                 return False, f"Face index {face_idx} out of range", None, None
 
-        # Validation 6: Must have exactly 4 BMesh faces
         if len(bm_faces) != 4:
             if should_free_bmesh:
                 bm.free()
             return False, f"Could not retrieve all 4 faces from BMesh (got {len(bm_faces)})", None, None
 
-        # Validation 7: The 4 faces must form a valid block
         center, block_type = detect_block_from_selection(bm_faces)
-
         if not center:
-            quad_count = sum(1 for f in bm_faces if len(f.verts) == 4)
-            tri_count = sum(1 for f in bm_faces if len(f.verts) == 3)
-            error_msg = f"Faces do not form a valid block (quads: {quad_count}, triangles: {tri_count})"
-
             if should_free_bmesh:
                 bm.free()
-            return False, error_msg, None, None
+            return False, "Faces do not form a valid block", None, None
 
-        # SUCCESS: Valid navigation point
         return True, "Valid navigation point", center, block_type
-
     finally:
         if should_free_bmesh and bm:
             bm.free()
 
 
+
+# Validate by material without dictionary
+
+def _validate_block_by_material(obj, material_name, bm=None):
+    """
+    Validates whether a given material forms a valid block (4 faces and correct topology).
+    Does not require it to exist in the 'constant_materials' dictionary.
+    """
+    face_indices = get_faces_by_material_name(obj, material_name)
+    if len(face_indices) != 4:
+        return False, None, None
+
+    should_free_bmesh = False
+    if bm is None:
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        should_free_bmesh = True
+
+    try:
+        bm_faces = []
+        for idx in face_indices:
+            if idx < len(bm.faces):
+                bm_faces.append(bm.faces[idx])
+
+        center, block_type = detect_block_from_selection(bm_faces)
+        return (center is not None), center, block_type
+    finally:
+        if should_free_bmesh and bm:
+            bm.free()
+
+
+
+# Navigation points
+
 def get_all_navigation_points(obj, bm=None):
     """
-    Get all valid navigation points from an object
-
-    Args:
-        obj: Blender object
-        bm: Optional existing BMesh
-
-    Returns:
-        List of tuples: (material_name, center_element, block_type)
+    Gets all navigation points.
+    Now works even if the object was separated and lost the 'constant_materials' dict.
     """
     navigation_points = []
 
-    if "constant_materials" not in obj:
-        return navigation_points
+    # 1. Attempt to get from stored dictionary (original object)
+    if "constant_materials" in obj:
+        const_dict = dict(obj["constant_materials"])
+        for mat_name, block_info in const_dict.items():
+            if block_info.get("is_navigation_point", False):
+                is_valid, error_msg, center, block_type = is_valid_navigation_point(obj, mat_name, bm)
+                if is_valid and center:
+                    navigation_points.append((mat_name, center, block_type))
 
-    # Convert IDPropertyGroup to dict
-    constant_materials = dict(obj["constant_materials"])
+        # If points were found in the dictionary, return them (original behavior)
+        if navigation_points:
+            return navigation_points
 
-    for mat_name, block_info in constant_materials.items():
-        if block_info.get("is_navigation_point", False):
-            is_valid, error_msg, center, block_type = is_valid_navigation_point(obj, mat_name, bm)
+    # 2. FALLBACK: If the dictionary does not exist or is empty, SCAN ALL MATERIALS.
+    # This allows it to work on separated/joined objects.
+    for slot in obj.material_slots:
+        if not slot.material:
+            continue
+        mat_name = slot.material.name
 
-            if is_valid and center:
-                navigation_points.append((mat_name, center, block_type))
+        # Only check materials that look like constants (contain "_ID")
+        if "_ID" not in mat_name:
+            continue
+
+        # Validate geometry without needing the dictionary
+        is_valid, center, block_type = _validate_block_by_material(obj, mat_name, bm)
+
+        if is_valid and center:
+            # If valid, add it as a navigation point (assume it is one)
+            navigation_points.append((mat_name, center, block_type))
 
     return navigation_points
 
 
-
-# UTILITIES FOR CLEARING ALL CONSTANT MATERIALS WITH FALLBACK
-
+# Utilities for clearing all constant materials with fallback
 
 def _create_base_material_from_constant(obj, const_mat_name):
-    """
-    Create a new base material by duplicating the constant material and stripping '_ID' suffix.
-    Returns (new_material_name, new_material_index) or (None, -1) on failure.
-    """
     if '_ID' in const_mat_name:
         base_name = const_mat_name.rsplit('_ID', 1)[0]
     else:
@@ -179,20 +195,6 @@ def _create_base_material_from_constant(obj, const_mat_name):
 
 
 def clear_all_constant_materials(obj, fallback_duplicate=True):
-    """
-    Clear all constant materials from the object.
-    For each constant material, try to restore the original material.
-    If the original material is missing and fallback_duplicate is True,
-    create a new base material from the constant material (strip '_ID' suffix)
-    and assign it to the block's faces.
-
-    Args:
-        obj: Blender object (must be in OBJECT mode for safe material ops)
-        fallback_duplicate: If True, create fallback base material when original missing
-
-    Returns:
-        tuple: (cleared_with_original, restored_with_fallback, failed_materials)
-    """
     if "constant_materials" not in obj:
         return 0, 0, []
 
@@ -207,7 +209,6 @@ def clear_all_constant_materials(obj, fallback_duplicate=True):
         block_id = block_info.get("block_id", 0)
         original_material_name = block_info.get("original_material", "")
 
-        # Get all faces that use this constant material
         face_indices = get_faces_by_material_name(obj, mat_name)
         if not face_indices:
             failed_materials.append(mat_name)
@@ -243,7 +244,6 @@ def clear_all_constant_materials(obj, fallback_duplicate=True):
                 failed_materials.append(mat_name)
                 continue
         else:
-            # Restore original material
             if original_material_name not in obj.data.materials:
                 obj.data.materials.append(original_material)
             original_mat_index = obj.data.materials.find(original_material_name)
@@ -252,25 +252,21 @@ def clear_all_constant_materials(obj, fallback_duplicate=True):
                     obj.data.polygons[idx].material_index = original_mat_index
             cleared_with_original += 1
 
-        # Remove constant material from dictionaries
         if mat_name in obj["constant_materials"]:
             del obj["constant_materials"][mat_name]
         const_prop_name = f"constant_name_{block_type}_{block_id}"
         if const_prop_name in obj:
             del obj[const_prop_name]
 
-        # Delete the constant material if no users
         if mat_name in bpy.data.materials:
             mat = bpy.data.materials[mat_name]
             if mat.users == 0:
                 bpy.data.materials.remove(mat)
 
-    # Remove any orphaned constant_name_* properties
     for prop in list(obj.keys()):
         if prop.startswith("constant_name_"):
             del obj[prop]
 
-    # Clean up unused material slots
     try:
         bpy.ops.object.material_slot_remove_unused()
     except Exception:
