@@ -1,6 +1,6 @@
 """
 QB/TB List Operators Initialization
-Registration of ALL operators for the block list system.
+Registration of ALL operators for the item list system.
 """
 
 import bpy
@@ -15,6 +15,7 @@ from .list_sort_filter import classes as sort_filter_classes
 from .list_select import classes as select_classes
 from .list_duplicate import classes as duplicate_classes
 from .list_toggle_seams import classes as seams_classes
+from .update_derived_materials import classes as update_classes
 
 operator_classes = (
     constant_material_classes +
@@ -26,7 +27,8 @@ operator_classes = (
     sort_filter_classes +
     select_classes +
     duplicate_classes +
-    seams_classes
+    seams_classes +
+    update_classes
 )
 
 def register():

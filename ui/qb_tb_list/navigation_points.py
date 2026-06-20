@@ -17,7 +17,6 @@ class LIST_MT_NavigationFilterMenu(Menu):
         current = scene.list_navigation_filter
         obj = context.edit_object
 
-        # Menu items (filter selection) with checkbox icons
         icon = 'CHECKBOX_HLT' if current == 'ALL' else 'CHECKBOX_DEHLT'
         op = layout.operator("list.set_navigation_filter", text="All", icon=icon)
         op.filter_type = 'ALL'
@@ -32,21 +31,15 @@ class LIST_MT_NavigationFilterMenu(Menu):
 
         layout.separator()
 
-        # Dynamic icon for the toggle button based on visible items
-        # Determine if all visible items are already navigation points
         all_are_nav = False
         if obj and scene.list_display_type == 'CONSTANT_MATERIALS':
             visible_items = _get_filtered_display_items(context, obj, scene)
             if visible_items:
-                const_dict = obj.get("constant_materials", {})
                 all_are_nav = all(
-                    const_dict.get(it['name'], {}).get("is_navigation_point", False)
+                    bpy.data.materials.get(it['name'], {}).get("ctr_is_navigation_point", False)
                     for it in visible_items
                 )
 
-        # Choose custom icon:
-        # - If all are nav points -> toggling will convert them to constant materials -> show constant_mat_icon
-        # - Otherwise -> toggling will mark them as nav points -> show nav_point_icon
         if all_are_nav:
             icon_id = get_icon("constant_mat_icon")
             fallback_icon = 'MATERIAL'

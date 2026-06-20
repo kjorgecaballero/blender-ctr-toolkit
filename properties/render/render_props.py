@@ -105,17 +105,18 @@ def register():
     bpy.types.Scene.ps1_prev_shadow_state = BoolProperty(default=True)
     bpy.types.Scene.show_advanced_overrides = BoolProperty(default=False)
 
-    # Blend apply scope 
+    # Blend apply scope – fully consistent with Material Manager
     bpy.types.Scene.blend_apply_scope = EnumProperty(
         name="Apply Blend Mode to",
         description="Defines which materials are affected when applying a blend mode or other material changes",
         items=[
             ('SELECTED', "Selected", "Apply only to the directly selected material(s)"),
-            ('FAMILY', "Full", "Apply to base material and all its constants"),
-            ('CONSTANTS_ONLY', "Constants", "Apply only to constant materials (excludes base)"),
+            ('FULL', "Full", "Apply to base material and all its constants (including nav points)"),
+            ('CONSTANTS', "Constants", "Apply only to constant materials (excludes base and nav points)"),
+            ('NAV', "Nav Points", "Apply only to navigation point constants"),
             ('BASE_ONLY', "Base", "Apply only to the base material"),
         ],
-        default='FAMILY'
+        default='FULL'
     )
 
     # Collapsible sections

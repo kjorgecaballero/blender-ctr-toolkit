@@ -28,7 +28,8 @@ class MATERIAL_OT_AssignSelected(Operator):
             self.report({'ERROR'}, f"Material '{mat_name}' not found")
             return {'CANCELLED'}
 
-        if "constant_materials" in obj and mat_name in obj["constant_materials"]:
+        # Check if the selected material is a constant material
+        if mat.get("ctr_block_type") is not None:
             self.report({'ERROR'}, "Cannot assign constant/navigation material using this button. Use the 'Assign' button inside the Block List (Constant Materials mode) instead.")
             return {'CANCELLED'}
 
@@ -100,12 +101,13 @@ class MATERIAL_OT_SelectByMaterial(Operator):
         name="Selection Scope",
         description="Which materials to select",
         items=[
-            ('CHECKED', "Checked", "Only the exact selected material"),
+            ('SELECTED', "Selected", "Only the exact selected material"),
             ('FULL', "Full", "Base + all constants (including nav points)"),
             ('CONSTANTS', "Constants", "Only constant materials (excludes base and nav points)"),
             ('NAV', "Nav Points", "Only navigation point constants"),
+            ('BASE_ONLY', "Base", "Only the base material (excludes constants)"),
         ],
-        default='CHECKED'
+        default='SELECTED'
     )
 
     @classmethod
@@ -114,7 +116,7 @@ class MATERIAL_OT_SelectByMaterial(Operator):
         return obj and obj.type == 'MESH' and context.mode == 'EDIT_MESH'
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=300)
+        return context.window_manager.invoke_props_dialog(self, width=400)
 
     def draw(self, context):
         self.layout.prop(self, "scope", expand=True)
@@ -127,55 +129,87 @@ class MATERIAL_OT_SelectByMaterial(Operator):
 
         mat_name = props.items[props.selected_index].name
         obj = context.active_object
-        const_dict = obj.get("constant_materials", {})
+        mat = bpy.data.materials.get(mat_name)
+        if not mat:
+            return {'CANCELLED'}
 
-        # Build the set of material names to select based on scope
         material_names = set()
 
-        # CHECKED: only the exact material
-        if self.scope == 'CHECKED':
+        if self.scope == 'SELECTED':
             material_names.add(mat_name)
-        elif mat_name in const_dict:
-            # Selected is a constant
-            base_name = const_dict[mat_name].get("original_material")
-            if base_name:
-                if self.scope == 'FULL':
-                    material_names.add(base_name)
-                for cname, cinfo in const_dict.items():
-                    if cinfo.get("original_material") == base_name:
-                        is_nav = cinfo.get("is_navigation_point", False)
-                        if self.scope == 'FULL':
-                            material_names.add(cname)
-                        elif self.scope == 'CONSTANTS' and not is_nav:
-                            material_names.add(cname)
-                        elif self.scope == 'NAV' and is_nav:
-                            material_names.add(cname)
-        else:
-            # Selected is a normal material (possibly a base)
-            base_name = mat_name
-            has_constants = any(cinfo.get("original_material") == base_name for cinfo in const_dict.values())
-            if has_constants:
-                if self.scope == 'FULL':
-                    material_names.add(base_name)
-                for cname, cinfo in const_dict.items():
-                    if cinfo.get("original_material") == base_name:
-                        is_nav = cinfo.get("is_navigation_point", False)
-                        if self.scope == 'FULL':
-                            material_names.add(cname)
-                        elif self.scope == 'CONSTANTS' and not is_nav:
-                            material_names.add(cname)
-                        elif self.scope == 'NAV' and is_nav:
-                            material_names.add(cname)
+
+        elif self.scope == 'FULL':
+            base_name = mat.get("ctr_original_material", mat_name)
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    material_names.add(base)
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            material_names.add(m.name)
+                else:
+                    material_names.add(mat_name)
             else:
-                # No constants, just the material itself
+                material_names.add(mat_name)
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        material_names.add(m.name)
+
+        elif self.scope == 'CONSTANTS':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            if not m.get("ctr_is_navigation_point", False):
+                                material_names.add(m.name)
+                else:
+                    if not mat.get("ctr_is_navigation_point", False):
+                        material_names.add(mat.name)
+            else:
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        if not m.get("ctr_is_navigation_point", False):
+                            material_names.add(m.name)
+
+        elif self.scope == 'NAV':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            if m.get("ctr_is_navigation_point", False):
+                                material_names.add(m.name)
+                else:
+                    if mat.get("ctr_is_navigation_point", False):
+                        material_names.add(mat.name)
+            else:
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        if m.get("ctr_is_navigation_point", False):
+                            material_names.add(m.name)
+
+        elif self.scope == 'BASE_ONLY':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    material_names.add(base)
+                else:
+                    material_names.add(mat_name)
+            else:
                 material_names.add(mat_name)
 
-        # Get material indices in the object
         mat_indices = set()
         for mname in material_names:
-            mat = bpy.data.materials.get(mname)
-            if mat and mat.name in obj.data.materials:
-                mat_indices.add(obj.data.materials.find(mat.name))
+            m = bpy.data.materials.get(mname)
+            if m and m.name in obj.data.materials:
+                mat_indices.add(obj.data.materials.find(m.name))
 
         if not mat_indices:
             self.report({'WARNING'}, f"None of the materials in the family are used by this object")
@@ -190,10 +224,11 @@ class MATERIAL_OT_SelectByMaterial(Operator):
         bmesh.update_edit_mesh(obj.data)
 
         scope_name = {
-            'CHECKED': 'checked material only',
+            'SELECTED': 'selected material only',
             'FULL': 'full family',
             'CONSTANTS': 'constants only',
-            'NAV': 'nav points only'
+            'NAV': 'nav points only',
+            'BASE_ONLY': 'base only'
         }[self.scope]
         self.report({'INFO'}, f"Selected {scope_name} for '{mat_name}'")
         return {'FINISHED'}
@@ -209,12 +244,13 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
         name="Deselection Scope",
         description="Which materials to deselect",
         items=[
-            ('CHECKED', "Checked", "Only the exact selected material"),
+            ('SELECTED', "Selected", "Only the exact selected material"),
             ('FULL', "Full", "Base + all constants (including nav points)"),
             ('CONSTANTS', "Constants", "Only constant materials (excludes base and nav points)"),
             ('NAV', "Nav Points", "Only navigation point constants"),
+            ('BASE_ONLY', "Base", "Only the base material (excludes constants)"),
         ],
-        default='CHECKED'
+        default='SELECTED'
     )
 
     @classmethod
@@ -223,7 +259,7 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
         return obj and obj.type == 'MESH' and context.mode == 'EDIT_MESH'
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=300)
+        return context.window_manager.invoke_props_dialog(self, width=400)
 
     def draw(self, context):
         self.layout.prop(self, "scope", expand=True)
@@ -236,49 +272,86 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
 
         mat_name = props.items[props.selected_index].name
         obj = context.active_object
-        const_dict = obj.get("constant_materials", {})
+        mat = bpy.data.materials.get(mat_name)
+        if not mat:
+            return {'CANCELLED'}
 
         material_names = set()
 
-        if self.scope == 'CHECKED':
+        if self.scope == 'SELECTED':
             material_names.add(mat_name)
-        elif mat_name in const_dict:
-            base_name = const_dict[mat_name].get("original_material")
-            if base_name:
-                if self.scope == 'FULL':
-                    material_names.add(base_name)
-                for cname, cinfo in const_dict.items():
-                    if cinfo.get("original_material") == base_name:
-                        is_nav = cinfo.get("is_navigation_point", False)
-                        if self.scope == 'FULL':
-                            material_names.add(cname)
-                        elif self.scope == 'CONSTANTS' and not is_nav:
-                            material_names.add(cname)
-                        elif self.scope == 'NAV' and is_nav:
-                            material_names.add(cname)
-        else:
-            base_name = mat_name
-            has_constants = any(cinfo.get("original_material") == base_name for cinfo in const_dict.values())
-            if has_constants:
-                if self.scope == 'FULL':
-                    material_names.add(base_name)
-                for cname, cinfo in const_dict.items():
-                    if cinfo.get("original_material") == base_name:
-                        is_nav = cinfo.get("is_navigation_point", False)
-                        if self.scope == 'FULL':
-                            material_names.add(cname)
-                        elif self.scope == 'CONSTANTS' and not is_nav:
-                            material_names.add(cname)
-                        elif self.scope == 'NAV' and is_nav:
-                            material_names.add(cname)
+
+        elif self.scope == 'FULL':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    material_names.add(base)
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            material_names.add(m.name)
+                else:
+                    material_names.add(mat_name)
+            else:
+                material_names.add(mat_name)
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        material_names.add(m.name)
+
+        elif self.scope == 'CONSTANTS':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            if not m.get("ctr_is_navigation_point", False):
+                                material_names.add(m.name)
+                else:
+                    if not mat.get("ctr_is_navigation_point", False):
+                        material_names.add(mat.name)
+            else:
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        if not m.get("ctr_is_navigation_point", False):
+                            material_names.add(m.name)
+
+        elif self.scope == 'NAV':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.get("ctr_original_material") == base:
+                            if m.get("ctr_is_navigation_point", False):
+                                material_names.add(m.name)
+                else:
+                    if mat.get("ctr_is_navigation_point", False):
+                        material_names.add(mat.name)
+            else:
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if m and m.get("ctr_original_material") == mat_name:
+                        if m.get("ctr_is_navigation_point", False):
+                            material_names.add(m.name)
+
+        elif self.scope == 'BASE_ONLY':
+            if mat.get("ctr_block_type") is not None:
+                base = mat.get("ctr_original_material")
+                if base:
+                    material_names.add(base)
+                else:
+                    material_names.add(mat_name)
             else:
                 material_names.add(mat_name)
 
         mat_indices = set()
         for mname in material_names:
-            mat = bpy.data.materials.get(mname)
-            if mat and mat.name in obj.data.materials:
-                mat_indices.add(obj.data.materials.find(mat.name))
+            m = bpy.data.materials.get(mname)
+            if m and m.name in obj.data.materials:
+                mat_indices.add(obj.data.materials.find(m.name))
 
         if not mat_indices:
             return {'CANCELLED'}
@@ -290,10 +363,11 @@ class MATERIAL_OT_DeselectByMaterial(Operator):
         bmesh.update_edit_mesh(obj.data)
 
         scope_name = {
-            'CHECKED': 'checked material only',
+            'SELECTED': 'selected material only',
             'FULL': 'full family',
             'CONSTANTS': 'constants only',
-            'NAV': 'nav points only'
+            'NAV': 'nav points only',
+            'BASE_ONLY': 'base only'
         }[self.scope]
         self.report({'INFO'}, f"Deselected {scope_name} for '{mat_name}'")
         return {'FINISHED'}

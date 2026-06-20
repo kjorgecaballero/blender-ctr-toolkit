@@ -1,13 +1,11 @@
 """
 Sort and Filter Operators for Quadblock/Triblock List
-Each issue filter has its own operator for custom tooltips.
 """
 
 import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty
-
-from ..qb_tb_list.list_multi_selection import _get_filtered_display_items
+from .list_multi_selection import _get_filtered_display_items
 
 ITEMS_PER_PAGE = 10
 
@@ -21,21 +19,17 @@ def _adjust_scroll_to_checked(context, obj, scene):
     if not checked_names:
         return
 
-    # Get the current list of visible items (respects filters, search, etc.)
     items = _get_filtered_display_items(context, obj, scene)
     if not items:
         return
 
-    # Sort items according to current sort settings (same logic as in list_panel)
     reverse_type = (scene.list_sort_type_direction == 'DESC')
     reverse_name = (scene.list_sort_name_direction == 'DESC')
 
     def sort_key(item):
-        # Primary sort: block type (QB first or TB first)
         type_order = 0 if item['block_type'] == 'quadblock' else 1
         if reverse_type:
             type_order = 1 - type_order
-        # Secondary: name
         name_key = item['name'].lower()
         return (type_order, name_key)
 
@@ -43,7 +37,6 @@ def _adjust_scroll_to_checked(context, obj, scene):
     if reverse_name:
         items.reverse()
 
-    # Find first checked item in the sorted list
     target_index = -1
     for idx, it in enumerate(items):
         if it['name'] in checked_names:
@@ -53,16 +46,13 @@ def _adjust_scroll_to_checked(context, obj, scene):
     if target_index == -1:
         return
 
-    # Calculate page start index
     page_start = (target_index // ITEMS_PER_PAGE) * ITEMS_PER_PAGE
     max_scroll = max(0, len(items) - ITEMS_PER_PAGE)
     new_scroll = min(page_start, max_scroll)
 
-    # Apply new scroll and list index
     scene.list_vertical_scroll = new_scroll
     scene.list_list_index = target_index
 
-    # Force UI redraw
     for area in context.screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()
@@ -77,9 +67,7 @@ class LIST_OT_ToggleSortName(Operator):
     def execute(self, context):
         scene = context.scene
         obj = context.edit_object
-        # Flip direction
         scene.list_sort_name_direction = 'DESC' if scene.list_sort_name_direction == 'ASC' else 'ASC'
-        # Adjust scroll to keep checked items visible
         if obj:
             _adjust_scroll_to_checked(context, obj, scene)
         return {'FINISHED'}
@@ -94,9 +82,7 @@ class LIST_OT_ToggleSortType(Operator):
     def execute(self, context):
         scene = context.scene
         obj = context.edit_object
-        # Flip direction
         scene.list_sort_type_direction = 'DESC' if scene.list_sort_type_direction == 'ASC' else 'ASC'
-        # Adjust scroll to keep checked items visible
         if obj:
             _adjust_scroll_to_checked(context, obj, scene)
         return {'FINISHED'}
@@ -118,8 +104,6 @@ class LIST_OT_SetMaterialFilter(Operator):
             scene.list_material_filter_cm = self.material_name
         return {'FINISHED'}
 
-
-# Individual Issue Filter Operators
 
 class LIST_OT_SetIssueFilterAll(Operator):
     bl_idname = "list.set_issue_filter_all"
@@ -146,7 +130,7 @@ class LIST_OT_SetIssueFilterValid(Operator):
 class LIST_OT_SetIssueFilterInvalid(Operator):
     bl_idname = "list.set_issue_filter_invalid"
     bl_label = "Invalid"
-    bl_description = "Show any block that has at least one issue (geometry, UVs, out of range, etc.)"
+    bl_description = "Show any block that has at least one issue"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -179,7 +163,7 @@ class LIST_OT_SetIssueFilterInvalidUVs(Operator):
 class LIST_OT_SetIssueFilterInvalidTriblockUVs(Operator):
     bl_idname = "list.set_issue_filter_invalid_triblock_uvs"
     bl_label = "Invalid Triblock UVs"
-    bl_description = "Show triblocks where the UV layout does not follow the expected pattern (adjacent triangles share UVs)"
+    bl_description = "Show triblocks where the UV layout does not follow the expected pattern"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -212,7 +196,7 @@ class LIST_OT_SetIssueFilterMissingUVs(Operator):
 class LIST_OT_SetIssueFilterOutOfRange(Operator):
     bl_idname = "list.set_issue_filter_out_of_range"
     bl_label = "Out of Range"
-    bl_description = "Show blocks that have vertices outside the defined Range Box (global bounds)"
+    bl_description = "Show blocks that have vertices outside the defined Range Box"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -231,7 +215,6 @@ class LIST_OT_SetIssueFilterMultipleMaterials(Operator):
         return {'FINISHED'}
 
 
-# All operator classes to register
 classes = [
     LIST_OT_ToggleSortName,
     LIST_OT_ToggleSortType,
