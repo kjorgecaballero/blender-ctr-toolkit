@@ -210,20 +210,21 @@ def restore_original_objects(context, joined_obj, nav_data, original_names, coll
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='DESELECT')
 
-        # Use bmesh to select faces by material index
+        # Use bmesh to select faces by material index (SAFE VERSION)
         bm = bmesh.from_edit_mesh(joined_obj.data)
         bm.faces.ensure_lookup_table()
+
+        # Count selected faces (no references stored)
+        selected_count = 0
         for face in bm.faces:
             if face.material_index in material_indices:
                 face.select = True
-        bmesh.update_edit_mesh(joined_obj.data)
-        bm.free()
+                selected_count += 1
 
-        # Check if we have any selection
-        bm = bmesh.from_edit_mesh(joined_obj.data)
-        selected_faces = [f for f in bm.faces if f.select]
-        bm.free()
-        if not selected_faces:
+        bmesh.update_edit_mesh(joined_obj.data)
+        bm.free()   # Release immediately after updating
+
+        if selected_count == 0:
             print(f"  No faces selected for {obj_name}, skipping separation.")
             continue
 
@@ -231,7 +232,6 @@ def restore_original_objects(context, joined_obj, nav_data, original_names, coll
         bpy.ops.mesh.select_linked()
 
         # Record objects selected BEFORE separation
-        # (In edit mode, the joined_obj is the only selected object)
         selected_before = set(context.selected_objects)
 
         # Separate selected faces
@@ -251,25 +251,48 @@ def restore_original_objects(context, joined_obj, nav_data, original_names, coll
 
         if new_obj:
             new_obj.name = obj_name
-            # RESTORE ORIGINAL COLLECTIONS
+
+            # COLLECTION RESTORATION
+            # Get the original collection names for this object
             coll_names = collections_data.get(obj_name, [])
-            if coll_names:
+
+            # Safety fallback: if no original collection is found, use the root collection
+            if not coll_names:
+                coll_names = [context.scene.collection.name]
+
+            # Get current collections the object belongs to
+            current_coll_names = {coll.name for coll in new_obj.users_collection}
+
+            # Only perform the move if the object is NOT already in the exact target collections
+            if set(coll_names) != current_coll_names:
                 # Unlink from all current collections
                 for coll in list(new_obj.users_collection):
                     coll.objects.unlink(new_obj)
-                # Link to original collections
+
+                # Link to the original collections
+                linked_to_any = False
                 for coll_name in coll_names:
                     if coll_name in bpy.data.collections:
                         bpy.data.collections[coll_name].objects.link(new_obj)
-                print(f"  Restored object: {obj_name} (collections: {coll_names})")
+                        linked_to_any = True
+
+                # If none of the target collections exist (e.g., renamed/deleted), fallback to root
+                if not linked_to_any:
+                    context.scene.collection.objects.link(new_obj)
             else:
-                print(f"  Restored object: {obj_name} (no original collections, staying in current)")
+                pass
+
+            print(f"  Restored object: {obj_name} (collections: {coll_names})")
             restored_objects.append(new_obj)
         else:
             print(f"  Failed to separate object for {obj_name}")
 
         # Deselect all and re-select joined object for next iteration
         bpy.ops.object.select_all(action='DESELECT')
+        # Verify that joined_obj still exists
+        if joined_obj.name not in bpy.data.objects:
+            print(f"  Joined object '{joined_obj.name}' no longer exists. Stopping restoration.")
+            break
         joined_obj.select_set(True)
         context.view_layer.objects.active = joined_obj
 
@@ -279,13 +302,16 @@ def restore_original_objects(context, joined_obj, nav_data, original_names, coll
     print(f"\nRestored {len(restored_objects)} objects.")
     print("="*60 + "\n")
 
-    # AUTO-DELETE JOINED OBJECT IF EMPTY
-    if joined_obj.data.polygons:
-        print(f"Joined object '{joined_obj.name}' still has {len(joined_obj.data.polygons)} faces. "
-              f"These faces do not belong to any navigation point and were not restored. Keeping it.")
+    # AUTO-DELETE JOINED OBJECT IF EMPTY (with existence check)
+    if joined_obj.name in bpy.data.objects:
+        if joined_obj.data.polygons:
+            print(f"Joined object '{joined_obj.name}' still has {len(joined_obj.data.polygons)} faces. "
+                  f"These faces do not belong to any navigation point and were not restored. Keeping it.")
+        else:
+            print(f"Joined object '{joined_obj.name}' is now empty. Deleting it automatically.")
+            bpy.data.objects.remove(joined_obj, do_unlink=True)
+            print(f"  Removed empty joined object.")
     else:
-        print(f"Joined object '{joined_obj.name}' is now empty. Deleting it automatically.")
-        bpy.data.objects.remove(joined_obj, do_unlink=True)
-        print(f"  Removed empty joined object.")
+        print(f"Joined object '{joined_obj.name}' has already been removed.")
 
     return restored_objects
