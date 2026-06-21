@@ -34,7 +34,8 @@ class ExportSettings:
         self.folder_behavior = 'SUFFIX'
         self.folder_name = ""
         self.allow_out_of_range = False
-        self.export_details = False   # export JSON details
+        self.export_details = False
+        self.multi_object = False
         
     @classmethod
     def from_operator(cls, operator):
@@ -68,6 +69,7 @@ class ExportSettings:
         settings.folder_behavior = operator.folder_behavior
         settings.allow_out_of_range = operator.allow_out_of_range
         settings.export_details = getattr(operator, 'export_details', False)
+        settings.multi_object = getattr(operator, 'export_multi_object', False)
         return settings
     
     @classmethod
@@ -101,6 +103,7 @@ class ExportSettings:
         settings.folder_behavior = context.scene.folder_behavior
         settings.allow_out_of_range = context.scene.allow_out_of_range
         settings.export_details = getattr(context.scene, 'export_details', False)
+        settings.multi_object = getattr(context.scene, 'export_multi_object', False)
         return settings
 
 class ExportStats:

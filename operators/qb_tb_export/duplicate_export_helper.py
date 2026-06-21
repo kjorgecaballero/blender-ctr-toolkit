@@ -1,6 +1,6 @@
 """
 Duplicate export helper for QB/TB export operations.
-Provides reusable functions for exporting duplicates and processed blocks.
+Functions for exporting duplicates and processed blocks.
 """
 
 import bpy
@@ -16,6 +16,10 @@ from ...utils.export_helpers import (
     get_vertex_snap_modifiers,
     disable_vertex_snap_modifiers,
     restore_vertex_snap_modifiers,
+)
+from ...utils.compat import (
+    ensure_objects_in_view_layer,
+    cleanup_temporarily_linked_objects,
 )
 
 
@@ -38,7 +42,30 @@ class DuplicateExportHelper:
         return None
 
     @staticmethod
-    def export_duplicates_only(context, export_paths, report_func=None):
+    def _get_objects_to_process(context, use_selection):
+        """
+        Return the list of mesh objects that should be processed based on use_selection,
+        but only if they are visible and in the view layer.
+        """
+        if use_selection:
+            candidates = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        else:
+            candidates = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+
+        # Filter out objects not in view layer or not visible
+        valid = []
+        for obj in candidates:
+            if obj.name not in context.view_layer.objects:
+                continue
+            if not obj.visible_get():
+                continue
+            if obj.hide_select or obj.hide_viewport:
+                continue
+            valid.append(obj)
+        return valid
+
+    @staticmethod
+    def export_duplicates_only(context, export_paths, report_func=None, multi_object=False, use_selection=False):
         """
         Export only duplicates (no final processed OBJ).
 
@@ -46,6 +73,8 @@ class DuplicateExportHelper:
             context: Blender context
             export_paths: Dictionary with paths from ExportManager.prepare_export_paths()
             report_func: Optional function to report messages (e.g., self.report)
+            multi_object: If True, process all selected objects together (joins them temporarily)
+            use_selection: If True, only process selected objects (only meaningful when multi_object=True)
 
         Returns:
             tuple: (duplicates_dir, main_texture_dir) or (None, None) on failure
@@ -54,10 +83,63 @@ class DuplicateExportHelper:
         duplicates_dir = os.path.join(base_dir, "duplicates")
         os.makedirs(duplicates_dir, exist_ok=True)
 
+        # If multi_object is True, we need to restrict processing to visible/selectable objects
+        # by temporarily hiding others. We do this by setting hide_viewport on non-target objects.
+        visibility_states = {}
+        if multi_object:
+            objects_to_process = DuplicateExportHelper._get_objects_to_process(context, use_selection)
+            # Hide all mesh objects that are NOT in the processing list
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    visibility_states[obj.name] = obj.hide_viewport
+                    if obj not in objects_to_process:
+                        obj.hide_viewport = True
+                    else:
+                        obj.hide_viewport = False
+            context.view_layer.update()
+
         block_obj = DuplicateExportHelper._find_block_object(context)
         if not block_obj:
             if report_func:
                 report_func({'WARNING'}, "No object with block data found. Run 'Find Blocks' first.")
+            # Restore visibility if changed
+            if multi_object:
+                for name, state in visibility_states.items():
+                    if name in bpy.data.objects:
+                        bpy.data.objects[name].hide_viewport = state
+                context.view_layer.update()
+            return None, None
+
+        # Store the name of the block object (in case it gets deleted)
+        block_obj_name = block_obj.name
+
+        # Store original visibility states
+        original_hide_viewport = block_obj.hide_viewport
+        original_hide = block_obj.hide_get()
+
+        # Ensure the object is in the view layer
+        temporarily_linked = ensure_objects_in_view_layer([block_obj], context)
+
+        # Make it visible if it was hidden
+        if block_obj.hide_viewport or block_obj.hide_get():
+            block_obj.hide_viewport = False
+            block_obj.hide_set(False)
+            context.view_layer.update()
+
+        # Verify that the object is now visible and selectable
+        if not block_obj.visible_get() or block_obj.name not in context.view_layer.objects:
+            if report_func:
+                report_func({'ERROR'}, f"Object '{block_obj.name}' cannot be made visible or is not in the view layer.")
+            # Restore visibility and cleanup
+            if block_obj.name in bpy.data.objects:
+                block_obj.hide_viewport = original_hide_viewport
+                block_obj.hide_set(original_hide)
+            cleanup_temporarily_linked_objects(temporarily_linked, context)
+            if multi_object:
+                for name, state in visibility_states.items():
+                    if name in bpy.data.objects:
+                        bpy.data.objects[name].hide_viewport = state
+                context.view_layer.update()
             return None, None
 
         original_mode = context.mode
@@ -69,13 +151,21 @@ class DuplicateExportHelper:
             except:
                 pass
 
+        # Select and activate the block object
         context.view_layer.objects.active = block_obj
         block_obj.select_set(True)
+
+        # Now try to enter edit mode
         try:
             bpy.ops.object.mode_set(mode='EDIT')
         except Exception as e:
             if report_func:
                 report_func({'ERROR'}, f"Failed to switch to EDIT mode: {e}")
+            # Restore original visibility and cleanup
+            if block_obj.name in bpy.data.objects:
+                block_obj.hide_viewport = original_hide_viewport
+                block_obj.hide_set(original_hide)
+            cleanup_temporarily_linked_objects(temporarily_linked, context)
             if original_active_name and original_active_name in bpy.data.objects:
                 context.view_layer.objects.active = bpy.data.objects[original_active_name]
             if original_mode != 'OBJECT' and original_mode != context.mode:
@@ -83,10 +173,20 @@ class DuplicateExportHelper:
                     bpy.ops.object.mode_set(mode=original_mode)
                 except:
                     pass
+            if multi_object:
+                for name, state in visibility_states.items():
+                    if name in bpy.data.objects:
+                        bpy.data.objects[name].hide_viewport = state
+                context.view_layer.update()
             return None, None
 
         try:
-            bpy.ops.navigator.duplicate_all_blocks_by_group('EXEC_DEFAULT', directory=base_dir)
+            # Pass multi_object flag to navigator; the navigator will respect visibility
+            bpy.ops.navigator.duplicate_all_blocks_by_group(
+                'EXEC_DEFAULT',
+                directory=base_dir,
+                multiple_objects=multi_object
+            )
         except Exception as e:
             if report_func:
                 report_func({'ERROR'}, f"Duplication operator failed: {e}")
@@ -94,6 +194,11 @@ class DuplicateExportHelper:
                 bpy.ops.object.mode_set(mode='OBJECT')
             except:
                 pass
+            # Restore original visibility and cleanup
+            if block_obj.name in bpy.data.objects:
+                block_obj.hide_viewport = original_hide_viewport
+                block_obj.hide_set(original_hide)
+            cleanup_temporarily_linked_objects(temporarily_linked, context)
             if original_active_name and original_active_name in bpy.data.objects:
                 context.view_layer.objects.active = bpy.data.objects[original_active_name]
             if original_mode != 'OBJECT' and original_mode != context.mode:
@@ -101,6 +206,11 @@ class DuplicateExportHelper:
                     bpy.ops.object.mode_set(mode=original_mode)
                 except:
                     pass
+            if multi_object:
+                for name, state in visibility_states.items():
+                    if name in bpy.data.objects:
+                        bpy.data.objects[name].hide_viewport = state
+                context.view_layer.update()
             return None, None
 
         if report_func:
@@ -110,6 +220,19 @@ class DuplicateExportHelper:
             bpy.ops.object.mode_set(mode='OBJECT')
         except:
             pass
+
+        # Restore original visibility and cleanup
+        # Use the stored name to check if the object still exists
+        if block_obj_name in bpy.data.objects:
+            block_obj_restore = bpy.data.objects[block_obj_name]
+            block_obj_restore.hide_viewport = original_hide_viewport
+            block_obj_restore.hide_set(original_hide)
+        else:
+            # The object was deleted; just clean up temporary links and continue
+            pass
+
+        cleanup_temporarily_linked_objects(temporarily_linked, context)
+
         if original_active_name and original_active_name in bpy.data.objects:
             context.view_layer.objects.active = bpy.data.objects[original_active_name]
         if original_mode != 'OBJECT' and original_mode != context.mode:
@@ -117,6 +240,13 @@ class DuplicateExportHelper:
                 bpy.ops.object.mode_set(mode=original_mode)
             except:
                 pass
+
+        # Restore visibility for multi_object mode
+        if multi_object:
+            for name, state in visibility_states.items():
+                if name in bpy.data.objects:
+                    bpy.data.objects[name].hide_viewport = state
+            context.view_layer.update()
 
         return duplicates_dir, export_paths.get('texture_dir')
 
@@ -136,9 +266,11 @@ class DuplicateExportHelper:
         """
         texture_remapper = None
         try:
-            # Step 1: export duplicates
+            # Step 1: export duplicates (pass multi_object and use_selection)
             duplicates_dir, main_texture_dir = DuplicateExportHelper.export_duplicates_only(
-                context, export_paths, report_func
+                context, export_paths, report_func,
+                multi_object=settings.multi_object,
+                use_selection=settings.use_selection
             )
             if duplicates_dir is None:
                 return False
@@ -168,17 +300,22 @@ class DuplicateExportHelper:
             proc_settings.path_mode = settings.path_mode
             proc_settings.allow_out_of_range = settings.allow_out_of_range
             proc_settings.export_details = settings.export_details
+            proc_settings.multi_object = False 
 
-            # Get processed objects from the dedicated collection
+            # Get processed objects from the dedicated collection, but only those visible/selectable
             processed_collection = bpy.data.collections.get("Processed_Blocks")
             if not processed_collection:
                 if report_func:
                     report_func({'WARNING'}, "No Processed_Blocks collection found.")
                 return False
-            processed_objs = [obj for obj in processed_collection.objects if obj.type == 'MESH']
+            processed_objs = []
+            for obj in processed_collection.objects:
+                if obj.type == 'MESH':
+                    if obj.name in context.view_layer.objects and obj.visible_get() and not obj.hide_select:
+                        processed_objs.append(obj)
             if not processed_objs:
                 if report_func:
-                    report_func({'WARNING'}, "No mesh objects in Processed_Blocks.")
+                    report_func({'WARNING'}, "No visible/selectable mesh objects in Processed_Blocks.")
                 return False
 
             # Disable PS1 render and vertex snap modifiers temporarily
@@ -218,14 +355,7 @@ class DuplicateExportHelper:
                 old_sel_names = [obj.name for obj in context.selected_objects if obj.name in bpy.data.objects]
                 old_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else None
 
-                # Select valid objects for export
-                for ob in bpy.data.objects:
-                    ob.select_set(False)
-                for obj in valid_objs:
-                    obj.select_set(True)
-                if valid_objs:
-                    context.view_layer.objects.active = valid_objs[0]
-
+                # prepare_export_operation will handle selection and view‑layer assurance
                 manager.prepare_export_operation(valid_objs)
                 export_result = manager.execute_export(proc_settings, valid_objs)
 

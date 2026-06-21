@@ -163,6 +163,12 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         default=False,
     )
 
+    export_multi_object: BoolProperty(
+        name="Multi Object",
+        description="Process all selected objects together (joins them temporarily) when exporting duplicates",
+        default=False,
+    )
+
     global_scale: FloatProperty(
         name="Scale",
         description="Global export scale (forced to 1.0)",
@@ -209,6 +215,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         box.prop(self, "export_duplicates", text="Export Duplicates")
         if self.export_duplicates:
             box.prop(self, "export_processed_duplicates", text="Export Processed")
+            box.prop(self, "export_multi_object", text="Multi Object")
 
         # Output
         box = layout.box()
@@ -248,6 +255,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         self.export_details = context.scene.export_details
         self.export_multiple_materials = context.scene.export_multiple_materials
         self.export_missing_uvs = context.scene.export_missing_uvs
+        self.export_multi_object = context.scene.export_multi_object
         return super().invoke(context, event)
 
     def _save_export_settings(self, context):
@@ -272,6 +280,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         context.scene.allow_out_of_range = self.allow_out_of_range
         context.scene.export_duplicates = self.export_duplicates
         context.scene.export_processed_duplicates = self.export_processed_duplicates
+        context.scene.export_multi_object = self.export_multi_object
 
     def execute(self, context):
         if not self.export_quadblocks and not self.export_triblocks:
@@ -297,7 +306,7 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
                 return {'CANCELLED'}
 
         elif self.export_duplicates and not self.export_processed_duplicates:
-            DuplicateExportHelper.export_duplicates_only(context, export_paths, report_func=self.report)
+            DuplicateExportHelper.export_duplicates_only(context, export_paths, report_func=self.report, multi_object=self.export_multi_object)
             self.report({'INFO'}, "Duplicates exported (no final OBJ saved).")
             return {'FINISHED'}
 

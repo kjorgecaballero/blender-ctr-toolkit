@@ -1,7 +1,6 @@
 """
 QB/TB Duplication Operators
 Operators for duplicating blocks by group
-Export to OBJ and re-import functionality for optimized performance.
 """
 
 import bpy
@@ -10,7 +9,12 @@ import os
 import re
 
 from ...utils import qb_tb_navigator
-from ...utils.compat import execute_obj_export, execute_obj_import
+from ...utils.compat import (
+    execute_obj_export,
+    execute_obj_import,
+    ensure_objects_in_view_layer,
+    cleanup_temporarily_linked_objects
+)
 from ..qb_tb_export.export_manager import ExportManager
 from ..qb_tb_export.export_settings import ExportSettings
 from ..qb_tb_export.texture_handler import TextureHandler
@@ -52,53 +56,62 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
     original_active = context.view_layer.objects.active
     original_selection = context.selected_objects[:]
 
-    for ob in bpy.data.objects:
-        ob.select_set(False)
-    for obj in objects:
-        obj.select_set(True)
-    if objects:
-        context.view_layer.objects.active = objects[0]
+    # Ensure all objects are in the view layer (Blender 5.0)
+    temporarily_linked = ensure_objects_in_view_layer(objects, context)
 
-    class TempExportProps:
-        def __init__(self):
-            self.filepath = obj_filepath
-            self.use_selection = True
-            self.export_colors = settings.export_colors
-            self.export_textures = settings.include_textures
-            self.path_mode = settings.path_mode
-            self.global_scale = settings.global_scale
-            self.export_quadblocks = True
-            self.export_triblocks = True
-            self.export_invalid_uvs = True
-            self.export_degenerated_uvs = True
-            self.apply_modifiers = False
-            self.separate_loose_parts = False
-
-    temp_props = TempExportProps()
-
-    if settings.include_textures and texture_dir:
-        try:
-            os.makedirs(texture_dir, exist_ok=True)
-            texture_handler = TextureHandler()
-            texture_handler.copy_textures_to_folder(texture_dir, objects)
-        except Exception as e:
-            print(f"Error copying textures: {e}")
-
-    result = execute_obj_export(temp_props, objects)
-
-    for ob in bpy.data.objects:
-        ob.select_set(False)
-    for obj in original_selection:
-        if obj.name in bpy.data.objects:
+    try:
+        for ob in bpy.data.objects:
+            ob.select_set(False)
+        for obj in objects:
             obj.select_set(True)
-    if original_active and original_active.name in bpy.data.objects:
-        context.view_layer.objects.active = original_active
+        if objects:
+            context.view_layer.objects.active = objects[0]
 
-    if previous_mode != 'OBJECT' and previous_mode is not None:
-        try:
-            bpy.ops.object.mode_set(mode=previous_mode)
-        except:
-            pass
+        class TempExportProps:
+            def __init__(self):
+                self.filepath = obj_filepath
+                self.use_selection = True
+                self.export_colors = settings.export_colors
+                self.export_textures = settings.include_textures
+                self.path_mode = settings.path_mode
+                self.global_scale = settings.global_scale
+                self.export_quadblocks = True
+                self.export_triblocks = True
+                self.export_invalid_uvs = True
+                self.export_degenerated_uvs = True
+                self.apply_modifiers = False
+                self.separate_loose_parts = False
+
+        temp_props = TempExportProps()
+
+        if settings.include_textures and texture_dir:
+            try:
+                os.makedirs(texture_dir, exist_ok=True)
+                texture_handler = TextureHandler()
+                texture_handler.copy_textures_to_folder(texture_dir, objects)
+            except Exception as e:
+                print(f"Error copying textures: {e}")
+
+        result = execute_obj_export(temp_props, objects)
+
+    finally:
+        # Clean up temporary view‑layer links
+        cleanup_temporarily_linked_objects(temporarily_linked, context)
+
+        # Restore selection and active object
+        for ob in bpy.data.objects:
+            ob.select_set(False)
+        for obj in original_selection:
+            if obj.name in bpy.data.objects:
+                obj.select_set(True)
+        if original_active and original_active.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active
+
+        if previous_mode != 'OBJECT' and previous_mode is not None:
+            try:
+                bpy.ops.object.mode_set(mode=previous_mode)
+            except:
+                pass
 
     return 'FINISHED' in result
 
@@ -478,7 +491,7 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 source_obj["joined_original_objects"] = original_names
                 source_obj["joined_nav_data"] = nav_data
                 source_obj["joined_original_collections"] = collections_data
-                source_obj["joined_result_name"] = source_obj.name  # now with "_joined" suffix
+                source_obj["joined_result_name"] = source_obj.name  # "_joined" suffix
 
                 print(f"\nJoined object: '{source_obj.name}'")
                 print(f"Original objects: {original_names}")
