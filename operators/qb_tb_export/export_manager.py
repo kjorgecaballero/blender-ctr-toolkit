@@ -25,6 +25,21 @@ class ExportManager:
         self.original_selection = []
         self.temp_filepath = None
     
+    def _get_base_export_path(self, context):
+        """
+        Determine the base export path from the last_export_path scene property.
+        If last_export_path is a .obj file, return its directory.
+        If it is a folder, return it directly.
+        Returns None if no valid last_export_path exists.
+        """
+        last = context.scene.last_export_path
+        if last and os.path.exists(last):
+            if last.lower().endswith('.obj'):
+                return os.path.dirname(last)
+            else:
+                return last
+        return None
+    
     def _try_create_project_folder(self, base_path, project_name, behavior='INCREMENTAL'):
         if behavior == 'REPLACE':
             folder_name = f"{project_name}_replace"
@@ -53,18 +68,6 @@ class ExportManager:
                         print(f"Error creating export subfolder {subfolder_path}: {e}")
                         continue
             return None
-    
-    def _get_base_export_path(self, context):
-        if context.scene.last_export_path and os.path.exists(context.scene.last_export_path):
-            last_path = context.scene.last_export_path
-            # If last_path is a .obj file, use its directory as base
-            if last_path.lower().endswith('.obj'):
-                return os.path.dirname(last_path)
-            else:
-                return last_path
-        elif context.scene.export_default_path:
-            return context.scene.export_default_path
-        return None
     
     def prepare_objects(self, settings):
         if not settings.export_quadblocks and not settings.export_triblocks:
