@@ -79,11 +79,21 @@ def update_derived_materials(obj, base_material_names, image, update_base_materi
 def is_constant_id_unique(obj, id_value, exclude_material=None):
     """
     Check if the ID (suffix after '_ID') is already used by another constant material
-    *on the same object*.
+    *on the same object*. exclude_material can be a Material object or its name.
     """
+    # Convert exclude_material to a Material object if it's a string
+    exclude_mat = None
+    if isinstance(exclude_material, str):
+        exclude_mat = bpy.data.materials.get(exclude_material)
+    elif isinstance(exclude_material, bpy.types.Material):
+        exclude_mat = exclude_material
+
     for slot in obj.material_slots:
         mat = slot.material
-        if not mat or mat == exclude_material:
+        if not mat:
+            continue
+        # Skip the excluded material (compare by object identity)
+        if exclude_mat and mat == exclude_mat:
             continue
         if "_ID" in mat.name:
             existing_id = mat.name.split('_ID', 1)[1]
@@ -207,6 +217,8 @@ def rename_base_material_family(obj, old_base_name, new_base_name):
                 return False, f"Constant name '{desired}' already exists."
             mat.name = desired
             updated += 1
+            # Ensure the block_id property is updated to match the new suffix
+            mat["ctr_block_id"] = suffix
         else:
             desired = new_base_name
             if desired in bpy.data.materials and desired != mat.name:

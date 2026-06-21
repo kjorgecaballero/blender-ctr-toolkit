@@ -96,10 +96,8 @@ class MATERIAL_OT_RenameMaterial(Operator):
             if new_base != current_base:
                 # Check if the new base name is available
                 if new_base in bpy.data.materials and new_base != current_base:
-                    # If the base material exists and it's not the current base,
-                    # we must ensure it's not used as a base by other constants (except ours)
                     # rename_base_material_family will handle conflicts.
-                    pass  # validation done inside the function
+                    pass
 
                 success, msg, updated = rename_base_material_family(obj, current_base, new_base)
                 if not success:
@@ -109,7 +107,6 @@ class MATERIAL_OT_RenameMaterial(Operator):
                 # We need to find the specific constant (which now has new_base_ID_old_id)
                 old_id = mat.get("ctr_block_id", "")
                 if not old_id:
-                    # If block_id not stored, try to extract from old name
                     if "_ID" in old_name:
                         old_id = old_name.split('_ID', 1)[1]
                     else:
@@ -124,14 +121,12 @@ class MATERIAL_OT_RenameMaterial(Operator):
                             break
                 if not const_mat:
                     self.report({'WARNING'}, "Could not locate the renamed constant after base rename")
-                    # But the base rename succeeded, so just finish
-                    self.report({'INFO'}, f"Base renamed to '{new_base}'")
                     context.scene.ctr_material_list._update_items(context)
                     return {'FINISHED'}
 
                 # Now if the ID also changed, rename that specific constant
                 if new_id != old_id:
-                    if not is_constant_id_unique(obj, new_id, exclude_material=const_mat.name):
+                    if not is_constant_id_unique(obj, new_id, exclude_material=const_mat):
                         self.report({'ERROR'}, f"ID '{new_id}' is already used by another constant on this object.")
                         return {'CANCELLED'}
                     new_const_name = f"{new_base}_ID{new_id}"
@@ -139,7 +134,7 @@ class MATERIAL_OT_RenameMaterial(Operator):
                     if not success:
                         self.report({'ERROR'}, msg)
                         return {'CANCELLED'}
-                    # Update its ctr_block_id to the new ID (if needed)
+                    # Update its ctr_block_id to the new ID
                     const_mat["ctr_block_id"] = new_id
                     self.report({'INFO'}, f"Base renamed to '{new_base}', constant renamed to '{new_const_name}'")
                 else:
@@ -153,7 +148,7 @@ class MATERIAL_OT_RenameMaterial(Operator):
                     self.report({'INFO'}, "No changes made")
                     return {'FINISHED'}
 
-                if not is_constant_id_unique(obj, new_id, exclude_material=old_name):
+                if not is_constant_id_unique(obj, new_id, exclude_material=mat):
                     self.report({'ERROR'}, f"ID '{new_id}' is already used by another constant on this object.")
                     return {'CANCELLED'}
 
