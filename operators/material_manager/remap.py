@@ -112,35 +112,48 @@ class MATERIAL_OT_RemapMaterial(Operator):
             self.report({'ERROR'}, "Please select an image")
             return {'CANCELLED'}
 
-        const_dict = obj.get("constant_materials", {}) if obj else {}
-        base_materials = set()
+        mat = bpy.data.materials.get(self.selected_mat_name)
+        if not mat:
+            self.report({'ERROR'}, f"Material '{self.selected_mat_name}' not found")
+            return {'CANCELLED'}
 
-        if self.selected_mat_name in const_dict:
-            base = const_dict[self.selected_mat_name].get("original_material", "")
+        # Determine the base material(s) to update
+        base_names = set()
+        if mat.get("ctr_block_type") is not None:
+            # It's a constant: get its base
+            base = mat.get("ctr_original_material", "")
             if base:
-                base_materials.add(base)
+                base_names.add(base)
+            else:
+                # Fallback: if no original base stored, use the material itself
+                base_names.add(self.selected_mat_name)
         else:
-            for info in const_dict.values():
-                if info.get("original_material") == self.selected_mat_name:
-                    base_materials.add(self.selected_mat_name)
+            # It's a normal material (possibly a base)
+            # Check if any constants reference it
+            has_constants = False
+            for m in bpy.data.materials:
+                if m.get("ctr_original_material") == self.selected_mat_name:
+                    has_constants = True
                     break
+            if has_constants:
+                base_names.add(self.selected_mat_name)
+            else:
+                # Just update this material
+                base_names.add(self.selected_mat_name)
 
         # Gather all material names that will be updated
         materials_to_update = []
-        if base_materials:
-            for base in base_materials:
-                materials_to_update.append(base)
-                for const_name, info in const_dict.items():
-                    if info.get("original_material") == base:
-                        materials_to_update.append(const_name)
-        else:
-            materials_to_update.append(self.selected_mat_name)
+        for base in base_names:
+            materials_to_update.append(base)
+            for m in bpy.data.materials:
+                if m.get("ctr_original_material") == base:
+                    materials_to_update.append(m.name)
 
         # Check if any material lacks a texture node
         need_node_creation = False
         for mat_name in materials_to_update:
-            mat = bpy.data.materials.get(mat_name)
-            if not material_has_texture_node(mat):
+            m = bpy.data.materials.get(mat_name)
+            if not material_has_texture_node(m):
                 need_node_creation = True
                 break
 
@@ -152,18 +165,15 @@ class MATERIAL_OT_RemapMaterial(Operator):
             ps1_was_disabled = True
 
         try:
-            if base_materials:
+            if base_names:
                 updated = update_derived_materials(
-                    obj, list(base_materials), new_image,
+                    obj, list(base_names), new_image,
                     update_base_material=True,
                     ensure_node_callback=ensure_texture_node
                 )
                 self.report({'INFO'}, f"Remapped {updated} materials (base + constants)")
             else:
-                mat = bpy.data.materials.get(self.selected_mat_name)
-                if not mat:
-                    self.report({'ERROR'}, f"Material '{self.selected_mat_name}' not found")
-                    return {'CANCELLED'}
+                # Fallback: just update the selected material
                 ensure_texture_node(mat, new_image)
                 self.report({'INFO'}, f"Remapped texture for '{mat.name}'")
         finally:
@@ -212,35 +222,41 @@ class MATERIAL_OT_RemapFromFile(Operator, ImportHelper):
             return {'CANCELLED'}
         selected_mat_name = props.items[props.selected_index].name
         obj = context.active_object
-        const_dict = obj.get("constant_materials", {}) if obj else {}
+        mat = bpy.data.materials.get(selected_mat_name)
+        if not mat:
+            self.report({'ERROR'}, f"Material '{selected_mat_name}' not found")
+            return {'CANCELLED'}
 
-        base_materials = set()
-        if selected_mat_name in const_dict:
-            base = const_dict[selected_mat_name].get("original_material", "")
+        # Determine base names as in the main operator
+        base_names = set()
+        if mat.get("ctr_block_type") is not None:
+            base = mat.get("ctr_original_material", "")
             if base:
-                base_materials.add(base)
+                base_names.add(base)
+            else:
+                base_names.add(selected_mat_name)
         else:
-            for info in const_dict.values():
-                if info.get("original_material") == selected_mat_name:
-                    base_materials.add(selected_mat_name)
+            has_constants = False
+            for m in bpy.data.materials:
+                if m.get("ctr_original_material") == selected_mat_name:
+                    has_constants = True
                     break
+            if has_constants:
+                base_names.add(selected_mat_name)
+            else:
+                base_names.add(selected_mat_name)
 
-        # Gather all material names that will be updated
         materials_to_update = []
-        if base_materials:
-            for base in base_materials:
-                materials_to_update.append(base)
-                for const_name, info in const_dict.items():
-                    if info.get("original_material") == base:
-                        materials_to_update.append(const_name)
-        else:
-            materials_to_update.append(selected_mat_name)
+        for base in base_names:
+            materials_to_update.append(base)
+            for m in bpy.data.materials:
+                if m.get("ctr_original_material") == base:
+                    materials_to_update.append(m.name)
 
-        # Check if any material lacks a texture node
         need_node_creation = False
         for mat_name in materials_to_update:
-            mat = bpy.data.materials.get(mat_name)
-            if not material_has_texture_node(mat):
+            m = bpy.data.materials.get(mat_name)
+            if not material_has_texture_node(m):
                 need_node_creation = True
                 break
 
@@ -251,18 +267,14 @@ class MATERIAL_OT_RemapFromFile(Operator, ImportHelper):
             ps1_was_disabled = True
 
         try:
-            if base_materials:
+            if base_names:
                 updated = update_derived_materials(
-                    obj, list(base_materials), image,
+                    obj, list(base_names), image,
                     update_base_material=True,
                     ensure_node_callback=ensure_texture_node
                 )
                 self.report({'INFO'}, f"Remapped {updated} materials")
             else:
-                mat = bpy.data.materials.get(selected_mat_name)
-                if not mat:
-                    self.report({'ERROR'}, f"Material '{selected_mat_name}' not found")
-                    return {'CANCELLED'}
                 ensure_texture_node(mat, image)
                 self.report({'INFO'}, f"Remapped texture for '{mat.name}'")
         finally:

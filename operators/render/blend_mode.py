@@ -2,55 +2,7 @@ import bpy
 import bmesh
 from bpy.types import Operator
 from ...utils.render import verify_attribute_for_active_object, PS1MaterialFactory
-
-
-def expand_materials_by_scope(material_names, obj, scope):
-    """
-    Expand a set of material names based on the chosen scope.
-    """
-    if not obj or obj.type != 'MESH' or scope == 'SELECTED':
-        return set(material_names)
-
-    const_dict = obj.get("constant_materials", {})
-    if not const_dict:
-        return set(material_names)
-
-    base_to_constants = {}
-    for cname, cinfo in const_dict.items():
-        base = cinfo.get("original_material", "")
-        if base:
-            base_to_constants.setdefault(base, set()).add(cname)
-
-    result = set()
-    for mat_name in material_names:
-        if mat_name in const_dict:
-            base = const_dict[mat_name].get("original_material", "")
-            if not base:
-                result.add(mat_name)
-                continue
-            if scope == 'FAMILY':
-                result.add(base)
-                result.update(base_to_constants.get(base, set()))
-            elif scope == 'CONSTANTS_ONLY':
-                result.update(base_to_constants.get(base, set()))
-            elif scope == 'BASE_ONLY':
-                result.add(base)
-            else:
-                result.add(mat_name)
-        else:
-            if mat_name in base_to_constants:
-                if scope == 'FAMILY':
-                    result.add(mat_name)
-                    result.update(base_to_constants[mat_name])
-                elif scope == 'CONSTANTS_ONLY':
-                    result.update(base_to_constants[mat_name])
-                elif scope == 'BASE_ONLY':
-                    result.add(mat_name)
-                else:
-                    result.add(mat_name)
-            else:
-                result.add(mat_name)
-    return result
+from ...utils.material_utils import get_family_materials
 
 
 class ApplyBlendMode(Operator):
@@ -66,7 +18,7 @@ class ApplyBlendMode(Operator):
         obj = context.active_object
         scope = scene.blend_apply_scope
 
-        # Collect originally selected material names ----
+        # Collect originally selected material names
         selected_material_names = set()
 
         # Case 1: Edit Mode with active mesh object
@@ -119,8 +71,17 @@ class ApplyBlendMode(Operator):
                 self.report({'WARNING'}, "No materials selected. Select materials in Outliner, select objects with materials, or enter Edit Mode and select faces.")
                 return {'CANCELLED'}
 
-        # Expand according to chosen scope
-        final_names = expand_materials_by_scope(selected_material_names, obj, scope)
+        # Expand each selected material according to the chosen scope using get_family_materials
+        final_names = set()
+        for mat_name in selected_material_names:
+            mat = bpy.data.materials.get(mat_name)
+            if mat:
+                family = get_family_materials(mat, obj, scope)
+                final_names.update(family)
+
+        if not final_names:
+            self.report({'WARNING'}, "No materials to apply blend mode to.")
+            return {'CANCELLED'}
 
         # Apply blend mode
         applied_count = 0

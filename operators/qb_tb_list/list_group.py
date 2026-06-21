@@ -1,8 +1,5 @@
 """
 Group Management Operators for Constant Materials
-Single group dropdown, no checkboxes.
-Buttons: New Group, Delete Group, Add Checked Items, Remove Checked Items.
-OK button sets the active group filter.
 """
 
 import json
@@ -11,7 +8,6 @@ from bpy.types import Operator, PropertyGroup
 from bpy.props import StringProperty, CollectionProperty
 from ...icons import get_icon
 
-# Global variable to keep a reference to the active management dialog
 _active_management_dialog = None
 
 
@@ -20,8 +16,13 @@ def _get_checked_materials(context):
     if not obj or "multi_selected_items" not in obj:
         return []
     multi = dict(obj["multi_selected_items"])
-    const_dict = obj.get("constant_materials", {})
-    return [m for m in multi.keys() if m in const_dict]
+    # Verify that they are actually constant materials
+    result = []
+    for name in multi.keys():
+        mat = bpy.data.materials.get(name)
+        if mat and mat.get("ctr_block_type") is not None:
+            result.append(name)
+    return result
 
 
 class GroupItem(PropertyGroup):
@@ -61,9 +62,13 @@ class LIST_OT_GroupManagementDialog(Operator):
     @classmethod
     def poll(cls, context):
         obj = context.edit_object
-        return (obj is not None and
-                context.scene.list_display_type == 'CONSTANT_MATERIALS' and
-                obj.get("constant_materials"))
+        if not obj or context.scene.list_display_type != 'CONSTANT_MATERIALS':
+            return False
+        # Check if there is at least one constant material on the object
+        for slot in obj.material_slots:
+            if slot.material and slot.material.get("ctr_block_type") is not None:
+                return True
+        return False
 
     def invoke(self, context, event):
         global _active_management_dialog

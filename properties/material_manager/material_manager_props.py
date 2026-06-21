@@ -2,8 +2,6 @@ import bpy
 from bpy.props import StringProperty, IntProperty, EnumProperty, CollectionProperty
 from bpy.types import PropertyGroup
 
-from ...utils.material_utils import get_material_categories
-
 
 class CTR_MaterialListItem(PropertyGroup):
     name: StringProperty()
@@ -30,62 +28,59 @@ class CTR_MaterialListProps(PropertyGroup):
     scroll: IntProperty(default=0, min=0)
 
     def _update_items(self, context):
-        """Rebuild the items collection from current filter & search."""
+        """Rebuild the items collection from current filter & search,
+        using material custom properties (ctr_block_type, ctr_is_navigation_point)."""
         self.items.clear()
         obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.selected_index = -1
+            self.scroll = 0
+            return
+
         search = self.search_text.lower()
 
-        if self.filter_type == 'ALL':
-            normal, constant, nav_point = get_material_categories()
-            raw = normal | constant | nav_point
-            for name in sorted(raw):
-                if search and search not in name.lower():
-                    continue
-                item = self.items.add()
-                item.name = name
-        else:
-            if not obj or obj.type != 'MESH':
-                self.selected_index = -1
-                self.scroll = 0
-                return
+        # Build lists from material slots
+        normal_names = []
+        constant_names = []
+        nav_names = []
 
-            const_dict = obj.get("constant_materials", {})
-            normal_mats, constant_mats, nav_point_mats = [], [], []
-
-            for slot in obj.material_slots:
-                if not slot.material:
-                    continue
-                mat_name = slot.material.name
-                if mat_name in const_dict:
-                    if const_dict[mat_name].get("is_navigation_point", False):
-                        nav_point_mats.append(mat_name)
-                    else:
-                        constant_mats.append(mat_name)
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat:
+                continue
+            if mat.get("ctr_block_type") is not None:
+                if mat.get("ctr_is_navigation_point", False):
+                    nav_names.append(mat.name)
                 else:
-                    normal_mats.append(mat_name)
+                    constant_names.append(mat.name)
+            else:
+                normal_names.append(mat.name)
 
-            normal_mats = list(dict.fromkeys(normal_mats))
-            constant_mats = list(dict.fromkeys(constant_mats))
-            nav_point_mats = list(dict.fromkeys(nav_point_mats))
+        # Remove duplicates (just in case)
+        normal_names = list(dict.fromkeys(normal_names))
+        constant_names = list(dict.fromkeys(constant_names))
+        nav_names = list(dict.fromkeys(nav_names))
 
-            if self.filter_type == 'NORMAL':
-                raw = normal_mats
-            elif self.filter_type == 'CONSTANT':
-                raw = constant_mats
-            else:  # NAV_POINT
-                raw = nav_point_mats
+        if self.filter_type == 'ALL':
+            raw = normal_names + constant_names + nav_names
+        elif self.filter_type == 'NORMAL':
+            raw = normal_names
+        elif self.filter_type == 'CONSTANT':
+            raw = constant_names
+        else:  # NAV_POINT
+            raw = nav_names
 
-            for name in sorted(raw):
-                if search and search not in name.lower():
-                    continue
-                item = self.items.add()
-                item.name = name
+        for name in sorted(raw):
+            if search and search not in name.lower():
+                continue
+            item = self.items.add()
+            item.name = name
 
         self.selected_index = -1
         self.scroll = 0
 
 
-# Registration 
+# Registration
 classes = [CTR_MaterialListItem, CTR_MaterialListProps]
 
 

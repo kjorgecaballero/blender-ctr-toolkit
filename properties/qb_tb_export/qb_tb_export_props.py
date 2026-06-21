@@ -152,6 +152,12 @@ def register():
         description="After duplication, export the processed objects using current export settings (filters, folder, etc.)",
         default=False
     )
+    
+    bpy.types.Scene.export_multi_object = bpy.props.BoolProperty(
+        name="Multi Object",
+        description="Process all selected objects together (joins them temporarily) when exporting duplicates",
+        default=False,
+    )
 
 def unregister():
     del bpy.types.Scene.export_index
@@ -177,3 +183,4 @@ def unregister():
     del bpy.types.Scene.use_selection
     del bpy.types.Scene.export_duplicates
     del bpy.types.Scene.export_processed_duplicates
+    del bpy.types.Scene.export_multi_object

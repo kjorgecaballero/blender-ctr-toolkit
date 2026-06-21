@@ -1,6 +1,5 @@
 """
 Material Selection Menus for Quadblock/Triblock List
-Issue Filter Menu with individual operators.
 """
 
 import bpy
@@ -18,88 +17,58 @@ class LIST_MT_MaterialFilterMenu(bpy.types.Menu):
 
         if scene.list_display_type == 'VERTEX_GROUPS':
             current_filter = scene.list_material_filter_vg
-            menu_title = "Filter by Material (Vertex Groups)"
         else:
             current_filter = scene.list_material_filter_cm
-            menu_title = "Filter by Material (Const. Mat)"
 
         op = layout.operator("list.set_material_filter", text="All Materials", icon='MATERIAL')
         op.material_name = ""
 
         layout.separator()
 
-        if obj and scene.list_display_type in ['VERTEX_GROUPS', 'CONSTANT_MATERIALS']:
-            materials = set()
-            display_items = []
+        if not obj:
+            return
 
-            if scene.list_display_type == 'VERTEX_GROUPS':
-                for vg in obj.vertex_groups:
-                    vg_name = vg.name
-                    if vg_name.startswith("QB_") and scene.list_filter_show_qb:
-                        try:
-                            block_id = int(vg_name[3:])
-                            display_items.append({
-                                'type': 'vertex_group',
-                                'name': vg_name,
-                                'block_type': 'quadblock',
-                                'block_id': block_id,
-                                'data': vg
-                            })
-                        except ValueError:
-                            continue
-                    elif vg_name.startswith("TB_") and scene.list_filter_show_tb:
-                        try:
-                            block_id = int(vg_name[3:])
-                            display_items.append({
-                                'type': 'vertex_group',
-                                'name': vg_name,
-                                'block_type': 'triblock',
-                                'block_id': block_id,
-                                'data': vg
-                            })
-                        except ValueError:
-                            continue
+        materials = set()
 
-            elif scene.list_display_type == 'CONSTANT_MATERIALS':
-                if "constant_materials" in obj and obj["constant_materials"]:
-                    constant_materials = obj["constant_materials"]
-                    for mat_name, info in constant_materials.items():
-                        block_type = info.get("block_type", "")
-                        block_id = info.get("block_id", 0)
-                        if (block_type == "quadblock" and scene.list_filter_cm_qb) or \
-                           (block_type == "triblock" and scene.list_filter_cm_tb):
-                            display_items.append({
-                                'type': 'constant_material',
-                                'name': mat_name,
-                                'block_type': block_type,
-                                'block_id': block_id,
-                                'original_material': info.get("original_material", "Unknown"),
-                                'data': info
-                            })
+        if scene.list_display_type == 'VERTEX_GROUPS':
+            for vg in obj.vertex_groups:
+                vg_name = vg.name
+                if vg_name.startswith("QB_") and scene.list_filter_show_qb:
+                    try:
+                        block_id = int(vg_name[3:])
+                        material = get_block_material_name(obj, 'quadblock', block_id)
+                        if material:
+                            materials.add(material)
+                    except ValueError:
+                        continue
+                elif vg_name.startswith("TB_") and scene.list_filter_show_tb:
+                    try:
+                        block_id = int(vg_name[3:])
+                        material = get_block_material_name(obj, 'triblock', block_id)
+                        if material:
+                            materials.add(material)
+                    except ValueError:
+                        continue
+        else:
+            # CONSTANT_MATERIALS: read from material slots
+            for slot in obj.material_slots:
+                mat = slot.material
+                if mat and mat.get("ctr_block_type") is not None:
+                    materials.add(mat.name)
 
-            for item in display_items:
-                if scene.list_display_type == 'VERTEX_GROUPS':
-                    material_name = get_block_material_name(obj, item['block_type'], item['block_id'])
-                    if material_name:
-                        materials.add(material_name)
-                else:
-                    materials.add(item['name'])
-
-            for mat in sorted(materials):
-                if mat:
-                    material_obj = bpy.data.materials.get(mat)
-                    icon_id = 0
-                    if material_obj and material_obj.use_nodes:
-                        for node in material_obj.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE' and node.image:
-                                image = node.image
-                                if not hasattr(image, 'preview') or not image.preview:
-                                    image.preview_ensure()
-                                if image.preview:
-                                    icon_id = image.preview.icon_id
-                                    break
-                    op = layout.operator("list.set_material_filter", text=mat, icon_value=icon_id)
-                    op.material_name = mat
+        for mat_name in sorted(materials):
+            mat = bpy.data.materials.get(mat_name)
+            icon_id = 0
+            if mat and mat.use_nodes:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE' and node.image:
+                        if not hasattr(node.image, 'preview') or not node.image.preview:
+                            node.image.preview_ensure()
+                        if node.image.preview:
+                            icon_id = node.image.preview.icon_id
+                            break
+            op = layout.operator("list.set_material_filter", text=mat_name, icon_value=icon_id)
+            op.material_name = mat_name
 
 
 class LIST_MT_VertexGroupMenu(bpy.types.Menu):

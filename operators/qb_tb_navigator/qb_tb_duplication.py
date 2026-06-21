@@ -1,7 +1,6 @@
 """
 QB/TB Duplication Operators
 Operators for duplicating blocks by group
-Export to OBJ and re-import functionality for optimized performance.
 """
 
 import bpy
@@ -10,7 +9,12 @@ import os
 import re
 
 from ...utils import qb_tb_navigator
-from ...utils.compat import execute_obj_export, execute_obj_import
+from ...utils.compat import (
+    execute_obj_export,
+    execute_obj_import,
+    ensure_objects_in_view_layer,
+    cleanup_temporarily_linked_objects
+)
 from ..qb_tb_export.export_manager import ExportManager
 from ..qb_tb_export.export_settings import ExportSettings
 from ..qb_tb_export.texture_handler import TextureHandler
@@ -21,30 +25,27 @@ from ...utils.export_helpers import (
     disable_vertex_snap_modifiers,
     restore_vertex_snap_modifiers
 )
+from .multiple_objects_helper import (
+    gather_objects_navigation_data,
+    join_selected_objects,
+    restore_original_objects
+)
 
 
-# Temporary global list to collect names of duplicated objects during a single
-# "Duplicate All" operation. It is cleared before use and not saved elsewhere.
 _temp_duplicated_objects = []
 
 
 def strip_blender_suffix(name):
-    """Remove Blender's automatic .001, .002 suffixes from a string."""
     return re.sub(r'\.\d+$', '', name)
 
 
 def move_object_to_collection_manual(obj, target_collection):
-    """Manually unlink from all collections and link to target_collection."""
     for col in list(obj.users_collection):
         col.objects.unlink(obj)
     target_collection.objects.link(obj)
 
 
 def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_dir, settings):
-    """
-    Export the list of objects to obj_filepath, copying textures to texture_dir if enabled.
-    Returns True if export was successful.
-    """
     if not objects:
         return False
 
@@ -55,55 +56,62 @@ def export_duplicated_objects_to_path(context, objects, obj_filepath, texture_di
     original_active = context.view_layer.objects.active
     original_selection = context.selected_objects[:]
 
-    # Deselect all using direct iteration (safe in OBJECT mode)
-    for ob in bpy.data.objects:
-        ob.select_set(False)
-    for obj in objects:
-        obj.select_set(True)
-    if objects:
-        context.view_layer.objects.active = objects[0]
+    # Ensure all objects are in the view layer (Blender 5.0)
+    temporarily_linked = ensure_objects_in_view_layer(objects, context)
 
-    class TempExportProps:
-        def __init__(self):
-            self.filepath = obj_filepath
-            self.use_selection = True
-            self.export_colors = settings.export_colors
-            self.export_textures = settings.include_textures
-            self.path_mode = settings.path_mode
-            self.global_scale = settings.global_scale
-            self.export_quadblocks = True
-            self.export_triblocks = True
-            self.export_invalid_uvs = True
-            self.export_degenerated_uvs = True
-            self.apply_modifiers = False
-            self.separate_loose_parts = False
-
-    temp_props = TempExportProps()
-
-    if settings.include_textures and texture_dir:
-        try:
-            os.makedirs(texture_dir, exist_ok=True)
-            texture_handler = TextureHandler()
-            texture_handler.copy_textures_to_folder(texture_dir, objects)
-        except Exception as e:
-            print(f"Error copying textures: {e}")
-
-    result = execute_obj_export(temp_props, objects)
-
-    # Deselect all again
-    for ob in bpy.data.objects:
-        ob.select_set(False)
-    for obj in original_selection:
-        if obj.name in bpy.data.objects:
+    try:
+        for ob in bpy.data.objects:
+            ob.select_set(False)
+        for obj in objects:
             obj.select_set(True)
-    if original_active and original_active.name in bpy.data.objects:
-        context.view_layer.objects.active = original_active
+        if objects:
+            context.view_layer.objects.active = objects[0]
 
-    if previous_mode != 'OBJECT' and previous_mode is not None:
-        try:
-            bpy.ops.object.mode_set(mode=previous_mode)
-        except:
-            pass
+        class TempExportProps:
+            def __init__(self):
+                self.filepath = obj_filepath
+                self.use_selection = True
+                self.export_colors = settings.export_colors
+                self.export_textures = settings.include_textures
+                self.path_mode = settings.path_mode
+                self.global_scale = settings.global_scale
+                self.export_quadblocks = True
+                self.export_triblocks = True
+                self.export_invalid_uvs = True
+                self.export_degenerated_uvs = True
+                self.apply_modifiers = False
+                self.separate_loose_parts = False
+
+        temp_props = TempExportProps()
+
+        if settings.include_textures and texture_dir:
+            try:
+                os.makedirs(texture_dir, exist_ok=True)
+                texture_handler = TextureHandler()
+                texture_handler.copy_textures_to_folder(texture_dir, objects)
+            except Exception as e:
+                print(f"Error copying textures: {e}")
+
+        result = execute_obj_export(temp_props, objects)
+
+    finally:
+        # Clean up temporary view‑layer links
+        cleanup_temporarily_linked_objects(temporarily_linked, context)
+
+        # Restore selection and active object
+        for ob in bpy.data.objects:
+            ob.select_set(False)
+        for obj in original_selection:
+            if obj.name in bpy.data.objects:
+                obj.select_set(True)
+        if original_active and original_active.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active
+
+        if previous_mode != 'OBJECT' and previous_mode is not None:
+            try:
+                bpy.ops.object.mode_set(mode=previous_mode)
+            except:
+                pass
 
     return 'FINISHED' in result
 
@@ -201,13 +209,11 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Quad_Group_{group_num}"
 
-                # Use manual linking instead of move_to_collection operator
                 move_object_to_collection_manual(new_obj, target_collection)
 
                 duplicated_objects.append(new_obj)
                 _temp_duplicated_objects.append(new_obj.name)
 
-                # Reset selection to only the original object
                 for ob in bpy.data.objects:
                     ob.select_set(False)
                 obj.select_set(True)
@@ -218,7 +224,6 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
             bm.verts.ensure_lookup_table()
             bm.faces.ensure_lookup_table()
 
-        # Final selection reset
         for ob in bpy.data.objects:
             ob.select_set(False)
         obj.select_set(True)
@@ -326,13 +331,11 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
 
                 new_obj.name = f"{original_obj_name}_Tri_Group_{group_num}"
 
-                # Use manual linking instead of move_to_collection operator
                 move_object_to_collection_manual(new_obj, target_collection)
 
                 duplicated_objects.append(new_obj)
                 _temp_duplicated_objects.append(new_obj.name)
 
-                # Reset selection to only the original object
                 for ob in bpy.data.objects:
                     ob.select_set(False)
                 obj.select_set(True)
@@ -343,7 +346,6 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
             bm.verts.ensure_lookup_table()
             bm.faces.ensure_lookup_table()
 
-        # Final selection reset
         for ob in bpy.data.objects:
             ob.select_set(False)
         obj.select_set(True)
@@ -363,7 +365,11 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (context.edit_object is not None and context.mode == 'EDIT_MESH')
+        if context.mode == 'EDIT_MESH' and context.edit_object:
+            return True
+        if context.mode == 'OBJECT' and context.selected_objects:
+            return any(obj.type == 'MESH' for obj in context.selected_objects)
+        return False
 
     directory: bpy.props.StringProperty(
         name="Export Directory",
@@ -372,14 +378,14 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         default=""
     )
 
-    # Sanitize suffixes
-    def _sanitize_material_suffixes(self, obj):
-        """
-        Convert material names like 'name.001' to 'name_001'
-        using the Material Manager's rename logic to update the whole family.
-        """
-        from ...utils.material_utils import rename_base_material_family
+    multiple_objects: bpy.props.BoolProperty(
+        name="Multiple Objects",
+        description="Join selected objects before duplication (requires OBJECT mode)",
+        default=False,
+    )
 
+    def _sanitize_material_suffixes(self, obj):
+        from ...utils.material_utils import rename_base_material_family
         renamed_count = 0
         for slot in obj.material_slots:
             mat = slot.material
@@ -395,7 +401,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     new_name = f"{original_new}_{counter:03d}"
                     counter += 1
                 if new_name != old_name:
-                    # Use the Material Manager's family rename logic
                     success, msg, updated = rename_base_material_family(obj, old_name, new_name)
                     if success:
                         self.report({'INFO'}, msg)
@@ -440,35 +445,122 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
         self._clear_processed_collection(context, "Processed_Blocks")
         _temp_duplicated_objects = []
 
-        quadblock_count = 0
-        triblock_count = 0
+        # Handle case: user is in EDIT mode but has "Multiple Objects" checked.
+        # Automatically switch to OBJECT mode and select all visible mesh objects.
 
-        # Store the name of the source object BEFORE any destructive operations
-        source_obj = context.edit_object
-        if source_obj is None:
-            self.report({'ERROR'}, "No active mesh object in edit mode")
-            return {'CANCELLED'}
-        original_obj_name = source_obj.name   # store name, not reference
+        if context.mode == 'EDIT_MESH' and self.multiple_objects:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH' and obj.visible_get() and not obj.hide_viewport:
+                    obj.select_set(True)
+            if not context.selected_objects:
+                active = context.active_object
+                if active and active.type == 'MESH':
+                    active.select_set(True)
+                else:
+                    self.report({'ERROR'}, "No mesh objects found to join.")
+                    return {'CANCELLED'}
+
+        # Determine source object
+        source_obj = None
+        nav_data = None
+        collections_data = None
+        if context.mode == 'EDIT_MESH':
+            source_obj = context.edit_object
+            if source_obj is None:
+                self.report({'ERROR'}, "No active mesh object in edit mode.")
+                return {'CANCELLED'}
+        else:  # OBJECT mode
+            if self.multiple_objects:
+                # Sanitize materials on each selected object BEFORE gathering nav data
+                selected_objs = [obj for obj in context.selected_objects if obj.type == 'MESH']
+                for obj in selected_objs:
+                    self._sanitize_material_suffixes(obj)
+
+                nav_data, summary_lines, collections_data = gather_objects_navigation_data(context)
+                for line in summary_lines:
+                    self.report({'INFO'}, line)
+                source_obj = join_selected_objects(context)
+                if source_obj is None:
+                    self.report({'ERROR'}, "Failed to join selected objects. Make sure at least two mesh objects are selected.")
+                    return {'CANCELLED'}
+
+                # Store data on the joined object
+                original_names = list(nav_data.keys())
+                source_obj["joined_original_objects"] = original_names
+                source_obj["joined_nav_data"] = nav_data
+                source_obj["joined_original_collections"] = collections_data
+                source_obj["joined_result_name"] = source_obj.name  # "_joined" suffix
+
+                print(f"\nJoined object: '{source_obj.name}'")
+                print(f"Original objects: {original_names}")
+                print(f"Navigation data per object: {nav_data}")
+                print(f"Collections data per object: {collections_data}")
+            else:
+                source_obj = context.active_object
+                if source_obj is None or source_obj.type != 'MESH':
+                    self.report({'ERROR'}, "Active object is not a mesh.")
+                    return {'CANCELLED'}
+
+        # Switch to Edit Mode on the source object
+        if context.mode != 'EDIT_MESH':
+            for ob in bpy.data.objects:
+                ob.select_set(False)
+            source_obj.select_set(True)
+            context.view_layer.objects.active = source_obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            if context.edit_object != source_obj:
+                self.report({'ERROR'}, "Failed to enter edit mode on the target object.")
+                return {'CANCELLED'}
+
+        # WORKFLOW FOR MULTIPLE OBJECTS
+
+        if self.multiple_objects:
+            # 1. Clear any old block data from the joined object
+            props_to_remove = [
+                "quadblock_centers", "triblock_faces", "used_face_indices",
+                "block_type", "quadblock_groups", "quad_group_members",
+                "triblock_groups", "tri_group_members", "face_to_quadblock",
+                "face_to_triblock", "quadblock_faces_map", "triblock_faces_map",
+                "multi_selected_items"
+            ]
+            for prop in props_to_remove:
+                if prop in source_obj:
+                    del source_obj[prop]
+
+            # 2. Deselect everything (so find_blocks uses navigation points)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bmesh.update_edit_mesh(source_obj.data)
+
+            # 3. Navigate
+            self.report({'INFO'}, "Running block detection (Navigate)...")
+            try:
+                bpy.ops.navigator.find_blocks()
+            except Exception as e:
+                self.report({'ERROR'}, f"Block detection failed: {str(e)}")
+                return {'CANCELLED'}
+
+
+        # Normal duplication pipeline
+
+        original_obj_name = source_obj.name
 
         try:
             original_mode = context.mode
             original_obj = context.object
 
-            # Get the source object (the mesh we are editing)
             source_obj = context.edit_object
             if source_obj is None:
                 self.report({'ERROR'}, "No active mesh object in edit mode")
                 return {'CANCELLED'}
 
-            # Ensure the source object is active and selected
             context.view_layer.objects.active = source_obj
             source_obj.select_set(True)
 
-            # Ensure we are in OBJECT mode to safely move collections
             if context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Store original collection and move to root if needed
             root_collection = context.scene.collection
             original_collections = list(source_obj.users_collection)
             moved_to_root = False
@@ -482,28 +574,24 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 move_object_to_collection_manual(source_obj, root_collection)
                 context.view_layer.update()
 
-            # Temporarily disable PS1 render and vertex snap modifiers
             ps1_was_active = temporary_disable_ps1_render(context)
             snap_mods = get_vertex_snap_modifiers([source_obj])
             snap_states = disable_vertex_snap_modifiers(snap_mods)
 
             try:
-                # Sanitize material names on the source object before any duplication
-                self._sanitize_material_suffixes(source_obj)
+                # Sanitization already done before join for multiple_objects,
+                # but for single object mode we still need to sanitize.
+                if not self.multiple_objects:
+                    self._sanitize_material_suffixes(source_obj)
 
-                # Ensure we are in EDIT mode with the correct active object
-                # First, make sure the source object is active (it already is, but double-check)
                 context.view_layer.objects.active = source_obj
                 source_obj.select_set(True)
-                # Now switch to EDIT mode if not already
                 if context.mode != 'EDIT_MESH':
                     bpy.ops.object.mode_set(mode='EDIT')
-                # Verify that we are now in edit mode and the edit_object is correct
                 if context.edit_object != source_obj:
                     self.report({'ERROR'}, "Failed to enter edit mode on the correct object")
                     return {'CANCELLED'}
 
-                # Now call the sub-operators (they require edit mode)
                 if "quad_group_members" in source_obj and source_obj["quad_group_members"]:
                     bpy.ops.navigator.duplicate_quadblocks_by_group()
                     quad_group_members = source_obj["quad_group_members"]
@@ -514,7 +602,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     tri_group_members = source_obj["tri_group_members"]
                     triblock_count = sum(len(members) for members in tri_group_members.values())
 
-                # Switch to Object Mode for the export phase
                 if context.mode != 'OBJECT':
                     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -556,7 +643,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     self.report({'ERROR'}, "Export failed")
                     return {'CANCELLED'}
 
-                # Safe deletion of temporary objects
                 for ob in bpy.data.objects:
                     ob.select_set(False)
                 for obj in duplicated_objs:
@@ -567,7 +653,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                 duplicated_objs.clear()
                 _temp_duplicated_objects.clear()
 
-                # Import the OBJ file
                 import_result = execute_obj_import(obj_filepath)
                 if 'FINISHED' not in import_result:
                     self.report({'WARNING'}, "OBJ imported but with issues")
@@ -589,7 +674,6 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
                 self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
 
-                # Material processing 
                 base_materials_cache = {}
                 for ob in bpy.data.objects:
                     ob.select_set(False)
@@ -672,32 +756,54 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
 
                 self.report({'INFO'}, "Material consolidation and renaming completed.")
 
+                # Move all processed objects to "Processed_Blocks" collection
                 self._move_to_processed_collection(context, separated_objects, "Processed_Blocks")
 
                 self.report({'INFO'}, f"Duplicated blocks exported to {obj_filepath} and imported")
                 self.report({'INFO'}, f"Generated {len(separated_objects)} objects in collection 'Processed_Blocks'")
 
+                # RESTORE ORIGINAL OBJECTS FROM JOINED MESH (only for multiple objects)
+                if self.multiple_objects and nav_data:
+                    self.report({'INFO'}, "Restoring original objects from joined mesh...")
+                    try:
+                        collections_data = source_obj.get("joined_original_collections", {})
+                        restored = restore_original_objects(
+                            context, source_obj, nav_data, list(nav_data.keys()), collections_data
+                        )
+                        self.report({'INFO'}, f"Restored {len(restored)} original objects.")
+                    except Exception as e:
+                        self.report({'ERROR'}, f"Failed to restore original objects: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
+
             finally:
                 restore_vertex_snap_modifiers(snap_states)
                 restore_ps1_render(context, ps1_was_active)
 
-                # Restore original collection if it was moved
-                # Use the stored object name to safely retrieve the object
-                if moved_to_root and original_obj_name in bpy.data.objects:
-                    obj_to_restore = bpy.data.objects[original_obj_name]
-                    # Unlink from root collection
-                    if obj_to_restore.name in root_collection.objects:
-                        root_collection.objects.unlink(obj_to_restore)
-                    # Re-link to original collections (skip root as it's already removed)
-                    for coll in original_collections:
-                        if coll != root_collection and coll.name in bpy.data.collections:
-                            if obj_to_restore.name not in coll.objects:
-                                coll.objects.link(obj_to_restore)
-                    context.view_layer.update()
-                    self.report({'INFO'}, f"Restored '{obj_to_restore.name}' to its original collections")
-                else:
-                    # If the source object no longer exists (very rare), just warn
-                    self.report({'WARNING'}, f"Could not restore collections for '{original_obj_name}' - object may have been deleted")
+                # RESTORE ORIGINAL COLLECTIONS FOR SINGLE OBJECT MODE
+                # For multiple objects, the joined object is temporary and will be
+                # either deleted or left in the root/processed collection.
+                # For single object, the original object must be restored to its original collections.
+                if not self.multiple_objects and moved_to_root:
+                    obj_to_restore = bpy.data.objects.get(original_obj_name)
+                    if obj_to_restore is not None:
+                        # Remove from root collection if present
+                        if obj_to_restore.name in root_collection.objects:
+                            root_collection.objects.unlink(obj_to_restore)
+                        # Link back to original collections
+                        for coll in original_collections:
+                            if coll != root_collection and coll.name in bpy.data.collections:
+                                if obj_to_restore.name not in coll.objects:
+                                    coll.objects.link(obj_to_restore)
+                        context.view_layer.update()
+                        self.report({'INFO'}, f"Restored '{obj_to_restore.name}' to its original collections")
+                    else:
+                        # Object no longer exists (should not happen in single mode)
+                        self.report({'WARNING'}, f"Object '{original_obj_name}' not found for restoration.")
+
+                # For multiple objects, we do NOT restore the joined object to original collections,
+                # because it is either deleted or kept as a container for unassigned faces.
+                # The individual original objects are restored by restore_original_objects above.
 
         finally:
             _temp_duplicated_objects = []

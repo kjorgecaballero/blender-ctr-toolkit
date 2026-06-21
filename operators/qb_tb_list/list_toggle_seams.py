@@ -15,14 +15,12 @@ class LIST_OT_ToggleBlockSeams(Operator):
         obj = context.edit_object
         if not obj or obj.type != 'MESH':
             return False
-        # Require block face maps (Navigate must have been run)
         return ("quadblock_faces_map" in obj or "triblock_faces_map" in obj) and context.mode == 'EDIT_MESH'
 
     def execute(self, context):
         obj = context.edit_object
         mesh = obj.data
 
-        # Switch to OBJECT mode to safely edit seams
         original_mode = context.mode
         if original_mode == 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -77,7 +75,6 @@ class LIST_OT_ToggleBlockSeams(Operator):
                 bpy.ops.object.mode_set(mode='EDIT')
             return {'CANCELLED'}
 
-        # Toggle seam state (if any edge already has seam, clear; otherwise mark)
         any_seamed = any(edge.seam for edge in block_edges)
         new_state = not any_seamed
 
