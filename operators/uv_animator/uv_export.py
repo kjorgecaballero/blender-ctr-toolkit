@@ -133,11 +133,93 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
         default=True
     )
 
+    # PRESET PROPERTIES
+    export_preset: bpy.props.BoolProperty(
+        name="Export Preset",
+        description="Generate a single JSON preset file containing all exported animations",
+        default=False
+    )
+    associate: bpy.props.BoolProperty(
+        name="Associate",
+        description="Include the object name in the 'quads' field of the preset",
+        default=True
+    )
+
     def draw(self, context):
         layout = self.layout
         box = layout.box()
         box.label(text="Export Options", icon='EXPORT')
         box.prop(self, "clean_after_export")
+        box.prop(self, "export_preset")
+        if self.export_preset:
+            box.prop(self, "associate")
+            box.label(text="A single JSON file will be created with all animations.", icon='INFO')
+
+    def _collect_animation_data(self, obj, obj_filepath, frames, texture_items, associate=True):
+        """
+        Build the animation data dictionary for a single object.
+        blendModes is per UNIQUE texture, in order of first appearance in frames.
+        """
+        # Gather unique textures in order of first appearance
+        unique_textures = []
+        seen = set()
+        for frame in frames:
+            tex_path = frame.texture_path
+            if tex_path and tex_path not in seen:
+                unique_textures.append(tex_path)
+                seen.add(tex_path)
+            elif not tex_path and '' not in seen:
+                # Treat empty texture as a special case
+                unique_textures.append('')
+                seen.add('')
+
+        # For each unique texture, find its blend mode
+        blend_modes = []
+        for tex_path in unique_textures:
+            blend_mode = 0  # default
+            if tex_path:
+                for item in texture_items:
+                    if item.texture_path == tex_path:
+                        try:
+                            blend_mode = int(item.blend_mode)
+                        except ValueError:
+                            blend_mode = 0
+                        break
+            # If no texture path or no match, blend_mode stays 0
+            blend_modes.append(blend_mode)
+
+        quads = [obj.name] if associate else []
+
+        return {
+            "blendModes": blend_modes,
+            "duration": obj.uv_frame_duration,
+            "horMirror": False,
+            "name": obj.name,  # Use object name as the animation name
+            "path": os.path.abspath(obj_filepath),
+            "quads": quads,
+            "rotation": 0,
+            "startAt": obj.uv_start_frame,
+            "verMirror": False
+        }
+
+    def _write_consolidated_preset(self, export_dir, base_filename, animations_data):
+        """
+        Write a single JSON file containing all animations.
+        """
+        if not animations_data:
+            return
+
+        preset = {}
+        for idx, anim_data in enumerate(animations_data):
+            preset[f"anim{idx}"] = anim_data
+        preset["animCount"] = len(animations_data)
+        preset["header"] = 5
+
+        json_path = os.path.join(export_dir, f"{base_filename}.json")
+        with open(json_path, 'w') as f:
+            json.dump(preset, f, indent=2)
+
+        self.report({'INFO'}, f"Consolidated preset JSON saved to {json_path} with {len(animations_data)} animations.")
 
     def execute(self, context):
         selected_objs = context.selected_objects if context.selected_objects else bpy.data.objects
@@ -172,8 +254,11 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
         ps1_was_active = temporary_disable_ps1_render(context)
         exported_files = []
 
+        # This will hold all animation data for the consolidated JSON
+        all_animations_data = []
 
-        # 1. Handle Constant Materials (blocks) using duplicate_all_blocks_by_group
+
+        # 1. Handle Constant Materials (Blocks) - WIP, no preset yet
 
         if objects_with_blocks:
             bpy.ops.object.select_all(action='DESELECT')
@@ -255,8 +340,8 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
             except OSError:
                 pass
 
-
-        # 2. Handle Legacy Objects
+        # 2. Handle Legacy Objects (with full preset support)
+        #    Accumulate animation data for the consolidated JSON.
 
         for obj_name in objects_legacy:
             if obj_name not in bpy.data.objects:
@@ -346,6 +431,17 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
                 if 'FINISHED' in result:
                     exported_files.append(export_path)
                     self.report({'INFO'}, f"Exported {base_name} with {num_frames} frames to {export_path}")
+
+                    # Collect animation data for the consolidated JSON (if preset is enabled)
+                    if self.export_preset:
+                        anim_data = self._collect_animation_data(
+                            obj,
+                            export_path,
+                            frames,
+                            obj.uv_texture_items,
+                            associate=self.associate
+                        )
+                        all_animations_data.append(anim_data)
                 else:
                     self.report({'WARNING'}, f"Failed to export {base_name}")
 
@@ -361,6 +457,23 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
                     if main_collection and not main_collection.objects and not main_collection.children:
                         if main_collection.name in bpy.data.collections:
                             bpy.data.collections.remove(main_collection)
+
+
+        # Write the consolidated preset JSON if we have animations
+
+        if self.export_preset and all_animations_data:
+            # Use the base name of the first exported OBJ file for the JSON name
+            if exported_files:
+                first_obj_path = exported_files[0]
+                base_name = os.path.splitext(os.path.basename(first_obj_path))[0]
+                # Remove the '_anim' suffix if present
+                if base_name.endswith('_anim'):
+                    base_name = base_name[:-5]
+                self._write_consolidated_preset(export_dir, base_name, all_animations_data)
+            else:
+                # Fallback: use the export directory name
+                base_name = os.path.basename(export_dir)
+                self._write_consolidated_preset(export_dir, base_name, all_animations_data)
 
         restore_ps1_render(context, ps1_was_active)
 
