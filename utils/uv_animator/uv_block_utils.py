@@ -1,0 +1,136 @@
+import bpy
+import bmesh
+import json
+
+def get_faces_with_material(obj, material_name):
+    """Return a list of face indices that use the given material, in natural polygon order."""
+    if obj.type != 'MESH':
+        return []
+    mesh = obj.data
+    mat_index = -1
+    for i, slot in enumerate(obj.material_slots):
+        if slot.material and slot.material.name == material_name:
+            mat_index = i
+            break
+    if mat_index == -1:
+        return []
+    face_indices = []
+    for poly in mesh.polygons:
+        if poly.material_index == mat_index:
+            face_indices.append(poly.index)
+    return face_indices
+
+def get_uvs_from_material_block(obj, material_name):
+    """Capture UVs from faces using the given material, in natural polygon order."""
+    if obj.type != 'MESH':
+        return None, "Not a mesh"
+    face_indices = get_faces_with_material(obj, material_name)
+    if not face_indices:
+        return None, f"No faces found with material '{material_name}'"
+
+    mesh = obj.data
+    if obj.mode == 'EDIT':
+        bm = bmesh.from_edit_mesh(mesh)
+        uv_layer = bm.loops.layers.uv.active
+        if not uv_layer:
+            return None, "No active UV map in edit mode"
+        faces = sorted([f for f in bm.faces if f.index in face_indices], key=lambda f: f.index)
+        uvs = []
+        for face in faces:
+            uvs.append([(loop[uv_layer].uv.x, loop[uv_layer].uv.y) for loop in face.loops])
+        return uvs, None
+    else:
+        uv_layer = mesh.uv_layers.active
+        if not uv_layer:
+            if mesh.uv_layers:
+                uv_layer = mesh.uv_layers[0]
+            else:
+                return None, "No UV layers found"
+        uv_data = uv_layer.data
+        if len(uv_data) == 0:
+            return None, "UV data is empty"
+        uvs = []
+        for fi in face_indices:
+            if fi >= len(mesh.polygons):
+                return None, f"Face index {fi} out of range"
+            poly = mesh.polygons[fi]
+            face_uvs = []
+            for li in range(poly.loop_start, poly.loop_start + poly.loop_total):
+                if li >= len(uv_data):
+                    return None, f"Loop {li} out of range (UV data size {len(uv_data)})"
+                uv = uv_data[li].uv
+                face_uvs.append((uv.x, uv.y))
+            uvs.append(face_uvs)
+        return uvs, None
+
+def apply_uvs_to_material(obj, material_name, uvs_data):
+    """Apply UVs to faces using the specified material."""
+    if obj.type != 'MESH':
+        return
+    face_indices = get_faces_with_material(obj, material_name)
+    if not face_indices:
+        # Try with the first material of the object as fallback
+        if obj.data.materials:
+            first_mat = obj.data.materials[0]
+            if first_mat and first_mat.name != material_name:
+                face_indices = get_faces_with_material(obj, first_mat.name)
+                if face_indices:
+                    material_name = first_mat.name
+        if not face_indices:
+            print(f"Warning: No faces found with material '{material_name}'")
+            return
+
+    original_mode = obj.mode
+    if original_mode != 'OBJECT':
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='OBJECT')
+    mesh = obj.data
+    uv_layer = mesh.uv_layers.active
+    if not uv_layer:
+        if original_mode == 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+        return
+    uv_data = uv_layer.data
+
+    if len(face_indices) != len(uvs_data):
+        print(f"Warning: face count ({len(face_indices)}) != UV count ({len(uvs_data)})")
+        if len(uvs_data) > len(face_indices):
+            uvs_data = uvs_data[:len(face_indices)]
+        else:
+            # If more faces than UVs, we can't handle
+            pass
+
+    for fi, face_uvs in zip(face_indices, uvs_data):
+        if fi >= len(mesh.polygons):
+            continue
+        poly = mesh.polygons[fi]
+        if len(face_uvs) != poly.loop_total:
+            continue
+        for i, (u, v) in enumerate(face_uvs):
+            uv_data[poly.loop_start + i].uv = (u, v)
+    mesh.update()
+    if original_mode == 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+
+def get_active_texture_from_material(mat):
+    if not mat or not mat.use_nodes:
+        return ""
+    for node in mat.node_tree.nodes:
+        if node.type == 'TEX_IMAGE' and node.image:
+            return bpy.path.abspath(node.image.filepath)
+    return ""
+
+def get_constant_materials_on_object(obj):
+    result = []
+    for slot in obj.material_slots:
+        mat = slot.material
+        if mat and mat.get("ctr_block_type") is not None:
+            block_type = mat.get("ctr_block_type")
+            block_id = mat.get("ctr_block_id", 0)
+            result.append((mat.name, block_type, block_id))
+    return result
+
+def is_valid_block(obj, material_name, block_type, block_id):
+    from ..qb_tb_navigator.constant_material_utils import is_valid_navigation_point
+    valid, _, _, _ = is_valid_navigation_point(obj, material_name, bm=None)
+    return valid

@@ -6,9 +6,7 @@ from .uv_textures import *
 from .uv_animation import *
 from .uv_export import *
 
-# Combined list of all classes from all modules
 classes = [
-
     UV_OT_ToggleExpand,
     UV_OT_TogglePlayback,
     UV_OT_ToggleGroupSelection,
@@ -32,6 +30,7 @@ classes = [
     UV_OT_GroupToggleTextureSubsection,
     UV_OT_GroupChangeTextureImage,
     UV_OT_NewAnimation,
+    UV_OT_NewAnimationFromConstants,
     UV_OT_AssignFrame,
     UV_OT_DeleteFrame,
     UV_OT_PlayPreview,

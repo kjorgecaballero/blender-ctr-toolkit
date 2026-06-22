@@ -2,14 +2,31 @@ import bpy
 import json
 from bpy.types import Operator
 
+def _redraw_ui(context):
+    for window in context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type in {'VIEW_3D', 'IMAGE_EDITOR'}:
+                area.tag_redraw()
+
 _active_uv_group_dialog = None
 
-# Group Management
+def _get_selected_items(context):
+    scene = context.scene
+    if scene.uv_animator_mode == 'LEGACY':
+        return [o.name for o in bpy.data.objects if o.type == 'MESH' and o.is_uv_animated and o.uv_selected_for_group]
+    else:
+        keys = []
+        for o in bpy.data.objects:
+            if o.type != 'MESH':
+                continue
+            for block in o.uv_animated_blocks:
+                if block.is_animated and block.selected_for_group:
+                    keys.append(f"{o.name}:{block.block_id}")
+        return keys
 
 class UV_OT_ToggleGroupActive(Operator):
     bl_idname = "uv_animator.toggle_group_active"
     bl_label = "Toggle Group Active"
-    bl_description = "Activate/deactivate this group for batch frame assignment"
     bl_options = {'REGISTER', 'UNDO'}
     group_name: bpy.props.StringProperty()
 
@@ -19,37 +36,31 @@ class UV_OT_ToggleGroupActive(Operator):
             toggles = json.loads(scene.uv_animator_group_toggles)
         except:
             toggles = {}
-
         toggles[self.group_name] = not toggles.get(self.group_name, False)
         scene.uv_animator_group_toggles = json.dumps(toggles)
-
-        for window in context.window_manager.windows:
-            for area in window.screen.areas:
-                if area.type == 'IMAGE_EDITOR':
-                    area.tag_redraw()
-
+        _redraw_ui(context)
         return {'FINISHED'}
 
 class UV_OT_GroupManagementDialog(Operator):
-    """Main group management dialog (Item List style)"""
     bl_idname = "uv_animator.group_management_dialog"
     bl_label = "Manage UV Groups"
-    bl_description = "Create, delete, and assign UV animation objects to groups"
     bl_options = {'REGISTER'}
-
     groups_collection: bpy.props.CollectionProperty(type=bpy.types.PropertyGroup)
     selected_group_name: bpy.props.StringProperty(name="Group", default="")
     _new_group_name: str = None
 
     @classmethod
     def poll(cls, context):
-        return any(obj.is_uv_animated for obj in bpy.data.objects if obj.type == 'MESH')
+        scene = context.scene
+        if scene.uv_animator_mode == 'LEGACY':
+            return any(o.type == 'MESH' and o.is_uv_animated for o in bpy.data.objects)
+        else:
+            return any(o.type == 'MESH' and any(b.is_animated for b in o.uv_animated_blocks) for o in bpy.data.objects)
 
     def invoke(self, context, event):
         global _active_uv_group_dialog
         _active_uv_group_dialog = self
         self._refresh_groups_collection(context)
-        
         current_filter = context.scene.uv_animator_active_group
         if current_filter and current_filter in [item.name for item in self.groups_collection]:
             self.selected_group_name = current_filter
@@ -61,13 +72,11 @@ class UV_OT_GroupManagementDialog(Operator):
         self.groups_collection.clear()
         none_item = self.groups_collection.add()
         none_item.name = "None"
-        
         groups_dict = {}
         try:
             groups_dict = json.loads(context.scene.uv_animator_groups)
         except:
             pass
-        
         for name in sorted(groups_dict.keys()):
             if name == "None":
                 continue
@@ -76,7 +85,6 @@ class UV_OT_GroupManagementDialog(Operator):
 
     def draw(self, context):
         self._refresh_groups_collection(context)
-        
         if self._new_group_name:
             if any(item.name == self._new_group_name for item in self.groups_collection):
                 self.selected_group_name = self._new_group_name
@@ -89,16 +97,12 @@ class UV_OT_GroupManagementDialog(Operator):
                     self.selected_group_name = "None"
 
         layout = self.layout
-        
         row = layout.row()
         row.prop_search(self, "selected_group_name", self, "groups_collection", text="Group", icon='GROUP')
-        
         col = layout.column(align=True)
         col.separator()
-        
         row = col.row(align=True)
         row.operator("uv_animator.new_group_simple", text="New Group", icon='COLLECTION_NEW')
-        
         if self.selected_group_name and self.selected_group_name != "None":
             op = row.operator("uv_animator.delete_group_simple", text="Delete Group", icon='TRASH')
             op.group_name = self.selected_group_name
@@ -106,9 +110,7 @@ class UV_OT_GroupManagementDialog(Operator):
             sub = row.row(align=True)
             sub.enabled = False
             sub.operator("uv_animator.delete_group_simple", text="Delete Group", icon='TRASH')
-        
         col.separator()
-        
         row = col.row(align=True)
         if self.selected_group_name and self.selected_group_name != "None":
             op = row.operator("uv_animator.add_to_group", text="Add Selected", icon='ADD')
@@ -119,9 +121,8 @@ class UV_OT_GroupManagementDialog(Operator):
             row.enabled = False
             row.operator("uv_animator.add_to_group", text="Add Selected", icon='ADD')
             row.operator("uv_animator.remove_from_group", text="Remove Selected", icon='REMOVE')
-
         col.separator()
-        col.label(text="Select objects using checkboxes in the list.", icon='INFO')
+        col.label(text="Select items using checkboxes in the list.", icon='INFO')
 
     def execute(self, context):
         global _active_uv_group_dialog
@@ -129,20 +130,14 @@ class UV_OT_GroupManagementDialog(Operator):
             context.scene.uv_animator_active_group = ""
         else:
             context.scene.uv_animator_active_group = self.selected_group_name
-        
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                area.tag_redraw()
-        
+        _redraw_ui(context)
         _active_uv_group_dialog = None
         return {'FINISHED'}
 
 class UV_OT_NewGroupSimple(Operator):
     bl_idname = "uv_animator.new_group_simple"
     bl_label = "New Group"
-    bl_description = "Create a new empty group"
     bl_options = {'REGISTER'}
-
     group_name: bpy.props.StringProperty(name="Group Name", default="")
 
     def invoke(self, context, event):
@@ -162,32 +157,25 @@ class UV_OT_NewGroupSimple(Operator):
         if name.lower() == "none":
             self.report({'ERROR'}, "Cannot create a group named 'None'.")
             return {'CANCELLED'}
-
         groups = {}
         try:
             groups = json.loads(scene.uv_animator_groups)
         except:
             pass
-        
         if name in groups:
             self.report({'ERROR'}, f"Group '{name}' already exists.")
             return {'CANCELLED'}
-
         groups[name] = []
         scene.uv_animator_groups = json.dumps(groups)
-
         if _active_uv_group_dialog:
             _active_uv_group_dialog._new_group_name = name
-
         self.report({'INFO'}, f"Group '{name}' created.")
         return {'FINISHED'}
 
 class UV_OT_DeleteGroupSimple(Operator):
     bl_idname = "uv_animator.delete_group_simple"
     bl_label = "Delete Group"
-    bl_description = "Delete the selected group"
     bl_options = {'REGISTER'}
-
     group_name: bpy.props.StringProperty()
 
     def execute(self, context):
@@ -196,32 +184,25 @@ class UV_OT_DeleteGroupSimple(Operator):
         if not name or name == "None":
             self.report({'WARNING'}, "No valid group selected.")
             return {'CANCELLED'}
-
         groups = {}
         try:
             groups = json.loads(scene.uv_animator_groups)
         except:
             pass
-        
         if name not in groups:
             self.report({'WARNING'}, f"Group '{name}' not found.")
             return {'CANCELLED'}
-
         del groups[name]
         scene.uv_animator_groups = json.dumps(groups)
-        
         if scene.uv_animator_active_group == name:
             scene.uv_animator_active_group = ""
-
         self.report({'INFO'}, f"Deleted group '{name}'.")
         return {'FINISHED'}
 
 class UV_OT_AddToGroup(Operator):
     bl_idname = "uv_animator.add_to_group"
     bl_label = "Add Selected to Group"
-    bl_description = "Add selected objects (checked in list) to the group"
     bl_options = {'REGISTER'}
-
     group_name: bpy.props.StringProperty()
 
     def execute(self, context):
@@ -230,49 +211,47 @@ class UV_OT_AddToGroup(Operator):
         if not group_name or group_name == "None":
             self.report({'WARNING'}, "No valid group selected.")
             return {'CANCELLED'}
-
-        selected_objects = [
-            obj.name for obj in bpy.data.objects 
-            if obj.type == 'MESH' and obj.is_uv_animated and obj.uv_selected_for_group
-        ]
-        if not selected_objects:
-            self.report({'WARNING'}, "No objects selected. Use checkboxes in the list.")
+        selected_keys = _get_selected_items(context)
+        if not selected_keys:
+            self.report({'WARNING'}, "No items selected. Use checkboxes in the list.")
             return {'CANCELLED'}
-
         groups = {}
         try:
             groups = json.loads(scene.uv_animator_groups)
         except:
             pass
-
         if group_name not in groups:
             self.report({'WARNING'}, f"Group '{group_name}' not found.")
             return {'CANCELLED'}
-
         current_set = set(groups[group_name])
-        to_add = set(selected_objects) - current_set
-        
+        to_add = set(selected_keys) - current_set
         if not to_add:
-            self.report({'WARNING'}, "All selected objects are already in this group.")
+            self.report({'WARNING'}, "All selected items are already in this group.")
             return {'CANCELLED'}
-
         groups[group_name] = list(current_set | to_add)
         scene.uv_animator_groups = json.dumps(groups)
-
-        for obj_name in to_add:
-            obj = bpy.data.objects.get(obj_name)
-            if obj:
-                obj.uv_selected_for_group = False
-
-        self.report({'INFO'}, f"Added {len(to_add)} object(s) to group '{group_name}'.")
+        if scene.uv_animator_mode == 'LEGACY':
+            for key in to_add:
+                obj = bpy.data.objects.get(key)
+                if obj:
+                    obj.uv_selected_for_group = False
+        else:
+            for key in to_add:
+                parts = key.split(":", 1)
+                if len(parts) == 2:
+                    obj = bpy.data.objects.get(parts[0])
+                    if obj:
+                        for block in obj.uv_animated_blocks:
+                            if block.block_id == parts[1]:
+                                block.selected_for_group = False
+                                break
+        self.report({'INFO'}, f"Added {len(to_add)} item(s) to group '{group_name}'.")
         return {'FINISHED'}
 
 class UV_OT_RemoveFromGroup(Operator):
     bl_idname = "uv_animator.remove_from_group"
     bl_label = "Remove Selected from Group"
-    bl_description = "Remove selected objects from the group"
     bl_options = {'REGISTER'}
-
     group_name: bpy.props.StringProperty()
 
     def execute(self, context):
@@ -281,149 +260,185 @@ class UV_OT_RemoveFromGroup(Operator):
         if not group_name or group_name == "None":
             self.report({'WARNING'}, "No valid group selected.")
             return {'CANCELLED'}
-
-        selected_objects = [
-            obj.name for obj in bpy.data.objects 
-            if obj.type == 'MESH' and obj.is_uv_animated and obj.uv_selected_for_group
-        ]
-        if not selected_objects:
-            self.report({'WARNING'}, "No objects selected. Use checkboxes in the list.")
+        selected_keys = _get_selected_items(context)
+        if not selected_keys:
+            self.report({'WARNING'}, "No items selected. Use checkboxes in the list.")
             return {'CANCELLED'}
-
         groups = {}
         try:
             groups = json.loads(scene.uv_animator_groups)
         except:
             pass
-
         if group_name not in groups:
             self.report({'WARNING'}, f"Group '{group_name}' not found.")
             return {'CANCELLED'}
-
         original_len = len(groups[group_name])
-        new_list = [obj for obj in groups[group_name] if obj not in selected_objects]
+        new_list = [key for key in groups[group_name] if key not in selected_keys]
         removed = original_len - len(new_list)
-
         if removed == 0:
-            self.report({'WARNING'}, "None of the selected objects are in this group.")
+            self.report({'WARNING'}, "None of the selected items are in this group.")
             return {'CANCELLED'}
-
         if new_list:
             groups[group_name] = new_list
         else:
             del groups[group_name]
             if scene.uv_animator_active_group == group_name:
                 scene.uv_animator_active_group = ""
-
         scene.uv_animator_groups = json.dumps(groups)
-
-        for obj_name in selected_objects:
-            obj = bpy.data.objects.get(obj_name)
-            if obj:
-                obj.uv_selected_for_group = False
-
-        self.report({'INFO'}, f"Removed {removed} object(s) from group '{group_name}'.")
+        if scene.uv_animator_mode == 'LEGACY':
+            for key in selected_keys:
+                obj = bpy.data.objects.get(key)
+                if obj:
+                    obj.uv_selected_for_group = False
+        else:
+            for key in selected_keys:
+                parts = key.split(":", 1)
+                if len(parts) == 2:
+                    obj = bpy.data.objects.get(parts[0])
+                    if obj:
+                        for block in obj.uv_animated_blocks:
+                            if block.block_id == parts[1]:
+                                block.selected_for_group = False
+                                break
+        self.report({'INFO'}, f"Removed {removed} item(s) from group '{group_name}'.")
         return {'FINISHED'}
 
 class UV_OT_ClearActiveGroupFilter(Operator):
     bl_idname = "uv_animator.clear_active_group_filter"
     bl_label = "Clear Filter"
-    bl_description = "Clear the active group filter to show all objects"
     bl_options = {'REGISTER'}
-
     def execute(self, context):
         context.scene.uv_animator_active_group = ""
+        _redraw_ui(context)
         return {'FINISHED'}
-
-# Group Set Frame Duration
 
 class UV_OT_GroupSetFrameDuration(Operator):
     bl_idname = "uv_animator.group_set_frame_duration"
     bl_label = "Group Set Frame Duration"
-    bl_description = "Set the frame duration for all objects in this group"
     bl_options = {'REGISTER', 'UNDO'}
-    
     group_name: bpy.props.StringProperty()
-    duration: bpy.props.IntProperty(
-        name="Duration",
-        description="Duration multiplier",
-        default=0,
-        min=0,
-        max=30
-    )
-    
+    duration: bpy.props.IntProperty(default=0, min=0, max=30)
+
     def invoke(self, context, event):
         groups_dict = json.loads(context.scene.uv_animator_groups)
         if self.group_name in groups_dict:
-            object_names = groups_dict[self.group_name]
-            for name in object_names:
-                obj = bpy.data.objects.get(name)
-                if obj and obj.type == 'MESH':
-                    self.duration = obj.uv_frame_duration
-                    break
+            keys = groups_dict[self.group_name]
+            if keys:
+                scene = context.scene
+                if scene.uv_animator_mode == 'LEGACY':
+                    obj = bpy.data.objects.get(keys[0])
+                    if obj:
+                        self.duration = obj.uv_frame_duration
+                else:
+                    parts = keys[0].split(":", 1)
+                    if len(parts) == 2:
+                        obj = bpy.data.objects.get(parts[0])
+                        if obj:
+                            for block in obj.uv_animated_blocks:
+                                if block.block_id == parts[1]:
+                                    self.duration = block.frame_duration
+                                    break
         return context.window_manager.invoke_props_dialog(self)
-    
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "duration")
         real_duration = (self.duration + 1) * 0.033
-        ms = real_duration * 1000
-        layout.label(text=f"Duration: {ms:.1f} ms ({real_duration:.3f} s)", icon='TIME')
-    
+        layout.label(text=f"Duration: {real_duration:.3f}s")
+
     def execute(self, context):
-        groups_dict = json.loads(context.scene.uv_animator_groups)
+        scene = context.scene
+        groups_dict = json.loads(scene.uv_animator_groups)
         if self.group_name not in groups_dict:
             self.report({'ERROR'}, "Group not found")
             return {'CANCELLED'}
-        
-        object_names = groups_dict[self.group_name]
+        keys = groups_dict[self.group_name]
         updated = 0
-        
-        for obj_name in object_names:
-            obj = bpy.data.objects.get(obj_name)
-            if obj and obj.type == 'MESH':
-                obj.uv_frame_duration = self.duration
-                updated += 1
-        
-        self.report({'INFO'}, f"Set frame duration to {self.duration} for {updated} object(s)")
+        for key in keys:
+            if scene.uv_animator_mode == 'LEGACY':
+                obj = bpy.data.objects.get(key)
+                if obj and obj.type == 'MESH':
+                    obj.uv_frame_duration = self.duration
+                    updated += 1
+            else:
+                parts = key.split(":", 1)
+                if len(parts) == 2:
+                    obj = bpy.data.objects.get(parts[0])
+                    if obj:
+                        for block in obj.uv_animated_blocks:
+                            if block.block_id == parts[1]:
+                                block.frame_duration = self.duration
+                                updated += 1
+                                break
+        self.report({'INFO'}, f"Set frame duration to {self.duration} for {updated} item(s)")
         return {'FINISHED'}
 
-# Toggle Group Playback
 class UV_OT_ToggleGroupPlayback(Operator):
     bl_idname = "uv_animator.toggle_group_playback"
     bl_label = "Toggle Group Playback"
-    bl_description = "Enable/disable playback for all objects in the group"
     bl_options = {'REGISTER', 'UNDO'}
-    
     group_name: bpy.props.StringProperty()
-    
+
     def execute(self, context):
-        groups_dict = json.loads(context.scene.uv_animator_groups)
-        if self.group_name == "Ungrouped":
-            # Get all animated objects not in any group
-            all_animated = [obj for obj in bpy.data.objects if obj.type == 'MESH' and obj.is_uv_animated]
-            grouped_names = set()
+        scene = context.scene
+        groups_dict = json.loads(scene.uv_animator_groups)
+        group_name = self.group_name
+        if group_name == "Ungrouped":
+            all_items = []
+            if scene.uv_animator_mode == 'LEGACY':
+                all_items = [o.name for o in bpy.data.objects if o.type == 'MESH' and o.is_uv_animated]
+            else:
+                all_items = []
+                for o in bpy.data.objects:
+                    if o.type == 'MESH' and o.is_uv_animated:
+                        for block in o.uv_animated_blocks:
+                            if block.is_animated:
+                                all_items.append(f"{o.name}:{block.block_id}")
+            grouped_keys = set()
             for members in groups_dict.values():
-                grouped_names.update(members)
-            objects = [obj for obj in all_animated if obj.name not in grouped_names]
+                grouped_keys.update(members)
+            items = [key for key in all_items if key not in grouped_keys]
         else:
-            if self.group_name not in groups_dict:
-                self.report({'WARNING'}, f"Group '{self.group_name}' not found")
+            if group_name not in groups_dict:
+                self.report({'WARNING'}, f"Group '{group_name}' not found")
                 return {'CANCELLED'}
-            object_names = groups_dict[self.group_name]
-            objects = [obj for obj in bpy.data.objects if obj.name in object_names and obj.type == 'MESH']
-        
-        if not objects:
-            self.report({'WARNING'}, f"No objects in group '{self.group_name}'")
+            items = groups_dict[group_name]
+        if not items:
+            self.report({'WARNING'}, f"No items in group '{group_name}'")
             return {'CANCELLED'}
-        
-        # Check if all objects have playback enabled
-        all_enabled = all(obj.uv_animator_playback_enabled for obj in objects)
-        # Toggle: if all are enabled, disable all; otherwise enable all
+        all_enabled = True
+        for key in items:
+            if scene.uv_animator_mode == 'LEGACY':
+                obj = bpy.data.objects.get(key)
+                if obj and not obj.uv_animator_playback_enabled:
+                    all_enabled = False
+                    break
+            else:
+                parts = key.split(":", 1)
+                if len(parts) == 2:
+                    obj = bpy.data.objects.get(parts[0])
+                    if obj:
+                        for block in obj.uv_animated_blocks:
+                            if block.block_id == parts[1]:
+                                if not block.playback_enabled:
+                                    all_enabled = False
+                                    break
+                        if not all_enabled:
+                            break
         new_state = not all_enabled
-        
-        for obj in objects:
-            obj.uv_animator_playback_enabled = new_state
-        
-        self.report({'INFO'}, f"{'Enabled' if new_state else 'Disabled'} playback for {len(objects)} object(s) in group '{self.group_name}'")
+        for key in items:
+            if scene.uv_animator_mode == 'LEGACY':
+                obj = bpy.data.objects.get(key)
+                if obj:
+                    obj.uv_animator_playback_enabled = new_state
+            else:
+                parts = key.split(":", 1)
+                if len(parts) == 2:
+                    obj = bpy.data.objects.get(parts[0])
+                    if obj:
+                        for block in obj.uv_animated_blocks:
+                            if block.block_id == parts[1]:
+                                block.playback_enabled = new_state
+                                break
+        self.report({'INFO'}, f"{'Enabled' if new_state else 'Disabled'} playback for {len(items)} item(s)")
         return {'FINISHED'}
