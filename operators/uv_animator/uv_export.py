@@ -69,7 +69,6 @@ def export_block_animation(context, dup_obj, block, export_dir, clean_after_expo
         frame_collection.objects.link(dup)
 
         uvs = json.loads(frame.uv_data)
-        # Pass the face centers to the apply function
         centers = json.loads(frame.face_centers) if frame.face_centers else None
         apply_uvs_to_material(dup, material_name, uvs, centers_ordered=centers)
 

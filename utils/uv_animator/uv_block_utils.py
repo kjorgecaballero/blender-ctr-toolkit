@@ -64,18 +64,34 @@ def get_uvs_from_material_block(obj, material_name):
             uvs.append(face_uvs)
         return uvs, None
 
+def get_face_center_world(obj, face_index):
+    """
+    Calculate the world-space centroid of a face.
+    Uses the object's world matrix to transform local coordinates.
+    """
+    if obj.type != 'MESH':
+        return None
+    mesh = obj.data
+    if face_index >= len(mesh.polygons):
+        return None
+    poly = mesh.polygons[face_index]
+    verts = [mesh.vertices[i].co for i in poly.vertices]
+    local_center = sum(verts, Vector((0, 0, 0))) / len(verts)
+    world_center = obj.matrix_world @ local_center
+    return world_center
+
 def apply_uvs_to_material(obj, material_name, uvs_data, centers_ordered=None):
     """
     Apply UVs to faces using the specified material.
-    If centers_ordered is provided (list of (x,y,z) tuples), it will reorder uvs_data
-    to match the current face order by comparing face centers.
-    This fixes UV reordering issues when duplicating blocks.
+    If centers_ordered is provided (list of (x,y,z) tuples in WORLD space),
+    it will reorder uvs_data to match the current face order by comparing
+    world-space face centroids.
+    This guarantees correct matching even after object duplication/transformation.
     """
     if obj.type != 'MESH':
         return
     face_indices = get_faces_with_material(obj, material_name)
     if not face_indices:
-        # Try with the first material of the object as fallback
         if obj.data.materials:
             first_mat = obj.data.materials[0]
             if first_mat and first_mat.name != material_name:
@@ -99,17 +115,18 @@ def apply_uvs_to_material(obj, material_name, uvs_data, centers_ordered=None):
         return
     uv_data = uv_layer.data
 
-    # REORDER UVs IF CENTERS ARE PROVIDED
+    # REORDER UVs USING WORLD-SPACE CENTERS
     if centers_ordered is not None and len(centers_ordered) == len(face_indices):
-        # Calculate current centers of the destination faces (in the order of face_indices)
+        # Calculate world centroids of destination faces (in the order of face_indices)
         dest_centers = []
         for fi in face_indices:
             if fi >= len(mesh.polygons):
                 continue
             poly = mesh.polygons[fi]
             verts = [mesh.vertices[i].co for i in poly.vertices]
-            center = sum(verts, Vector((0, 0, 0))) / len(verts)
-            dest_centers.append(center)
+            local_center = sum(verts, Vector((0, 0, 0))) / len(verts)
+            world_center = obj.matrix_world @ local_center
+            dest_centers.append(world_center)
 
         # Reorder uvs_data to match the destination face order
         reordered_uvs = []
@@ -126,6 +143,7 @@ def apply_uvs_to_material(obj, material_name, uvs_data, centers_ordered=None):
                 reordered_uvs.append(uvs_data[best_idx])
             else:
                 # Fallback: keep the first UV (should never happen if centers match)
+                print(f"Warning: No match found for center {d_center}, using fallback UV")
                 reordered_uvs.append(uvs_data[0])
         uvs_data = reordered_uvs
 
