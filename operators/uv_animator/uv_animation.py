@@ -1,6 +1,8 @@
 import bpy
+import bmesh
 import json
 import time
+from mathutils import Vector
 from bpy.types import Operator
 from ...utils.uv_animator.uv_animator_utils import (
     get_current_uvs_from_mesh,
@@ -15,7 +17,8 @@ from ...utils.uv_animator.uv_block_utils import (
     apply_uvs_to_material,
     get_active_texture_from_material,
     get_constant_materials_on_object,
-    is_valid_block
+    is_valid_block,
+    get_faces_with_material
 )
 from .uv_collapse import _get_expanded_dict, _set_expanded_dict
 
@@ -226,11 +229,33 @@ class UV_OT_AssignFrame(Operator):
                     errors.append(f"Block '{block.block_id}': {error}")
                     skipped_count += 1
                     continue
+
+                # Capture face centers for stable matching
+                face_indices = get_faces_with_material(obj, block.material_name)
+                centers = []
+                if obj.mode == 'EDIT':
+                    bm = bmesh.from_edit_mesh(obj.data)
+                    bm.faces.ensure_lookup_table()
+                    for fi in face_indices:
+                        if fi < len(bm.faces):
+                            c = bm.faces[fi].calc_center_bounds()
+                            centers.append((c.x, c.y, c.z))
+                else:
+                    mesh = obj.data
+                    for fi in face_indices:
+                        if fi < len(mesh.polygons):
+                            poly = mesh.polygons[fi]
+                            verts = [mesh.vertices[i].co for i in poly.vertices]
+                            center = sum(verts, Vector((0, 0, 0))) / len(verts)
+                            centers.append((center.x, center.y, center.z))
+
+
                 mat = bpy.data.materials.get(block.material_name)
                 tex_path = get_active_texture_from_material(mat)
                 frame = block.frames.add()
                 frame.uv_data = json.dumps(uvs)
                 frame.texture_path = tex_path
+                frame.face_centers = json.dumps(centers)   # Store centers
                 assigned_count += 1
                 if len(block.frames) == 1:
                     block.start_frame = 0
@@ -420,6 +445,7 @@ class UV_OT_PlayPreview(Operator):
                             idx = 0
                         frame = frames[idx]
                         uvs = json.loads(frame.uv_data)
+                        # No need to pass centers here because preview uses the same object (no duplication)
                         apply_uvs_to_material(obj, block.material_name, uvs)
                         next_idx = (idx + 1) % len(frames)
                         self._frame_indices[key] = next_idx

@@ -43,7 +43,6 @@ def export_block_animation(context, dup_obj, block, export_dir, clean_after_expo
     if dup_obj.name not in bpy.data.objects:
         return None
 
-    # Get the material name from the duplicated object (it should have the constant material)
     material_name = None
     if dup_obj.data.materials:
         material_name = dup_obj.data.materials[0].name
@@ -70,7 +69,9 @@ def export_block_animation(context, dup_obj, block, export_dir, clean_after_expo
         frame_collection.objects.link(dup)
 
         uvs = json.loads(frame.uv_data)
-        apply_uvs_to_material(dup, material_name, uvs)
+        # Pass the face centers to the apply function
+        centers = json.loads(frame.face_centers) if frame.face_centers else None
+        apply_uvs_to_material(dup, material_name, uvs, centers_ordered=centers)
 
         if frame.texture_path and dup.active_material:
             set_texture_to_material(dup.active_material, frame.texture_path)
@@ -173,7 +174,7 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
         exported_files = []
 
 
-        # 1. Handle Constant Materials using duplicate_all_blocks_by_group
+        # 1. Handle Constant Materials (blocks) using duplicate_all_blocks_by_group
 
         if objects_with_blocks:
             bpy.ops.object.select_all(action='DESELECT')
@@ -256,7 +257,7 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
                 pass
 
 
-        # 2. Handle Objects
+        # 2. Handle Legacy Objects
 
         for obj_name in objects_legacy:
             if obj_name not in bpy.data.objects:

@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 import json
+from mathutils import Vector
 
 def get_faces_with_material(obj, material_name):
     """Return a list of face indices that use the given material, in natural polygon order."""
@@ -63,8 +64,13 @@ def get_uvs_from_material_block(obj, material_name):
             uvs.append(face_uvs)
         return uvs, None
 
-def apply_uvs_to_material(obj, material_name, uvs_data):
-    """Apply UVs to faces using the specified material."""
+def apply_uvs_to_material(obj, material_name, uvs_data, centers_ordered=None):
+    """
+    Apply UVs to faces using the specified material.
+    If centers_ordered is provided (list of (x,y,z) tuples), it will reorder uvs_data
+    to match the current face order by comparing face centers.
+    This fixes UV reordering issues when duplicating blocks.
+    """
     if obj.type != 'MESH':
         return
     face_indices = get_faces_with_material(obj, material_name)
@@ -84,6 +90,7 @@ def apply_uvs_to_material(obj, material_name, uvs_data):
     if original_mode != 'OBJECT':
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='OBJECT')
+
     mesh = obj.data
     uv_layer = mesh.uv_layers.active
     if not uv_layer:
@@ -92,12 +99,41 @@ def apply_uvs_to_material(obj, material_name, uvs_data):
         return
     uv_data = uv_layer.data
 
+    # REORDER UVs IF CENTERS ARE PROVIDED
+    if centers_ordered is not None and len(centers_ordered) == len(face_indices):
+        # Calculate current centers of the destination faces (in the order of face_indices)
+        dest_centers = []
+        for fi in face_indices:
+            if fi >= len(mesh.polygons):
+                continue
+            poly = mesh.polygons[fi]
+            verts = [mesh.vertices[i].co for i in poly.vertices]
+            center = sum(verts, Vector((0, 0, 0))) / len(verts)
+            dest_centers.append(center)
+
+        # Reorder uvs_data to match the destination face order
+        reordered_uvs = []
+        for d_center in dest_centers:
+            best_idx = -1
+            best_dist = 1e6
+            for j, orig_center_tuple in enumerate(centers_ordered):
+                orig_center = Vector(orig_center_tuple)
+                dist = (d_center - orig_center).length
+                if dist < best_dist:
+                    best_dist = dist
+                    best_idx = j
+            if best_idx != -1:
+                reordered_uvs.append(uvs_data[best_idx])
+            else:
+                # Fallback: keep the first UV (should never happen if centers match)
+                reordered_uvs.append(uvs_data[0])
+        uvs_data = reordered_uvs
+
     if len(face_indices) != len(uvs_data):
         print(f"Warning: face count ({len(face_indices)}) != UV count ({len(uvs_data)})")
         if len(uvs_data) > len(face_indices):
             uvs_data = uvs_data[:len(face_indices)]
         else:
-            # If more faces than UVs, we can't handle
             pass
 
     for fi, face_uvs in zip(face_indices, uvs_data):
