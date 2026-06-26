@@ -28,9 +28,10 @@ class CTR_PT_MaterialManager(Panel):
         row.separator(factor=1.0)
         CTR_HelpUtils.draw_help_buttons_into_row(row)
 
-        # Search bar
+        # Search bar + Refresh icon
         row = layout.row(align=True)
         row.prop(props, "search_text", text="", icon='VIEWZOOM')
+        row.operator("material.refresh_list", text="", icon='FILE_REFRESH')
 
         # First row: Assign, Select, Deselect
         row1 = layout.row(align=True)
@@ -48,7 +49,7 @@ class CTR_PT_MaterialManager(Panel):
         row1.operator("material.select_by_material", text="Select", icon='RESTRICT_SELECT_OFF')
         row1.operator("material.deselect_by_material", text="Deselect", icon='RESTRICT_SELECT_ON')
 
-        # Second row: Rename, Remap, Refresh
+        # Second row: Rename, Remap, Separate
         row2 = layout.row(align=True)
 
         rename_row = row2.row(align=True)
@@ -58,8 +59,7 @@ class CTR_PT_MaterialManager(Panel):
         remap_row = row2.row(align=True)
         remap_row.enabled = (props.selected_index >= 0 and props.selected_index < len(props.items))
         remap_row.operator("material.remap_material", text="Remap", icon='IMAGE_DATA')
-
-        row2.operator("material.refresh_list", text="Refresh", icon='FILE_REFRESH')
+        row2.operator("material.separate_by_family", text="Separate", icon='MOD_BOOLEAN')
 
         # List area
         total = len(props.items)
