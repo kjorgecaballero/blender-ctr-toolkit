@@ -43,21 +43,21 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         layout = self.layout
         scene = context.scene
 
-        # Mode selector
+        # ROW 1: MODE
         row = layout.row(align=True)
         row.prop(scene, "uv_animator_mode", expand=True)
 
-        # Main controls
+        # ROW 2: NEW / DELETE
         row = layout.row(align=True)
         if scene.uv_animator_mode == 'LEGACY':
             row.operator("uv_animator.new_animation", text="New", icon='FILE_NEW')
         else:
             row.operator("uv_animator.new_animation_from_constants", text="New", icon='FILE_NEW')
-        row.operator("uv_animator.delete_animation", text="Delete All", icon='TRASH')
+        row.operator("uv_animator.delete_animation", text="Delete", icon='TRASH')
 
+        # ROW 3: ASSIGN / PLAY-
         row = layout.row(align=True)
-        row.operator("uv_animator.assign_frame", text="Assign Frame", icon='UV')
-
+        row.operator("uv_animator.assign_frame", text="Assign", icon='UV')
         if UV_OT_PlayPreview.is_playing():
             row.operator("uv_animator.stop_preview", text="Stop", icon='PAUSE')
         else:
@@ -79,17 +79,61 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
                 sub.enabled = False
                 sub.operator("uv_animator.play_preview", text="Play", icon='PLAY')
 
+        # ROW 4: EXPORT / GROUP
         row = layout.row(align=True)
-        row.operator("uv_animator.export_animation", text="Export Animation", icon='EXPORT')
-
-        # Group filter
-        row = layout.row(align=True)
+        row.operator("uv_animator.export_animation", text="Export", icon='EXPORT')
         active_group = scene.uv_animator_active_group
         button_text = active_group if active_group else "Group"
         row.operator("uv_animator.group_management_dialog", text=button_text, icon='GROUP')
         if active_group:
             row.operator("uv_animator.clear_active_group_filter", text="", icon='X', emboss=False)
 
+        # COLLAPSIBLE SECTION: ANIM TOOLS
+        row = layout.row()
+        row.prop(scene, "uv_tools_show_animation_creation",
+                icon="TRIA_DOWN" if scene.uv_tools_show_animation_creation else "TRIA_RIGHT",
+                icon_only=True, emboss=False)
+        row.label(text="Anim Tools")
+
+        if scene.uv_tools_show_animation_creation:
+            box = layout.box()
+            # Tool selector (expand)
+            row = box.row(align=True)
+            row.prop(scene, "uv_animator_active_tool", expand=True)
+
+            if scene.uv_animator_active_tool == 'INTERPOLATE':
+                # Row 1: Group | Find | Generate (button with popup)
+                row = box.row(align=True)
+                row.operator("uv_animator.auto_group_collections", text="Group", icon='OUTLINER_COLLECTION')
+                row.operator("uv_animator.auto_find_collections", text="Find", icon='VIEWZOOM')
+                # Generate button - opens popup with Revert option
+                row.operator("uv_animator.auto_assign_interpolation", text="Generate", icon='NODE_TEXTURE')
+
+                # Row 2: Animation selector
+                base_animations = json.loads(scene.uv_animator_base_animations)
+                if base_animations:
+                    row = box.row(align=True)
+                    row.prop(scene, "uv_animator_selected_animation", text="")
+                    row.menu("UV_MT_AutoAnimationMenu", text="", icon='DOWNARROW_HLT')
+                else:
+                    box.label(text="No animations found. Use 'Group' and 'Find'.", icon='INFO')
+
+                # Row 3: Texture selection
+                row = box.row(align=True)
+                row.label(text="Texture:")
+                if scene.uv_animator_secondary_texture:
+                    row.label(text=os.path.basename(scene.uv_animator_secondary_texture), icon='TEXTURE')
+                else:
+                    row.label(text="None", icon='TEXTURE')
+                row.operator("uv_animator.auto_select_secondary_texture", text="", icon='FILE_FOLDER')
+
+
+            elif scene.uv_animator_active_tool == 'SCAN':
+                row = box.row(align=True)
+                row.operator("uv_animator.scan_timeline", text="Scan Timeline", icon='TIME')
+
+        # ANIMATION LISTS
+        layout.separator()
         items = self._get_items(scene)
         if not items:
             layout.label(text="No animated items. Select mesh(es) and press 'New'.", icon='INFO')
@@ -129,6 +173,7 @@ class UV_ANIMATOR_PT_MainPanel(Panel):
         else:
             layout.label(text="No active target", icon='ERROR')
 
+    # HELPER METHODS
     def draw_all_groups(self, layout, scene, items, groups, expanded, toggles):
         grouped = {}
         for it in items:

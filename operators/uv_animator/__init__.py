@@ -5,6 +5,7 @@ from .uv_collapse import *
 from .uv_textures import *
 from .uv_animation import *
 from .uv_export import *
+from .uv_interpolate import *
 
 classes = [
     UV_OT_ToggleExpand,
@@ -38,6 +39,13 @@ classes = [
     UV_OT_DeleteAnimation,
     UV_OT_ToggleGroupPlayback,
     UV_OT_ExportAnimation,
+    UV_OT_AutoGroupCollections,
+    UV_OT_AutoFindCollections,
+    UV_OT_AutoSelectSecondaryTexture,
+    UV_OT_AutoAssignInterpolation,
+    UV_OT_AutoSelectAnimation,
+    UV_MT_AutoAnimationMenu,
+    UV_OT_ScanTimeline,
 ]
 
 def register():
