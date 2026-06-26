@@ -44,11 +44,13 @@ class LIST_PT_BlockListPanel(Panel):
                 if vg.name.startswith("QB_") and scene.list_filter_show_qb:
                     try:
                         block_id = int(vg.name[3:])
+                        material_name = get_block_material_name(obj, 'quadblock', block_id)
                         display_items.append({
                             'type': 'vertex_group',
                             'name': vg.name,
                             'block_type': 'quadblock',
                             'block_id': block_id,
+                            'material': material_name,
                             'data': vg
                         })
                         display_counts["qb"] += 1
@@ -58,11 +60,13 @@ class LIST_PT_BlockListPanel(Panel):
                 elif vg.name.startswith("TB_") and scene.list_filter_show_tb:
                     try:
                         block_id = int(vg.name[3:])
+                        material_name = get_block_material_name(obj, 'triblock', block_id)
                         display_items.append({
                             'type': 'vertex_group',
                             'name': vg.name,
                             'block_type': 'triblock',
                             'block_id': block_id,
+                            'material': material_name,
                             'data': vg
                         })
                         display_counts["tb"] += 1
