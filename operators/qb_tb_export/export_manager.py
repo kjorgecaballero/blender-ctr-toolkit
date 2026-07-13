@@ -162,8 +162,11 @@ class ExportManager:
                 else:
                     texture_dir = None
             
+            # Store base_path
             if project_folder:
-                self.context.scene.last_export_path = project_folder
+                self.context.scene.last_export_path = base_path
+            else:
+                self.context.scene.last_export_path = obj_filepath
         else:
             # Direct file export (no folder structure)
             project_folder = None
