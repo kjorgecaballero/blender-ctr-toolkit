@@ -247,7 +247,9 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
             box.label(text=f"  {os.path.basename(context.scene.last_export_path)}")
             box.label(text=f"  {context.scene.last_export_path}")
 
+
     def invoke(self, context, event):
+        # Load ALL user-facing properties from the scene to persist settings
         self.folder_behavior = context.scene.folder_behavior
         self.use_selection = context.scene.use_selection
         self.export_duplicates = context.scene.export_duplicates
@@ -256,6 +258,21 @@ class QB_TB_OT_ExportQuadTriBlocks(Operator, ExportHelper):
         self.export_multiple_materials = context.scene.export_multiple_materials
         self.export_missing_uvs = context.scene.export_missing_uvs
         self.export_multi_object = context.scene.export_multi_object
+        self.export_to_folder = context.scene.export_to_folder
+        self.include_textures = context.scene.include_textures
+        self.remap_textures = context.scene.remap_textures
+        self.apply_modifiers = context.scene.apply_modifiers
+        self.separate_loose_parts = context.scene.separate_loose_parts
+        self.export_invalid_uvs = context.scene.export_invalid_uvs
+        self.export_invalid_triblock_uvs = context.scene.export_invalid_triblock_uvs
+        self.export_degenerated_uvs = context.scene.export_degenerated_uvs
+        self.allow_out_of_range = context.scene.allow_out_of_range
+        self.path_mode = context.scene.path_mode
+        self.export_colors = context.scene.export_colors
+        self.export_quadblocks = context.scene.export_quadblocks
+        self.export_triblocks = context.scene.export_triblocks
+        self.global_scale = context.scene.global_scale
+
         return super().invoke(context, event)
 
     def _save_export_settings(self, context):
