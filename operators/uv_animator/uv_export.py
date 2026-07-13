@@ -14,26 +14,59 @@ from ...utils.export_helpers import temporary_disable_ps1_render, restore_ps1_re
 def sanitize_name(name):
     return re.sub(r'[^a-zA-Z0-9_]', '_', name)
 
-def set_texture_to_material(material, texture_path):
-    if not material or not material.use_nodes:
+def assign_texture_to_duplicate(dup, desired_texture, texture_materials, obj_name, frame_key):
+    """
+    Assign a texture to the duplicate object, reusing materials if the texture is already used.
+    This avoids creating a new material for every frame if the texture is the same.
+    """
+    if not desired_texture or desired_texture == "No Texture":
         return
-    tex_node = None
-    for node in material.node_tree.nodes:
-        if node.type == 'TEX_IMAGE':
-            tex_node = node
-            break
-    if not tex_node:
-        tex_node = material.node_tree.nodes.new('ShaderNodeTexImage')
-        for node in material.node_tree.nodes:
-            if node.type == 'BSDF_PRINCIPLED':
-                material.node_tree.links.new(tex_node.outputs['Color'], node.inputs['Base Color'])
-                break
-    if texture_path and os.path.exists(texture_path):
+
+    # Check if the current material already has the desired texture
+    if dup.data.materials:
+        current_mat = dup.data.materials[0]
+        if current_mat.use_nodes:
+            for node in current_mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    current_path = bpy.path.abspath(node.image.filepath).replace("\\", "/")
+                    if current_path == desired_texture:
+                        return  # Already has the correct texture
+
+    # If not, look in the material cache
+    if desired_texture in texture_materials:
+        new_mat = texture_materials[desired_texture]
+    else:
+        # Create a new material with the texture
+        new_mat = bpy.data.materials.new(name=f"Mat_{obj_name}_frame_{frame_key}")
+        new_mat.use_nodes = True
+        nodes = new_mat.node_tree.nodes
+        links = new_mat.node_tree.links
+
+        # Clear default nodes
+        for node in list(nodes):
+            nodes.remove(node)
+
+        # Create nodes
+        tex_node = nodes.new(type='ShaderNodeTexImage')
+        bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+        output_node = nodes.new(type='ShaderNodeOutputMaterial')
+
+        # Load image
         try:
-            img = bpy.data.images.load(texture_path, check_existing=True)
+            img = bpy.data.images.load(desired_texture, check_existing=True)
             tex_node.image = img
         except Exception as e:
-            print(f"Warning: Could not load texture {texture_path}: {e}")
+            print(f"Could not load image: {desired_texture}, error: {e}")
+
+        # Connect nodes
+        links.new(tex_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+        links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+
+        texture_materials[desired_texture] = new_mat
+
+    # Assign the material to the object
+    dup.data.materials.clear()
+    dup.data.materials.append(new_mat)
 
 def export_block_animation(context, dup_obj, block, export_dir, clean_after_export=True):
     frames = block.frames
@@ -62,6 +95,8 @@ def export_block_animation(context, dup_obj, block, export_dir, clean_after_expo
     context.scene.collection.children.link(frame_collection)
 
     frame_objects = []
+    texture_materials = {}  # Cache materials by texture path
+
     for idx, frame in enumerate(frames):
         dup = dup_obj.copy()
         dup.data = dup_obj.data.copy()
@@ -72,8 +107,9 @@ def export_block_animation(context, dup_obj, block, export_dir, clean_after_expo
         centers = json.loads(frame.face_centers) if frame.face_centers else None
         apply_uvs_to_material(dup, material_name, uvs, centers_ordered=centers)
 
-        if frame.texture_path and dup.active_material:
-            set_texture_to_material(dup.active_material, frame.texture_path)
+        # Assign texture if available
+        if frame.texture_path:
+            assign_texture_to_duplicate(dup, frame.texture_path, texture_materials, base_name, idx)
 
         frame_objects.append(dup)
 
@@ -133,7 +169,6 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
         default=True
     )
 
-    # PRESET PROPERTIES
     export_preset: bpy.props.BoolProperty(
         name="Export Preset",
         description="Generate a single JSON preset file containing all exported animations",
@@ -257,9 +292,7 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
         # This will hold all animation data for the consolidated JSON
         all_animations_data = []
 
-
-        # 1. Handle Constant Materials (Blocks) - WIP, no preset yet
-
+        # 1. Handle Constant Materials
         if objects_with_blocks:
             bpy.ops.object.select_all(action='DESELECT')
             for obj_name in objects_with_blocks:
@@ -341,8 +374,6 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
                 pass
 
         # 2. Handle Legacy Objects (with full preset support)
-        #    Accumulate animation data for the consolidated JSON.
-
         for obj_name in objects_legacy:
             if obj_name not in bpy.data.objects:
                 continue
@@ -370,14 +401,18 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
             main_collection.children.link(obj_collection)
 
             duplicated_objects = []
+            texture_materials = {}  # Cache materials by texture path
+
             for idx, frame in enumerate(frames):
                 dup = obj.copy()
                 dup.data = obj.data.copy()
 
+                # Copy the original material without renaming it
                 if obj.active_material:
                     original_mat = obj.active_material
                     new_mat = original_mat.copy()
-                    new_mat.name = f"{base_name}_frame{idx+1:02d}_mat"
+                    # Keep the base name (Blender will add .001, .002 etc.)
+                    new_mat.name = original_mat.name
                     if dup.data.materials:
                         dup.data.materials[0] = new_mat
                     else:
@@ -386,7 +421,7 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
 
                     tex_path = frame.texture_path
                     if tex_path:
-                        set_texture_to_material(new_mat, tex_path)
+                        assign_texture_to_duplicate(dup, tex_path, texture_materials, base_name, idx)
 
                 dup.uv_animation_frames.clear()
                 dup.uv_texture_items.clear()
@@ -458,20 +493,15 @@ class UV_OT_ExportAnimation(Operator, ExportHelper):
                         if main_collection.name in bpy.data.collections:
                             bpy.data.collections.remove(main_collection)
 
-
         # Write the consolidated preset JSON if we have animations
-
         if self.export_preset and all_animations_data:
-            # Use the base name of the first exported OBJ file for the JSON name
             if exported_files:
                 first_obj_path = exported_files[0]
                 base_name = os.path.splitext(os.path.basename(first_obj_path))[0]
-                # Remove the '_anim' suffix if present
                 if base_name.endswith('_anim'):
                     base_name = base_name[:-5]
                 self._write_consolidated_preset(export_dir, base_name, all_animations_data)
             else:
-                # Fallback: use the export directory name
                 base_name = os.path.basename(export_dir)
                 self._write_consolidated_preset(export_dir, base_name, all_animations_data)
 

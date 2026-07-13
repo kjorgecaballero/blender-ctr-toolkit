@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 import json
+import os
 from ...utils.qb_tb_validator.qb_tb_analyzer import get_mesh_type, get_object_issues
 
 def get_all_uvs(obj):
@@ -75,8 +76,9 @@ def get_current_uvs_from_mesh(obj):
 
 def get_active_texture_path(obj):
     """
-    Get the filepath of the active image texture node in the object's active material.
+    Get the absolute filepath of the active image texture node in the object's active material.
     Returns an empty string if no texture is found.
+    Uses bpy.path.abspath to resolve relative paths.
     """
     if not obj.active_material or not obj.active_material.use_nodes:
         return ""
@@ -118,7 +120,9 @@ def apply_uvs_to_object(obj, uvs_data, texture_path=None):
             for node in mat.node_tree.nodes:
                 if node.type == 'TEX_IMAGE' and node.image:
                     try:
-                        img = bpy.data.images.load(texture_path, check_existing=True)
+                        # Resolve path and load image
+                        abs_path = bpy.path.abspath(texture_path)
+                        img = bpy.data.images.load(abs_path, check_existing=True)
                         node.image = img
                     except:
                         pass

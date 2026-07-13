@@ -138,8 +138,6 @@ class UV_OT_AutoGroupCollections(Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=350)
 
-
-
 # FIND COLLECTIONS
 
 class UV_OT_AutoFindCollections(Operator):
@@ -178,8 +176,6 @@ class UV_OT_AutoFindCollections(Operator):
 
         return {'FINISHED'}
 
-
-
 # SELECT SECONDARY TEXTURE
 
 class UV_OT_AutoSelectSecondaryTexture(Operator, bpy_extras.io_utils.ImportHelper):
@@ -198,8 +194,6 @@ class UV_OT_AutoSelectSecondaryTexture(Operator, bpy_extras.io_utils.ImportHelpe
         self.report({'INFO'}, f"Secondary texture set to: {os.path.basename(self.filepath)}")
         return {'FINISHED'}
 
-
-
 # MENU FOR ANIMATION SELECTION
 
 class UV_MT_AutoAnimationMenu(Menu):
@@ -213,7 +207,6 @@ class UV_MT_AutoAnimationMenu(Menu):
             op = layout.operator("uv_animator.auto_select_animation", text=name)
             op.anim_name = name
 
-
 class UV_OT_AutoSelectAnimation(Operator):
     """Select an animation to process"""
     bl_idname = "uv_animator.auto_select_animation"
@@ -226,8 +219,6 @@ class UV_OT_AutoSelectAnimation(Operator):
         context.scene.uv_animator_selected_animation = self.anim_name
         self.report({'INFO'}, f"Selected animation: {self.anim_name}")
         return {'FINISHED'}
-
-
 
 # GENERATE OPERATOR (WITH POPUP FOR REVERT)
 
@@ -310,8 +301,9 @@ class UV_OT_AutoAssignInterpolation(Operator):
 
                 primary_tex = get_active_texture_path(obj)
                 if not primary_tex:
-                    self.report({'WARNING'}, f"Object '{obj.name}' has no active texture")
-                    continue
+                    # If primary texture is missing, use secondary as fallback for keyframes too
+                    self.report({'WARNING'}, f"Object '{obj.name}' has no active texture, using secondary for all frames")
+                    primary_tex = secondary_tex
 
                 for frame_idx in range(total_animation_frames):
                     if revert and frame_idx >= total_frames:
@@ -323,7 +315,9 @@ class UV_OT_AutoAssignInterpolation(Operator):
 
                     frame = obj.uv_animation_frames.add()
                     frame.uv_data = json.dumps(uvs)
-                    frame.texture_path = primary_tex if is_keyframe else secondary_tex
+                    # Store absolute path to avoid resolution issues later
+                    abs_path = bpy.path.abspath(primary_tex if is_keyframe else secondary_tex)
+                    frame.texture_path = abs_path
 
                 sync_texture_items(obj)
                 processed_objects.append(obj.name)
@@ -353,8 +347,6 @@ class UV_OT_AutoAssignInterpolation(Operator):
 
         self.report({'INFO'}, f"Generated {total_animation_frames} frames for '{selected_anim}' (Revert: {'ON' if revert else 'OFF'}) on {len(processed_objects)} object(s). Grouped as '{selected_anim}'.")
         return {'FINISHED'}
-
-
 
 # SCAN TIMELINE
 
@@ -402,10 +394,12 @@ class UV_OT_ScanTimeline(Operator):
                     continue
 
                 tex_path = get_active_texture_path(obj)
+                # Store absolute path
+                abs_tex_path = bpy.path.abspath(tex_path) if tex_path else ""
 
                 frame_data = obj.uv_animation_frames.add()
                 frame_data.uv_data = json.dumps(uvs)
-                frame_data.texture_path = tex_path
+                frame_data.texture_path = abs_tex_path
 
             progress += 1
             if progress % 10 == 0:
