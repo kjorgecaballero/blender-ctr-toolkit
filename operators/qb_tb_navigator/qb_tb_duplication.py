@@ -221,7 +221,7 @@ class NAVIGATOR_OT_DuplicateQuadblocksByGroup(bpy.types.Operator):
             if new_objects:
                 new_obj = new_objects[0]
 
-                new_obj.name = f"{original_obj_name}_Quad_Group_{group_num}"
+                new_obj.name = f"{original_obj_name}_QB_{group_num}"
 
                 move_object_to_collection_manual(new_obj, target_collection)
 
@@ -343,7 +343,7 @@ class NAVIGATOR_OT_DuplicateTriblocksByGroup(bpy.types.Operator):
             if new_objects:
                 new_obj = new_objects[0]
 
-                new_obj.name = f"{original_obj_name}_Tri_Group_{group_num}"
+                new_obj.name = f"{original_obj_name}_TB_{group_num}"
 
                 move_object_to_collection_manual(new_obj, target_collection)
 
@@ -685,6 +685,23 @@ class NAVIGATOR_OT_DuplicateAllBlocksByGroup(bpy.types.Operator):
                     for obj in imported_objects:
                         if obj.type == 'MESH' and len(obj.data.polygons) == 0:
                             bpy.data.objects.remove(obj, do_unlink=True)
+
+                # remove .001, .002 suffixes
+                # This applies to ALL separated objects (whether they have constant materials or not)
+                name_map = {}
+                for obj in separated_objects:
+                    # Remove the .001, .002 suffix that Blender adds during separation
+                    base_name = re.sub(r'\.\d+$', '', obj.name)
+                    
+                    # If the base name already exists (collision), add a numeric suffix with underscore
+                    final_name = base_name
+                    counter = 1
+                    while final_name in name_map or final_name in bpy.data.objects:
+                        final_name = f"{base_name}_{counter:03d}"
+                        counter += 1
+                    
+                    obj.name = final_name
+                    name_map[final_name] = obj
 
                 self.report({'INFO'}, f"Separation completed, generated {len(separated_objects)} parts.")
 
