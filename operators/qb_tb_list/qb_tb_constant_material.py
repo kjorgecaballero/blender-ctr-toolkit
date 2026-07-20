@@ -340,6 +340,11 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
         ],
         default='SELECTED'
     )
+    purge_unused: bpy.props.BoolProperty(
+        name="Purge Unused Data",
+        description="Remove all orphaned data blocks (materials, images, textures, etc.) after clearing",
+        default=False,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -359,6 +364,13 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
         obj = context.edit_object
         const_count = sum(1 for slot in obj.material_slots if slot.material and slot.material.get("ctr_block_type") is not None)
         layout.label(text=f"This object has {const_count} constant materials.")
+        layout.prop(self, "purge_unused")
+        if self.purge_unused:
+            box = layout.box()
+            box.label(text="This may take a few seconds on large files.", icon='INFO')
+
+        layout.separator()
+
         col = layout.column(align=True)
         col.prop(self, "clear_mode", expand=True)
 
@@ -494,6 +506,12 @@ class LIST_OT_ClearConstantMaterial(bpy.types.Operator):
             else:
                 msg = f"Cleared {cleared+restored} constants (restored {restored})"
                 self.report({'INFO'}, msg)
+            if self.purge_unused:
+                try:
+                    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+                    self.report({'INFO'}, "Purged unused data blocks.")
+                except Exception as e:
+                    self.report({'WARNING'}, f"Purge failed: {str(e)}")
 
         except Exception as e:
             self.report({'ERROR'}, f"Error: {str(e)}")

@@ -228,6 +228,11 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
         ],
         default='SELECTED'
     )
+    purge_unused: bpy.props.BoolProperty(
+        name="Purge Unused Data",
+        description="Remove all orphaned data blocks (materials, images, textures, etc.) after clearing",
+        default=False,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -246,7 +251,13 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
         obj = context.edit_object
         block_groups = [vg for vg in obj.vertex_groups if vg.name.startswith(("QB_", "TB_"))]
         layout.label(text=f"Found {len(block_groups)} block vertex groups", icon='GROUP_VERTEX')
+        layout.prop(self, "purge_unused")
+        if self.purge_unused:
+            box = layout.box()
+            box.label(text="This may take a few seconds on large files.", icon='INFO')
+
         layout.separator()
+
         col = layout.column(align=True)
         col.prop(self, "clear_mode", expand=True)
         box = layout.box()
@@ -273,6 +284,12 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
                 self.report({'INFO'}, f"Removed {removed_count} block vertex groups")
                 if "multi_selected_items" in obj:
                     obj["multi_selected_items"].clear()
+                if self.purge_unused:
+                    try:
+                        bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+                        self.report({'INFO'}, "Purged unused data blocks.")
+                    except Exception as e:
+                        self.report({'WARNING'}, f"Purge failed: {str(e)}")
                 return {'FINISHED'}
 
             # SELECTED mode
@@ -350,6 +367,12 @@ class LIST_OT_ClearBlockVertexGroups(bpy.types.Operator):
                 obj["multi_selected_items"] = multi
 
             self.report({'INFO'}, f"Removed {removed_count} block vertex groups")
+            if self.purge_unused:
+                try:
+                    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+                    self.report({'INFO'}, "Purged unused data blocks.")
+                except Exception as e:
+                    self.report({'WARNING'}, f"Purge failed: {str(e)}")
 
         finally:
             if original_mode == 'EDIT_MESH':

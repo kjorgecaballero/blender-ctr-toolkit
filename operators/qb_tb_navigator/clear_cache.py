@@ -34,6 +34,11 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
         description="Delete detection data (face maps, groups, etc.)",
         default=True
     )
+    purge_unused: bpy.props.BoolProperty(
+        name="Purge Unused Data",
+        description="Remove all orphaned data blocks (materials, images, textures, etc.) after clearing",
+        default=False,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -46,6 +51,12 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
         layout = self.layout
 
         layout.label(text="This will DELETE the following addon data from the active object:", icon='ERROR')
+        layout.separator()
+        layout.prop(self, "purge_unused")
+        if self.purge_unused:
+            box = layout.box()
+            box.label(text="This may take a few seconds on large files.", icon='INFO')
+
         layout.separator()
 
         col = layout.column(align=True)
@@ -69,7 +80,7 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
         if self.clear_constant_materials:
             box = layout.box()
             box.alert = True
-            box.label(text="⚠️ Clearing constant materials will restore base materials", icon='ERROR')
+            box.label(text="Clearing constant materials will restore base materials", icon='ERROR')
             box.label(text="   or create fallback materials if originals are missing.")
             box.label(text="   This affects only faces using those materials on THIS object.")
 
@@ -130,6 +141,14 @@ class NAVIGATOR_OT_ClearBlockCache(bpy.types.Operator):
                 for f in bm.faces:
                     f.select = False
                 bmesh.update_edit_mesh(obj.data)
+
+            # Purge unused data if requested
+            if self.purge_unused:
+                try:
+                    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+                    self.report({'INFO'}, "Purged unused data blocks.")
+                except Exception as e:
+                    self.report({'WARNING'}, f"Purge failed: {str(e)}")
 
             self.report({'INFO'}, f"Reset completed. Cleaned {total_cleared} items.")
 
