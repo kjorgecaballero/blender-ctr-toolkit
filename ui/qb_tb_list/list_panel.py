@@ -5,7 +5,7 @@ Quadblock/Triblock List Panel - Main UI
 import bpy
 from bpy.types import Panel
 
-from .list_helpers import get_material_image_icon, get_block_material_name
+from .list_helpers import get_material_image_icon, get_block_material_name, get_list_sort_key
 from ...addon_updater_ops import updater
 from ..help_utils import draw_help_buttons
 from ...icons import get_icon
@@ -390,23 +390,9 @@ class LIST_PT_BlockListPanel(Panel):
                             new_filtered.append(it)
                 filtered_items = new_filtered
 
-        # SORT
-        reverse_type = (scene.list_sort_type_direction == 'DESC')
-        reverse_name = (scene.list_sort_name_direction == 'DESC')
-
-        def sort_key(item):
-            type_order = 0 if item['block_type'] == 'quadblock' else 1
-            if reverse_type:
-                type_order = 1 - type_order
-            nav_order = 0 if item.get('is_nav_point', False) else 1
-            if reverse_name:
-                nav_order = 1 - nav_order
-            name_key = item['name'].lower()
-            id_key = item['block_id']
-            return (type_order, nav_order, name_key, id_key)
-
-        filtered_items.sort(key=sort_key)
-        if reverse_name:
+        # SORT using the common key function
+        filtered_items.sort(key=lambda item: get_list_sort_key(item, scene))
+        if scene.list_sort_name_direction == 'DESC':
             filtered_items.reverse()
 
         # PAGINATION

@@ -62,3 +62,17 @@ def get_block_material_name(obj, block_type, block_id):
         pass
 
     return material_name
+
+
+def get_list_sort_key(item, scene):
+    """
+    Return a sort key for consistent list ordering across the addon.
+    Ensures scroll-to-item functions find the correct index.
+    """
+    reverse_type = (scene.list_sort_type_direction == 'DESC')
+    type_order = 0 if item['block_type'] == 'quadblock' else 1
+    if reverse_type:
+        type_order = 1 - type_order
+
+    # Sort by type, name, then ID
+    return (type_order, item['name'].lower(), item['block_id'])

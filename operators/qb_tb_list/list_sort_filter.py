@@ -6,6 +6,7 @@ import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty
 from .list_multi_selection import _get_filtered_display_items
+from ...ui.qb_tb_list.list_helpers import get_list_sort_key
 
 ITEMS_PER_PAGE = 10
 
@@ -23,18 +24,8 @@ def _adjust_scroll_to_checked(context, obj, scene):
     if not items:
         return
 
-    reverse_type = (scene.list_sort_type_direction == 'DESC')
-    reverse_name = (scene.list_sort_name_direction == 'DESC')
-
-    def sort_key(item):
-        type_order = 0 if item['block_type'] == 'quadblock' else 1
-        if reverse_type:
-            type_order = 1 - type_order
-        name_key = item['name'].lower()
-        return (type_order, name_key)
-
-    items.sort(key=sort_key)
-    if reverse_name:
+    items.sort(key=lambda item: get_list_sort_key(item, scene))
+    if scene.list_sort_name_direction == 'DESC':
         items.reverse()
 
     target_index = -1
