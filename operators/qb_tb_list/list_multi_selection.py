@@ -7,7 +7,7 @@ import bmesh
 from bpy.types import Operator
 from bpy.props import StringProperty, BoolProperty
 
-from ...ui.qb_tb_list.list_helpers import get_block_material_name
+from ...ui.qb_tb_list.list_helpers import get_block_material_name, get_list_sort_key
 
 
 def _get_filtered_display_items(context, obj, scene):
@@ -60,7 +60,6 @@ def _get_filtered_display_items(context, obj, scene):
                     'is_nav_point': mat.get("ctr_is_navigation_point", False),
                 })
 
-    # Group filter for constant materials
     if display_type == 'CONSTANT_MATERIALS' and scene.list_active_group:
         if "constant_material_groups" in scene:
             try:
@@ -72,12 +71,10 @@ def _get_filtered_display_items(context, obj, scene):
             except:
                 pass
 
-    # Material filter
     mat_filter = scene.list_material_filter_vg if display_type == 'VERTEX_GROUPS' else scene.list_material_filter_cm
     if mat_filter:
         items = [it for it in items if it['material'] == mat_filter]
 
-    # Search filter
     search = scene.list_search_text.lower()
     if search:
         filtered = []
@@ -93,7 +90,6 @@ def _get_filtered_display_items(context, obj, scene):
                     continue
         items = filtered
 
-    # Issue filter for vertex groups
     if display_type == 'VERTEX_GROUPS':
         issues_dict = {}
         if "vertex_group_issues" in obj:
@@ -136,6 +132,7 @@ def _get_filtered_display_items(context, obj, scene):
         items = filtered
 
     return items
+
 
 class LIST_OT_ToggleMultiSelection(Operator):
     bl_idname = "list.toggle_multi_selection"
@@ -185,37 +182,69 @@ class LIST_OT_ToggleMultiSelection(Operator):
         display_type = scene.list_display_type
 
         if display_type == 'VERTEX_GROUPS':
-            if item_name.startswith(("QB_", "TB_")) and item_name in obj.vertex_groups:
-                vg = obj.vertex_groups[item_name]
-                original_mode = context.mode
-                if original_mode == 'EDIT_MESH':
-                    bpy.ops.object.mode_set(mode='OBJECT')
+            if not item_name.startswith(("QB_", "TB_")):
+                return
+
+            quad_map = obj.get("quadblock_faces_map", {})
+            tri_map = obj.get("triblock_faces_map", {})
+
+            block_id = None
+            face_map = None
+            if item_name.startswith("QB_"):
                 try:
-                    vertex_indices = []
-                    for vert in obj.data.vertices:
-                        try:
-                            if vg.weight(vert.index) > 0:
-                                vertex_indices.append(vert.index)
-                        except RuntimeError:
-                            pass
-                    bpy.ops.object.mode_set(mode='EDIT')
-                    bm = bmesh.from_edit_mesh(obj.data)
-                    bm.verts.ensure_lookup_table()
-                    bm.faces.ensure_lookup_table()
-                    for idx in vertex_indices:
-                        if idx < len(bm.verts):
-                            bm.verts[idx].select = select_state
-                    for face in bm.faces:
-                        if select_state:
-                            if all(v.select for v in face.verts):
-                                face.select = True
-                        else:
-                            if all(v.index in vertex_indices for v in face.verts):
-                                face.select = False
-                    bmesh.update_edit_mesh(obj.data)
-                finally:
-                    if original_mode == 'OBJECT':
+                    block_id = int(item_name[3:])
+                    face_map = quad_map.get(str(block_id), [])
+                except ValueError:
+                    return
+            elif item_name.startswith("TB_"):
+                try:
+                    block_id = int(item_name[3:])
+                    face_map = tri_map.get(str(block_id), [])
+                except ValueError:
+                    return
+
+            if not face_map:
+                self.report({'WARNING'}, f"No face map found for {item_name}. Run 'Navigate' for accurate selection.")
+                if item_name in obj.vertex_groups:
+                    vg = obj.vertex_groups[item_name]
+                    original_mode = context.mode
+                    if original_mode == 'EDIT_MESH':
                         bpy.ops.object.mode_set(mode='OBJECT')
+                    try:
+                        vertex_indices = []
+                        for vert in obj.data.vertices:
+                            try:
+                                if vg.weight(vert.index) > 0:
+                                    vertex_indices.append(vert.index)
+                            except RuntimeError:
+                                pass
+                        bpy.ops.object.mode_set(mode='EDIT')
+                        bm = bmesh.from_edit_mesh(obj.data)
+                        bm.verts.ensure_lookup_table()
+                        bm.faces.ensure_lookup_table()
+                        for idx in vertex_indices:
+                            if idx < len(bm.verts):
+                                bm.verts[idx].select = select_state
+                        for face in bm.faces:
+                            if select_state:
+                                if all(v.select for v in face.verts):
+                                    face.select = True
+                            else:
+                                if all(v.index in vertex_indices for v in face.verts):
+                                    face.select = False
+                        bmesh.update_edit_mesh(obj.data)
+                    finally:
+                        if original_mode == 'OBJECT':
+                            bpy.ops.object.mode_set(mode='OBJECT')
+                return
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+            for f_idx in face_map:
+                if f_idx < len(bm.faces):
+                    bm.faces[f_idx].select = select_state
+            bmesh.update_edit_mesh(obj.data)
 
         elif display_type == 'CONSTANT_MATERIALS':
             mat = bpy.data.materials.get(item_name)
@@ -311,63 +340,64 @@ class LIST_OT_SelectMultiChecked(Operator):
                 self.report({'WARNING'}, "No vertex groups to select.")
                 return {'CANCELLED'}
 
-            vg_indices = [vg.index for vg in obj.vertex_groups if vg.name in target_vg_names]
-            if not vg_indices:
-                self.report({'WARNING'}, "No matching vertex groups.")
+            if self.clear_existing:
+                bpy.ops.mesh.select_all(action='DESELECT')
+
+            quad_map = obj.get("quadblock_faces_map", {})
+            tri_map = obj.get("triblock_faces_map", {})
+
+            has_maps = False
+            for vg_name in target_vg_names:
+                if vg_name.startswith("QB_"):
+                    block_id = int(vg_name[3:])
+                    if quad_map.get(str(block_id)):
+                        has_maps = True
+                        break
+                elif vg_name.startswith("TB_"):
+                    block_id = int(vg_name[3:])
+                    if tri_map.get(str(block_id)):
+                        has_maps = True
+                        break
+
+            if not has_maps:
+                self.report(
+                    {'WARNING'},
+                    "Block face maps not found. Please run 'Find All Blocks' (Navigate) first to enable accurate selection."
+                )
                 return {'CANCELLED'}
 
-            original_mode = context.mode
-            if original_mode == 'EDIT_MESH':
-                bpy.ops.object.mode_set(mode='OBJECT')
+            face_indices_to_select = set()
+            for vg_name in target_vg_names:
+                if vg_name.startswith("QB_"):
+                    try:
+                        block_id = int(vg_name[3:])
+                        faces = quad_map.get(str(block_id), [])
+                        face_indices_to_select.update(faces)
+                    except ValueError:
+                        continue
+                elif vg_name.startswith("TB_"):
+                    try:
+                        block_id = int(vg_name[3:])
+                        faces = tri_map.get(str(block_id), [])
+                        face_indices_to_select.update(faces)
+                    except ValueError:
+                        continue
 
-            try:
-                mesh = obj.data
-                bm = bmesh.new()
-                bm.from_mesh(mesh)
-                bm.verts.ensure_lookup_table()
-                deform_layer = bm.verts.layers.deform.active
-                if not deform_layer:
-                    bm.free()
-                    self.report({'WARNING'}, "No vertex group data found.")
-                    return {'CANCELLED'}
+            if not face_indices_to_select:
+                self.report({'WARNING'}, "No faces found for selected blocks in face maps.")
+                return {'CANCELLED'}
 
-                target_set = set(vg_indices)
-                vertex_indices = set()
-                for vert in bm.verts:
-                    deform = vert[deform_layer]
-                    for vg_idx in deform.keys():
-                        if vg_idx in target_set and deform[vg_idx] > 0:
-                            vertex_indices.add(vert.index)
-                            break
-                bm.free()
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+            selected_count = 0
+            for f_idx in face_indices_to_select:
+                if f_idx < len(bm.faces):
+                    bm.faces[f_idx].select = True
+                    selected_count += 1
+            bmesh.update_edit_mesh(obj.data)
 
-                bpy.ops.object.mode_set(mode='EDIT')
-                bm_edit = bmesh.from_edit_mesh(obj.data)
-                bm_edit.verts.ensure_lookup_table()
-                bm_edit.faces.ensure_lookup_table()
-
-                if self.clear_existing:
-                    for v in bm_edit.verts:
-                        v.select = False
-                    for f in bm_edit.faces:
-                        f.select = False
-
-                for idx in vertex_indices:
-                    if idx < len(bm_edit.verts):
-                        bm_edit.verts[idx].select = True
-
-                selected_vert_indices = vertex_indices
-                for face in bm_edit.faces:
-                    if all(v.index in selected_vert_indices for v in face.verts):
-                        face.select = True
-
-                bmesh.update_edit_mesh(obj.data)
-                count = len(vertex_indices)
-                self.report({'INFO'}, f"Selected {len(target_vg_names)} groups ({count} vertices)")
-
-            finally:
-                if original_mode == 'OBJECT':
-                    bpy.ops.object.mode_set(mode='OBJECT')
+            self.report({'INFO'}, f"Selected {selected_count} faces from {len(target_vg_names)} blocks using face maps.")
+            return {'FINISHED'}
 
         elif display_type == 'CONSTANT_MATERIALS':
             target_mats = []
@@ -478,7 +508,7 @@ class LIST_OT_CheckAll(Operator):
             if original_mode == 'EDIT_MESH':
                 bpy.ops.object.mode_set(mode='EDIT')
 
-        bpy.ops.list.select_multi_checked(select_all=False, clear_existing=False)
+        bpy.ops.list.select_multi_checked(select_all=False, clear_existing=True)
         return {'FINISHED'}
 
 

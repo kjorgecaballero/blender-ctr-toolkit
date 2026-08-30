@@ -43,6 +43,37 @@ def _scroll_to_item(context, obj, scene, target_item_name):
             area.tag_redraw()
 
 
+def _select_from_face_maps(obj, target_names):
+    """Helper to select faces using face maps."""
+    quad_map = obj.get("quadblock_faces_map", {})
+    tri_map = obj.get("triblock_faces_map", {})
+    face_indices = set()
+    for name in target_names:
+        if name.startswith("QB_"):
+            try:
+                block_id = int(name[3:])
+                faces = quad_map.get(str(block_id), [])
+                face_indices.update(faces)
+            except ValueError:
+                continue
+        elif name.startswith("TB_"):
+            try:
+                block_id = int(name[3:])
+                faces = tri_map.get(str(block_id), [])
+                face_indices.update(faces)
+            except ValueError:
+                continue
+    if face_indices:
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        for f_idx in face_indices:
+            if f_idx < len(bm.faces):
+                bm.faces[f_idx].select = True
+        bmesh.update_edit_mesh(obj.data)
+        return len(face_indices)
+    return 0
+
+
 class LIST_OT_SelectListFromBlock(Operator):
     bl_idname = "list.select_list_from_block"
     bl_label = "Select in List"
@@ -58,7 +89,6 @@ class LIST_OT_SelectListFromBlock(Operator):
         scene = context.scene
 
         if scene.list_display_type == 'CONSTANT_MATERIALS':
-            # Constant Materials mode: use material names from selected faces
             bm = bmesh.from_edit_mesh(obj.data)
             selected_faces = [f for f in bm.faces if f.select]
             if not selected_faces:
@@ -93,7 +123,6 @@ class LIST_OT_SelectListFromBlock(Operator):
             return {'FINISHED'}
 
         else:
-            # VERTEX_GROUPS mode
             if "face_to_quadblock" not in obj and "face_to_triblock" not in obj:
                 self.report({'WARNING'}, "No block data found. Run 'Find All Blocks' first.")
                 return {'CANCELLED'}
@@ -152,8 +181,12 @@ class LIST_OT_SelectListFromBlock(Operator):
                 last_block_name = found_blocks[-1][2]
                 _scroll_to_item(context, obj, scene, last_block_name)
 
-            bpy.ops.list.select_multi_checked(select_all=False)
-            self.report({'INFO'}, f"Added {len(found_blocks)} blocks to checklist")
+            target_names = [bname for _, _, bname in found_blocks]
+            selected_count = _select_from_face_maps(obj, target_names)
+            if selected_count == 0:
+                bpy.ops.list.select_multi_checked(select_all=False)
+            else:
+                self.report({'INFO'}, f"Added {len(found_blocks)} blocks to checklist and selected {selected_count} faces.")
             return {'FINISHED'}
 
 
